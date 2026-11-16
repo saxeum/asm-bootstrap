@@ -41,7 +41,7 @@ help:
 	@echo 'make which FILE=f which assembler produced f (by content sha)'
 	@echo 'make check      forbidden tools, bootstrap, shas, branch decodes, provenance'
 	@echo 'make clean      remove generated binaries'
-all: asm1 dis
+all: asm1 dis cc
 
 # The branch decoder. It is built by asm1 from src/dis.s like any other program,
 # and it exists because the gate that checks docs/branches.tsv may not use
