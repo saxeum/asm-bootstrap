@@ -2720,3 +2720,34 @@ for the slots, the one thing a golden cannot see.
 
 `cc` 8 744 → 8 745 bytes: one byte, because the prologue constant grew and the code shrank by the same
 amount. 27 checks, 36 refusals, 25 goldens.
+
+## `space N`, and why the segment is still read-only
+
+`space N` reserves N zeroed bytes in the image, so a label can name a region the program did not have
+to write out by hand. The obvious next step — make the segment writable so that region is a *buffer* —
+ran into a structural wall worth writing down.
+
+The header an assembly emits is copied from the **builder's** embedded template, not from the source.
+So changing `p_flags` breaks the fixpoint *before* the change can be promoted: the seed emits the old
+flag, the built assembler emits the new one, and `make promote` requires the fixpoint to hold first.
+Every other change is unaffected, because the source does not use the new capability; the header is
+emitted on every assembly, so it is the one thing that cannot go through that door.
+
+Two escape routes were worked out and neither was taken here, because both are decisions about the
+bootstrap rather than about the assembler:
+
+1. Revert the template to 5 and **patch `p_flags` at emit time**. Then the template bytes stay
+   identical and the fixpoint holds — but the first build still emits 7 while the seed emitted 5, so
+   the *file* and the *emitted* differ for exactly one cycle. This is the right shape; it needs a
+   documented two-step promote (`promote-header`, with the superiority cases as the evidence that the
+   intermediate is sound).
+2. A second read-write `PT_LOAD`, which is the same wall with more work behind it.
+
+What that leaves, and the cheaper way round it: a big *writable* buffer can live on the stack. A
+program's stack is already read-write, `cc` emits its own `sub rsp`, and a function with a large local
+array only needs the frame size to grow. That needs no header change at all, so it can go through the
+ordinary gate structure.
+
+`space` is committed with a *read* of the reserved region as its gate: `movzx edi, byte [buf]` exits 0,
+because the bytes are zeros. That is a weak gate and an honest one — it proves the reservation and the
+label, not writability.

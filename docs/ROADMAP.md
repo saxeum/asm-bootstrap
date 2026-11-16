@@ -1487,3 +1487,19 @@ Left, in order:
 2. `<=`/`>=` against a variable.
 3. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus, with
    the dialect frozen as the witness.
+
+## Assembler: `space N`
+
+`space N` reserves N zeroed bytes and a label before it gives their address. It is committed without
+the writable segment, because making the segment writable is a header change and a header change
+cannot pass the fixpoint gate before it is promoted (`docs/WAVES.md` has the analysis and the two
+escape routes).
+
+Next, in order of what unblocks the most:
+
+1. **A large local array in `cc`** — grow the frame for an array instead of refusing one over 32 slots.
+   The stack is read-write already, so a compiler's input buffer needs no assembler change at all.
+2. **The two-step promote for header changes**, if a writable segment turns out to be needed after
+   all. `p_flags` patched at emit time, template untouched, and a `promote-header` target whose
+   evidence is the superiority suite rather than the fixpoint.
+3. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.

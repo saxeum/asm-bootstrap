@@ -268,11 +268,36 @@ jnz.l d_m
 movzx edx, byte [rbx+1]
 cmp dl, 121
 jz.l psys
+cmp dl, 112
+jz.l d_spc
 cmp dl, 104
 jz.l d_sh
 cmp dl, 97
 jz.l d_sa
 jmp.l dsubreg
+d_spc:
+; `space N` -- N zero bytes in the image. The segment is read-write-execute, so
+; a label before it gives the address of a buffer the program can write to. It
+; is deliberately not a `.bss` with memsz > filesz: that needs a fixup for the
+; labels that live past the end of the file, and nothing here needs zeros that
+; are not already on disk.
+lea rbx, [rbx+5]        ; past "space"
+call skipsp
+call expr
+mov [rbp+136], ecx
+d_spl:
+mov eax, [rbp+136]
+cmp eax, 0
+jz d_spd
+mov eax, 0
+call emital
+mov eax, [rbp+136]
+dec eax
+mov [rbp+136], eax
+jmp d_spl
+d_spd:
+jmp.l pline
+
 d_sh:
 movzx edx, byte [rbx+2]
 cmp dl, 108
