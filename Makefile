@@ -357,7 +357,7 @@ test-cc: cc asm1
 	  if $(ASM1) < tests/golden/recursion.s > $$tmp/rc 2>/dev/null; then \
 	    chmod +x $$tmp/rc; \
 	    if $$tmp/rc; then g1=0; else g1=$$?; fi; \
-	    if [ $$g1 -eq 10 ]; then \
+	  if [ $$g1 -eq 10 ]; then \
 	      printf '  cc    recursion: f(10,0) with an accumulator exits 10 (ten frames)\n'; \
 	    else echo "  recursion exited $$g1, wanted 10 -- frames or arguments are wrong"; fail=1; fi; \
 	  else echo "  asm1 refuses recursion.s"; fail=1; fi; \

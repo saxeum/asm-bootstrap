@@ -3262,3 +3262,30 @@ argument. Not attempted here: it is a rewrite of `cargloop`/`cardskip`, and the 
 the one least able to verify a rewrite of the argument path.
 
 Gate added for what *does* work: four arguments at depth 0 exits 10.
+
+## The argument spill: fixed the defect, broke the compiler, reverted
+
+The collision from the last entry was fixed as designed — park each argument in a frame slot
+(`16400 - 8*i`, above the array region), then load the argument registers together just before the call.
+It worked: `1 + f(1,2,3,4)` exited 11, two four-argument calls at different depths exited 20, and a
+literal as a depth-1 argument exited 105.
+
+**And `cc` then crashed on its own source.** `./cc < src/cc.c` segfaulted, so the port could not be
+compiled by the compiler it is a port of — the one program that matters. Bisecting by function got no
+further than establishing that five functions with loops, tables and 21 literals is enough to trigger
+it, while every gate in the suite still passed. A change that fixes a defect and breaks the compiler on
+its own input is not mergeable, so it was reverted (`git checkout src/cc.s`, keeping the `r10` prologue
+fix which is the *other* half of the four-argument story).
+
+Three mistakes of mine inside the attempt, each worth not repeating:
+
+- the load loop's counter went into `[rbp-296]`, which `ex3call` uses to hold the recursion depth — the
+  emitted text became `add ll` / `, rax`;
+- after moving it to `-336` the loop's *initialisation* still wrote `-296`, so the loop never ran and the
+  arguments were never loaded;
+- and a `gsub` over the gate replaced `if [ $g1 -eq 10 ]` in **three** different gates, silently changing
+  the recursion, sum and four-arguments gates at once. `make test-cc` caught it, but only because the
+  recursion gate printed its failure while its own message claimed success.
+
+The attempt is kept as `.work/cc.s.argspill` — not committed, because it does not work — and the
+reproduction for the crash is what the next session needs: `./cc < src/cc.c` after applying it.

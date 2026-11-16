@@ -1789,3 +1789,13 @@ At the rate of the last three sessions — roughly one slice per session, each s
 one or two gates — the port is **four to six sessions** away from D2, and `src/asm1.c` is a further
 project of comparable size. That is the honest number, and it is the one worth writing down: the work
 left is not uncertain, only long.
+
+## Next: the argument spill, again — and the crash it caused
+
+The fix is designed and its acceptance tests exist (`1 + f(1,2,3,4)` = 11, `f(..)+h(..)` = 20, a literal
+as a depth-1 argument = 105). What it lacks is an answer to: **why does `cc` segfault on `src/cc.c` with
+it applied?** Five functions with loops and 21 literals reproduce it; every gate in the suite still
+passes. The reverted patch is `.work/cc.s.argspill` — reapply it, then bisect `src/cc.c` by deleting one
+function at a time, which is cheap and was not done here.
+
+Until then the port writes around the collision: no call at depth > 0 with three or more arguments.
