@@ -223,11 +223,33 @@ jnz.l d_m
 movzx edx, byte [rbx+1]
 cmp dl, 121
 jz.l psys
+cmp dl, 104
+jz.l d_sh
+cmp dl, 97
+jz.l d_sa
 mov eax, 72
 mov [rbp+44], eax
 mov eax, 41
 mov [rbp+48], eax
 jmp.l prr
+d_sh:
+movzx edx, byte [rbx+2]
+cmp dl, 108
+jz.l shl_
+cmp dl, 114
+jnz.l fail
+mov eax, 40
+jmp.l shx
+shl_:
+mov eax, 32
+shx:
+mov [rbp+44], eax
+jmp.l psh
+d_sa:
+mov eax, 56
+mov [rbp+44], eax
+jmp.l psh
+
 d_m:
 cmp al, 109
 jnz.l d_d
@@ -1563,3 +1585,27 @@ mov [rbp+40], eax
 cmp eax, 0
 jnz.l hcpl
 ret
+
+psh:
+lea rbx, [rbx+4]
+call reg32
+mov [rbp+32], edx
+lea rbx, [rbx+1]
+call skipsp
+call expr
+mov edx, 256
+call chklim
+mov [rbp+36], ecx
+mov eax, [rbp+32]
+mov edx, [rbp+44]
+add eax, edx
+mov edx, 192
+add eax, edx
+mov [rbp+40], eax
+mov eax, 193
+call emital
+mov eax, [rbp+40]
+call emital
+mov eax, [rbp+36]
+call emital
+jmp.l pline

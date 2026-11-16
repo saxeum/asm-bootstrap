@@ -529,3 +529,31 @@ superior: and eax,ecx -> 21 c8 where asm0a emits 01 c8 (it reads "and" as "add")
 The lesson is worth stating plainly: **an independent implementation is not a correct one.** The
 cross-check between `asm0a` and `asm1` was valuable because they were *different*, not because
 `asm0a` was right — and this is the first case where they disagree and `asm1` is the correct side.
+
+### Phase 2, item 6 continued: shifts
+
+```
+shl eax, 1   -> c1 e0 01      shr eax, 1  -> c1 e8 01
+sar eax, 31  -> c1 f8 1f      shr edi, 8  -> c1 ef 08
+```
+
+`asm1` 5 781 → **5 945 bytes**. `shl`/`shr`/`sar` are one handler: `C1 /digit ib` with the digit in
+`[rbp+44]` (4, 5, 7). The `s` dispatcher already split syscall from `sub`; it now splits three ways on
+the second character — `y` for syscall, `h` for `shl`/`shr`, `a` for `sar` — and `shl`-vs-`shr` on the
+third. Capability pairs: 20.
+
+**Three defects, all mine, all the same shape as last time: an insertion that cut a neighbouring
+path.**
+
+1. The `d_sh`/`d_sa` handlers were inserted *before* `jmp.l prr`, so the `sub` path lost its jump and
+   fell into the shift handler. The build failed outright — which is the good case.
+2. The `psh` tail was written with two `call emital`s where the second needed its operand loaded
+   first, so every shift emitted the *modrm twice* and never the count: `shl eax,1` gave `c1 e0 02`,
+   where `02` was not the count but whatever was left in `eax`.
+3. My fix for (2) was a line-number `sed` insert that landed mid-block and duplicated lines — the
+   same mistake recorded in `AGENTS.md` twice already. The block was then rewritten by content anchor
+   (label to next label), which is the method that works.
+
+Item 6 still open: `push`/`pop`, `imul`, `r8`–`r15` with REX, and indexed addressing
+`[base+index*scale]`. The last two need the register and memory-operand machinery extended rather
+than just another handler.
