@@ -630,3 +630,55 @@ Both are the *same* underlying confusion, now responsible for six defects: **fil
 segment offset differ by 0x78, and only a decode tells you which one you have.** The counter-
 measure that would have caught both immediately is the one already adopted: decode the patched
 site, and compute every displacement in one space, from a decode.
+
+## Wave 2d-9 — PASS: `mov r32,r32`, and a silent mis-assembly caught
+
+Artifact: `asm0a`, 3000 bytes, sha `33fd9db953402acde7347910068ccb20ce154f946de16742066fe3a1cf8b7d34`, entry `0x400110`, filesz `0xbb8`.
+
+Attempting to write an assembler *in the dialect* rather than hand-emitting more byte code was
+the point of this wave. It failed at once, on the most basic omission: **there was no register-to-
+register move at all**, so no assembler source could be written. `do_mov` now distinguishes a
+third source shape — `[` load, digit immediate, or a letter → register — and `do_movrr` emits
+`89 /r`.
+
+### Gate
+
+```
+movrr  byte-identical to ref/movrr (134 B), exits 7
+exit42 42 | hello_num "Hello, World!" | jmp 7 | loop 10 | jz 5 | r8 7 | inc8 3 | cmp8 12 |
+stack "H" | count10 1..10 | dbnum "Hi" | load 7 | store 7 | movrr 7 — all byte-identical
+```
+
+### The probe's real finding: a silent mis-assembly
+
+While writing the probe, `mov al, [rsi]` assembled to **`b0 00`** — `mov al, 0` — and exited 0.
+`mdisp2` routes it down the 8-bit path because the comma sits at index 6, and the number parser
+then met `[`, found no digits, and yielded 0.
+
+This is the worst defect class in the project so far: not a rejection, not a crash, but a
+plausible, running, wrong binary produced from valid-looking source. A self-hosted assembler
+written with even one `mov r8,[mem]` would have had its code silently truncated to zeroes and
+every subsequent fixpoint check would still have "passed".
+
+Fixed with `digchk`: the 8-bit immediate path now verifies that the character after the blanks
+is a digit and `fail`s otherwise. `mov al,[rsi]` exits 1; `mov al,5` still emits `b0 05`.
+
+### What the probe says is still missing
+
+Written in the same wave, not just observed:
+
+| construct | needed for | status |
+|---|---|---|
+| `mov r64,r64` | any pointer work | rejected |
+| `movzx r32, byte [mem]` | scanning source bytes | rejected |
+| `add r32,r32`, `add r32,imm` | pointer and offset arithmetic | rejected |
+| `cmp r32,imm32` | comparing counts and offsets | rejected |
+| `test r32,r32` | zero checks | rejected |
+| `sub r32,imm` | adjusting the stack / pointers | rejected |
+| `[reg+disp32]` | table and buffer addressing | rejected |
+| `jmp/jcc rel32` | any branch beyond ±127 bytes | rejected |
+
+Eight forms. The honest conclusion: the dialect is roughly half of what an assembler's own
+source needs, and hand-emitting those eight is three or four more waves of the patch arithmetic
+that has already produced seven defects of its own. That trade — more byte code to enable
+avoiding byte code — is the one thing worth deciding before the next wave.

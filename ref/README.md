@@ -11,6 +11,7 @@ output for the same source is byte-identical to one of these.
 | `fib`     | 334 B | `f61cea2c…2e10098` |
 | `jmp`     | 139 B | `f1efca3a…b0fd1de` |  wave 2b: a forward jump, exits 7 not 99
 | `loop`    | 140 B | `5ca623d6…` |  wave 2c: inc/dec/jnz, exits 10 (iteration count)
+| `movrr`   | 134 B | `633ee8eb…` |  wave 2d-9: `mov r32,r32`, exits 7 |
 | `store`   | 138 B | `5129e1e0…` |  wave 2d-8: `mov [mem],r32` + load, exits 7 |
 | `load`    | 138 B | `24e4f4c8…` |  wave 2d-7: `mov r32,[mem]`, exits 7 |
 | `dbnum`   | 154 B | `902aa1d8…` |  wave 2d-6: numeric `db`, prints `Hi\n` |
