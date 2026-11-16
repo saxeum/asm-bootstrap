@@ -411,3 +411,28 @@ Measured, by putting the class in each candidate slot and assembling `src/cc.s`:
 something does. That is recorded here as an open question rather than a conclusion, and the rule until
 it is answered is: **the safe bytes are `[rbp+2]`, `[rbp+8..11]`, `[rbp+104]`'s companions and the
 negative slots `[rbp-64]`…`[rbp-128]`; do not put state in `[rbp+0..7]`.**
+
+## Duplicate labels are refused, and that is what makes `cat` a link step
+
+`asm1` assembled a duplicate label silently and the first definition won. That is a wrong-answer
+class of its own: the second definition is dead code, which then hides whatever it was meant to do.
+It also made the obvious way to combine two translation units —
+
+```
+cat a.s b.s | asm1 > prog
+```
+
+— quietly wrong whenever both files defined the same name, which for two C translation units is
+`main` every time.
+
+`lbldef` now looks the name up before adding it, in pass 0, and refuses with its own reason:
+`line N: duplicate` (the fourth reason word, after `range`, `label` and the generic `rejected`).
+
+**The check had to be preceded by three deletions**, because `src/asm1.s` itself carried seven dead
+duplicate labels — a second `chkok: ret`, `trm`'s `termok`/`termnum` pair, and the unreachable
+`lblchk` block with its own `ls1` copy. An assembler cannot refuse what its own source does, so the
+debt recorded in `docs/continue-here.md` had to be paid first. `asm1` 7 669 → 7 598 after the
+deletions and → 7 731 with the check and the new message.
+
+The duplicate check is also the first place the assembler looks a symbol up *without* failing when it
+is absent, which is why it uses `lku0` (which reports found/not-found in `edx`) rather than `lku`.

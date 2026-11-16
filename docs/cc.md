@@ -271,3 +271,55 @@ only then does the dialect implementation become history. Two rules for it:
 
 Nothing in that order may use a system compiler (invariant 10). The first C compiler has to be
 written in the dialect, which is why step 2 precedes step 4 at all.
+
+## Is a linker needed? Not yet, and not in that shape
+
+**No, and it can wait — because the assembler already does the two jobs a linker would do for a
+one-unit program, and because the current design cannot use a real one without losing the property
+that makes the dialect easy to target.**
+
+A linker does three things. Here is what happens to each:
+
+| a linker | today |
+|---|---|
+| **symbol resolution** across objects | `asm1`'s label table, in one pass over one input |
+| **relocation** — patch addresses whose values are known only at link time | `asm1` evaluates `label`, `label+4`, `end-start` at assembly time, against a fixed base of `0x400000`. There is nothing left to relocate. |
+| **section merging** — `.text`, `.data`, `.bss`, alignment, program headers | `asm1` writes the ELF and its program headers itself |
+
+The third row is the design decision that makes the second one invisible: **every address is baked in
+as an immediate** (`mov esi, 4194424+label`). That only works while the whole program is one input
+with one known layout, which is exactly why a linker is not merely "not yet" — a real one would force
+the assembler to stop resolving addresses and emit relocation records instead, and that is the
+assembler's single most valuable property gone.
+
+### So how do two translation units get combined?
+
+```
+cat a.s b.s | asm1 > a.out
+```
+
+That is today's linker, and it works: `main` in `a.s` can `call` a routine defined in `b.s`, because
+both end up in one assembly pass with one label table. It is not a link step, it is the absence of one
+— the same trick as `#include`.
+
+**It was unsafe until this wave.** Duplicate labels assembled silently, first definition winning, so
+`cat main.s other-main.s | asm1` quietly kept one of the two mains. `asm1` now **refuses** a duplicate
+definition (`line N: duplicate`), which is what makes concatenation an honest mechanism instead of a
+trapdoor. That check cost three deletions first: `src/asm1.s` itself carried seven dead duplicate
+labels (a second `chkok`, `trm`'s `termok`/`termnum`, an unreachable `lblchk` block with its own
+`ls1`), and the assembler cannot refuse what its own source does.
+
+### When would a linker actually earn its place?
+
+Two cases, and neither is on the compiler's path:
+
+1. **Reusing a runtime across programs** — `write`, `exit`, number formatting as a library. That needs
+   no linker: it is one `.s` file `cat`-ed in front, and the label-collision check now makes that
+   safe.
+2. **Compiling the compiler's own source as several files** — a real linker, or several `cat`s. For a
+   compiler of this size one file is fine, and `cat` is fine for two.
+
+What would force it: `.data` as a *separate* segment with its own alignment, or a program large enough
+that assembling its source in one pass becomes the bottleneck. Neither is close. The honest position
+is the one already in `docs/ROADMAP.md` — **no linker, one translation unit per program** — with
+`cat` as the escape hatch and the duplicate check as its guard.

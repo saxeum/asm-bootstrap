@@ -2110,3 +2110,28 @@ state goes in `[rbp+2]`, `[rbp+8..11]` or the negative slots; never `[rbp+0..7]`
 Two things this says about the project: a frame map that is "obviously free" is not evidence, and the
 *fix* here was verified the only way that counts — the new assembler's output for `cc.s` is
 byte-identical to the previous assembler's, which is the same standard `asm2` will be held to.
+
+## Duplicate labels refused — the precondition for `cat` ever being a link step
+
+The question was "do we need a linker?", and the answer is no for a while (`docs/cc.md` has the
+table: the assembler already does symbol resolution, relocation and the ELF), with `cat a.s b.s |
+asm1` as the way to combine units. But that mechanism was *unsafe*, because a duplicate label
+assembled silently and the first won — so `cat` of two files that both define `main` kept one of them
+without a word.
+
+Landing the check required paying a debt first: `src/asm1.s` itself had seven dead duplicate labels
+(a second `chkok: ret`, `trm`'s `termok`/`termnum`, the unreachable `lblchk` block and its `ls1`).
+Deleted, with 18/18 and the fixpoint checked after the deletion and before the check went in —
+the same ordering that made the `emitmem` duplicate safe to remove two waves ago.
+
+Then `lbldef` gained a lookup-before-insert, using `lku0` (the found/not-found variant) and a fourth
+reason word: `line N: duplicate`. `asm1` 7 669 → 7 598 (dead code) → 7 731 (check + message).
+
+Two defects in my own edits, both the same shape as ever: an awk insertion that put `cmp eax, 3`
+between `cmp eax, 2` and its `jz`, so `label` stopped matching (`messages 5/8`), and a block insert
+that duplicated `mrng:` — which the *new check then caught*, since the assembler now refuses what it
+used to accept. The fixpoint failing at `line 1882: duplicate` was the new gate doing its job on its
+own source within minutes of being added.
+
+`cat a.s b.s | asm1` is now verified: `main` in one file calls a routine in the other and exits 7, and
+a genuine `main`/`main` collision is a refusal, not a coin toss.

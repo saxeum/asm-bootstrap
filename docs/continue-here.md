@@ -15,15 +15,15 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | | bytes | sha256 (16) | notes |
 |---|---|---|---|
 | `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
-| `asm1` | 7 669 | `db11adf1852040ee` | built by `seed/asm1` from `src/asm1.s` |
-| `seed/asm1` | 7 669 | `db11adf1852040ee` | the promoted stage; identical to `asm1` |
+| `asm1` | 7 731 | `ac80d9f9094d7051` | built by `seed/asm1` from `src/asm1.s` |
+| `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted stage; identical to `asm1` |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
-| `src/asm1.s` | 30 904 | — | 2 142 lines, 196 labels (limit 256, 7 of them duplicated dead code) |
+| `src/asm1.s` | 31 236 | — | 2 150 lines, 199 labels (limit 256), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
 | `cc` | 2 902 | `2056d95abc461a61` | built by `asm1` from `src/cc.s` (911 lines) — C to dialect TEXT |
 
 Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **30 capability
-pairs** · **5 superiority cases** (byte-level) + 3 behavioural · 7 exact messages · 38 decoder cases ·
+pairs** · **5 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
 **94 coverage forms** · **6 cc gates** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
@@ -33,7 +33,7 @@ make clean && make && make check
 ```
 
 `make check` must print, in order: **forbidden tools: none invoked** · **coverage 88/88 forms
-exercised** · fixpoint holds · bootstrap NOT APPLICABLE · 9/9 rejections · 7/7 exact messages ·
+exercised** · fixpoint holds · bootstrap NOT APPLICABLE · 9/9 rejections · 8/8 exact messages ·
 30/30 capability pairs · 5/5 superiority cases (plus the 99 KB, `entry` and r8d cases) · 38/38 decoder
 cases · cc 6 gates · 36 provenance records · SHAS match · `asm1.sha` match · and a real **`branch pins: 290/290`**
 line naming both the subject's sha and the decoder's. If any line is missing or red, stop and fix

@@ -1179,3 +1179,21 @@ Measured across candidate slots: `[rbp+0]` and `[rbp-80]` work; `[rbp+1]`, `[rbp
 scratch at `[rbp+4]`, so they are explained. The first two have no writer anywhere in
 `src/asm1.s` and are recorded as an open question, with the rule in `docs/encodings.md`: state goes in
 `[rbp+2]`, `[rbp+8..11]` or the negative slots, never `[rbp+0..7]`.
+
+## No linker, and now a reason that is checkable
+
+The question came up: does the compiler need a linker? `docs/cc.md` has the analysis; the short
+version is that `asm1` already does symbol resolution, relocation and the ELF, because every address
+is baked in as an immediate against a fixed base — and a real linker would force the assembler to stop
+resolving addresses, which is the property that makes the dialect easy to target.
+
+Two translation units are combined with `cat a.s b.s | asm1`, which *is* the absence of a link step.
+That was unsafe until this wave: duplicate labels assembled silently and the first won. `asm1` now
+refuses them (`line N: duplicate`), so a `cat` of two files that both define `main` fails instead of
+picking one.
+
+The check could not be added first: `src/asm1.s` carried seven dead duplicate labels of its own, so
+the debt recorded in `docs/continue-here.md` had to be paid — the unreachable `lblchk` block, a second
+`chkok: ret`, and `trm`'s `termok`/`termnum`. `asm1` 7 669 → 7 598 (deletions) → 7 731 (check and the
+fourth reason word). The fixpoint then failed at `line 1882: duplicate` on my own source, which is the
+new check working on itself within minutes.

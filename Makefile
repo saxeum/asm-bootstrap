@@ -501,5 +501,6 @@ test-msg-exact: asm1
 	check "line 2: rejected" "mov eax, 1\nfrobnicate 1"; \
 	check "line 1: rejected" "jbe x"; \
 	check "line 1: rejected" "jnb x"; \
-	printf '  messages %s/7 exact: line number and reason\n' $$ok; \
+	check "line 3: duplicate" "x:\nret\nx:"; \
+	printf '  messages %s/8 exact: line number and reason\n' $$ok; \
 	exit $$fail

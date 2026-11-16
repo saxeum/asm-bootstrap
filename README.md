@@ -175,12 +175,12 @@ Each prints `identical`, and `milestone-fixpoint` produces 4295 bytes with sha25
 | | |
 |---|---|
 | bootstrap | `asm0a`, 3745 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD`, sha256 in `docs/SHAS` |
-| self-hosted | `asm1`, 7669 bytes, sha256 `db11adf1852040ee…`, built by `seed/asm1` from `src/asm1.s` (2142 lines, 30904 bytes) |
+| self-hosted | `asm1`, 7731 bytes, sha256 `ac80d9f9094d7051…`, built by `seed/asm1` from `src/asm1.s` (2150 lines, 31236 bytes) |
 | seed | `seed/asm1`, 7623 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
 | builder | `asm1` is built by `seed/asm1`, never by itself. Since the source needs more than 128 labels, `asm0a` can no longer parse it: `make bootstrap-check` reports NOT APPLICABLE |
 | fixpoint | `asm1(asm1.s) == asm1`, 7623 bytes, one sha256, idempotent |
 | fixtures | 18, all byte-identical to hand-emitted references and behaviourally correct |
-| rejections | 9 sources refused by both assemblers with no output, and 7 exact messages: line number *and* reason |
+| rejections | 9 sources refused by both assemblers with no output, and 8 exact messages: line number *and* reason |
 | capability | 30 pairs where asm1 accepts syntax asm0a cannot parse; both spellings must agree byte for byte |
 | coverage | 94 claimed forms, each required to appear in a test input (`make test-coverage`) — the gate that says which paths nothing has ever executed |
 | superior | six cases where asm1 is right and asm0a is not (`and`-as-`add`, `[rbp]` disp 0, a negative disp, 64-bit vs 32-bit width, `r8`–`r15`, disp32), each against a hand-computed body; plus a 99 KB source, a chosen `entry` point and r8d arithmetic, all of which must RUN |
