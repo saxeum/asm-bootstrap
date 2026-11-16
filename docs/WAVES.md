@@ -986,3 +986,47 @@ rather than the shims.
 
 Both habits are now in the log as the reason this landed: **one patch, decode, corpus** and
 **one discriminating experiment instead of another round of patching**.
+
+## Probe: can an assembler written in this dialect read its own input?
+
+Every fixture so far is a few instructions with constants baked in. `asm1.s` is different: it has
+to *read* text and *branch on its content*, and this dialect has three properties that were
+assumed to make that impossible.
+
+`src/window.s` tests all three at once and settles it:
+
+```
+read(0, rsp, 16)                      ; buffer is the stack, reached with lea rsi,[rsp]
+mov eax,[rsi]                         ; 4-byte window, no byte load needed
+cmp eax, 0x20766f6d                   ; "mov "        -> je ismov
+cmp eax, 0x74697865                   ; "exit"        -> je isexit
+```
+
+Behaviour, run three ways:
+
+```
+"mov eax,1"  -> exit 2
+"exit now"   -> exit 3
+"zzzzz"      -> exit 1
+```
+
+### The three assumptions, and why each holds
+
+1. **No `movzx r32, byte [mem]`** — so a byte cannot be read directly. A **4-byte window plus a
+   32-bit compare** replaces it: load four bytes once and compare against a packed literal. This
+   is how mnemonic matching will work, and it costs one load per four characters instead of four.
+2. **No displacement beyond ±127** — so a buffer cannot be indexed by offset. Instead **never
+   index at all**: carry a moving pointer in a 64-bit register, access `[rsi]` with displacement
+   zero, and advance with `lea rsi,[rsi+1]`. The buffer can then be anywhere.
+3. **No `mov r64,r64`** — so a pointer cannot be copied. `lea rdi,[rsi]` is a move, and
+   `lea rsi,[rsp]` is how a buffer address is obtained in the first place.
+
+### What is left to build
+
+Labels, which the assembler needs for its own loop. A table at a `lea rbp,[rsp]` base with
+12-byte entries (8-byte name, 4-byte offset) stays inside ±127 for eight labels, so
+`[rbp+disp8]` reaches it without any new form. Register budget: `rsi` input pointer, `rdi` output
+pointer, `rbx` counter, `eax`/`ecx`/`edx` scratch, `rbp` label-table base.
+
+Estimated at 600–800 instructions. Nothing in the design requires a form this assembler cannot
+emit, which is the property that makes self-hosting possible at all.
