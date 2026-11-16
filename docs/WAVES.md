@@ -426,3 +426,50 @@ Two lessons worth keeping:
    wrong. Had I "fixed" the assembler to match it, I would have introduced a second, longer
    encoding for `jmp` that the dialect's own rule forbids — the exact class of silent
    divergence `docs/handover.md` condition 3 exists to prevent.
+
+## Wave 2d-4 — PASS: memory operands, `lea`, `mov byte [mem],imm8`
+
+Artifact: `asm0a`, 2570 bytes, sha `3a937a765d590d604433a56d4f23c43cba55df97da78b6f3dc90d4524a7a989d`, entry `0x400110`, filesz `0xa0a`.
+
+The last real parsing work. Four new pieces:
+
+- **`memop`** parses `[base]` or `[base+disp]`, resolving the base through a new 64-bit table
+  (`lookup64`, which falls back to the 32-bit table so `[esp]` also works) and the displacement
+  through the existing range-checked `num8`.
+- **`emit_mem`** turns (reg field, base, disp) into `modrm` + optional `SIB 0x24` (required when
+  the base is `rsp`/`esp`, since `rm=100` means SIB) + optional `disp8`. Shared by all three
+  forms, which is why they cost less than they look.
+- **`do_lea`** picks `REX.W` by testing whether the destination starts with `r` — the one place
+  the class is decided syntactically rather than by table.
+- **`do_movmem`**, **`do_movbyte`**, and `mdisp2` (routes `mov [`, `mov byte `, `movzx`, `mov`
+  and `mov r8`).
+
+### Gate
+
+```
+stack    asm0a exit 0, byte-identical, produced binary prints "H\n"
+exit42 42 | hello_num prints | jmp 7 | loop 10 | jz 5 | r8 7 | inc8 3 | cmp8 12 — all identical
+```
+
+`src/stack.s` stores a byte and a newline into its own stack frame with two different memory
+forms, takes the address with `lea rsi,[rsp]`, and writes 2 bytes to stdout — so the memory
+operands are *observed*, not merely encoded. A wrong SIB or displacement prints nothing or the
+wrong bytes.
+
+### Four defects, all in the new plumbing
+
+1. **`memop` never advanced past the base name**, so `[rsp]` looked for `]` at `'r'`. Fixed by
+   making `lookup64` leave `rbx` past the name (inserted at its `ret`, so only the table
+   shifted) and changing `do_lea`'s follow-up skip from 4 to 1.
+2. **`lea edx,[ecx+2]` fell through `lookup64` to `lookup`, which does not advance `rbx`** — the
+   r64 and r32 paths disagreed about where the cursor was. Fixed with a thunk that calls
+   `lookup` and then advances, so both paths leave `rbx` in the same place.
+3. **A patch at segment 0x933 instead of file 0x9AB** corrupted `do_movbyte`'s first
+   instruction; my "restore" covered 0x932–0x935 and left 0x936 zeroed, which turned
+   `call memop` into `(bad)`. Same class as the earlier `0F 84` mistakes: *file and segment
+   offsets are different numbers, and the difference is 0x78.*
+4. **`do_movbyte` never skipped the `,` after `]`**, so `10` parsed as 0 and the program printed
+   `H\0`. The standalone test passed because the instruction is 5 bytes either way — only the
+   three-instruction fixture with an observable output caught it. Fixed with a `memop2` wrapper
+   that consumes an optional comma, so all three memory forms share one rule, and the now
+   redundant skip in `do_movmem` became NOPs.
