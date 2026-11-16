@@ -383,3 +383,31 @@ Four defects, and three of them are the same defect wearing different clothes:
 
 Every one was caught by a test rather than by reading: the fixtures for (2) and (3), the capability
 pairs for (1) and (4).
+
+### Phase 2, item 5: `entry` — attempted, reverted, and why
+
+Not landed. `asm1` is at the last green commit (5 351 bytes, 18/18, fixpoint, all gates).
+
+The intended change: an `entry <expr>` directive, so a source can put data *before* code and choose
+its own entry point. It is on the critical path twice over — `asm0a`'s own layout puts data first, and
+reconstructing `src/asm0a.s` (Stage 5) needs exactly that.
+
+It requires the header emission to stop being "copy 96 bytes, then filesz, then 8 bytes" and become
+four parameterised copies with the entry field spliced in at offset 24:
+
+    0..23 from the template | 8 bytes of entry | 32..95 from the template
+    | filesz + memsz | 112..119 from the template
+
+That is the right shape, and I had it working piecewise. What defeated it was the *editing*, not the
+design: three `sed` line-range replacements in a row landed one or two lines off, and the last one
+deleted the `mov eax, 2` that switches `emital` from counting to writing. Every fixture then failed,
+because the assembler was silently back in count mode — and the header it produced was wrong in a way
+that only `cmp` against `ref/` shows.
+
+Reverted rather than half-landed. The lesson is already in `AGENTS.md` and I ignored it: structural
+edits to this file are done by *appending self-contained blocks and anchoring on content*, not by
+line numbers. A rewrite of the header belongs in a session that starts with the whole budget.
+
+Next session starts here: extract the header emission into `hcp` (a copy helper taking pointer and
+count), then splice the entry field, and check `18/18` after **each** of those two steps rather than
+after the third.
