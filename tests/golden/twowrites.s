@@ -22,6 +22,8 @@ entry main
 m1:
 db "A"
 m1end:
+db 0
 m2:
 db "BB"
 m2end:
+db 0

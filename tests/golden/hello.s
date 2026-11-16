@@ -17,3 +17,4 @@ entry main
 m1:
 db "Hello, World!\n"
 m1end:
+db 0

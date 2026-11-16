@@ -63,3 +63,4 @@ entry main
 m1:
 db "hi"
 m1end:
+db 0

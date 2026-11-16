@@ -3099,3 +3099,34 @@ This was not chased further. Every other gate passes, `src/cc.c` compiles and as
 at run time for the same reason. That is the state the port is handed on in: two defects down, one
 reproduced and named, and the acceptance test (`cc < src/cc.c` → `cc1` → `cc1 | cmp - expected`) not yet
 passing.
+
+## The port's first verified slice, and the defect that blocked it
+
+`src/cc.c` — the compiler's output side, written in the subset it compiles — now passes:
+
+```
+cc < src/cc.c > .work/cc1.s ; asm1 < .work/cc1.s > .work/cc1 ; ./.work/cc1 | cmp - tests/selfhost/slice1.expected
+```
+
+Byte-identical to text written before the code existed, and `make test-selfhost` is in `check`.
+
+Getting there needed one more defect found and fixed, and it is a good one: **literals were emitted with
+no terminating zero.** `write("...")` never needed one — it passes an explicit length — so nothing had
+ever noticed. But `es(p, l, s) { while (s[i] != 0) ... }` walked straight past the end of `"ab"` into
+`"cd"`, and the program wrote the wrong bytes at the wrong offsets:
+
+```
+l = line(p,l,"ab"); l = line(p,l,"cd");   printed  abcd\ncd\n   instead of  ab\ncd\n
+```
+
+The fix has a subtlety worth recording: the `db 0` goes **after the `m<k>end:` label**, not before it.
+Inside, it would become part of the length `write` computes (`m1end-m1`) and every `write` would emit a
+stray NUL — which is exactly what the first attempt did, and the `hello` gate caught it by refusing to
+match `Hello, World!\n`.
+
+Gate: two strings walked to their ends print `ab\ncd\n` — the shape a compiler uses everywhere and that
+no earlier test had produced.
+
+Two earlier suspicions in this file were wrong and are worth retracting: the literal counter and
+`wblock`'s `[rbp+20]+1` were in step all along, and the multi-argument call was passing arguments
+correctly. The bug was in the *data* the arguments pointed at.

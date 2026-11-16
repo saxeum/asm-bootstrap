@@ -2232,6 +2232,10 @@ inc eax
 call emitnum
 mov esi, 4194424+f_end
 call emitstr
+mov esi, 4194424+f_dbz
+call emitstr             ; a terminating zero AFTER the end label: a literal is a
+                         ; C string too, and `while (s[i] != 0)` runs into the next
+                         ; one without it -- but `write`'s length must not count it
 mov eax, [rbp+40]
 inc eax
 mov [rbp+40], eax
@@ -2957,4 +2961,8 @@ db "mov [rbp-328], "
 db 0
 f_r9:
 db "r9"
+db 0
+f_dbz:
+db "db 0"
+db 10
 db 0

@@ -128,7 +128,7 @@ verify-provenance: asm1 dis
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: test-tools test-tmp test-header asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
+check: test-tools test-tmp test-header test-selfhost asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -576,6 +576,16 @@ test-cc: cc asm1
 	  if $$tmp/tl; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 5 ]; then \
 	    printf '  cc    two functions, one loop each: sibling blocks get distinct labels, exits 5\n'; \
+	if $(CC) < tests/golden/strterm.c > $$tmp/st.s 2>/dev/null && cmp -s $$tmp/st.s tests/golden/strterm.s; then :; \
+	else echo "  strterm.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/strterm.s > $$tmp/st 2>/dev/null; then \
+	  chmod +x $$tmp/st; \
+	  $$tmp/st > $$tmp/st.out; g1=$$?; \
+	  printf 'ab\ncd\n' > $$tmp/st.want; \
+	  if [ $$g1 -eq 0 ] && cmp -s $$tmp/st.out $$tmp/st.want; then \
+	    printf '  cc    literals are zero-terminated: two strings walked to their ends\n'; \
+	  else echo "  strterm wrote [$$(cat $$tmp/st.out)]"; fail=1; fi; \
+	else echo "  asm1 refuses strterm.s"; fail=1; fi; \
 	  else echo "  twoloops exited $$g1, wanted 5"; fail=1; fi; \
 	else echo "  asm1 refuses twoloops.s -- sibling blocks share a label"; fail=1; fi; \
 	  else echo "  strlit exited $$g1, wanted 2"; fail=1; fi; \
@@ -695,6 +705,28 @@ test-cc: cc asm1
 # assemble, and its normalised shape (tools/shape.awk) must appear in some test
 # input. A form nobody tests is a red gate with a name on it, which is the
 # difference between "we have 18 fixtures" and "we know what they reach".
+# ---- the port ----------------------------------------------------------------
+# The compiler, written in the subset it compiles. Slice 1 is the output side:
+# emitstr/emitc/putn/line and one fixed program. The expected text was written
+# before src/cc.c existed, and this target is what makes the claim "the port has
+# started" mean something. A later slice will replace the pipeline below with
+# cc1 compiling src/cc.c itself (cc1.s vs cc2.s).
+test-selfhost: asm1 cc
+	@mkdir -p $(WORK); \
+	if $(CC) < src/cc.c > $(WORK)/cc1.s 2>$(WORK)/cc1.err; then \
+	  if $(ASM1) < $(WORK)/cc1.s > $(WORK)/cc1 2>$(WORK)/asm1.err; then \
+	    chmod +x $(WORK)/cc1; \
+	    if $(WORK)/cc1 > $(WORK)/cc1.out 2>$(WORK)/cc1.run.err; then \
+	      if cmp -s $(WORK)/cc1.out tests/selfhost/slice1.expected; then \
+	        printf '  selfhost: slice 1 -- src/cc.c compiled and assembled emits the expected text\n'; \
+	      else \
+	        echo '  selfhost: the emitted text differs from tests/selfhost/slice1.expected:'; \
+	        diff tests/selfhost/slice1.expected $(WORK)/cc1.out | head -8; exit 1; \
+	      fi; \
+	    else echo "  selfhost: $(WORK)/cc1 failed at run time"; head -3 $(WORK)/cc1.run.err; exit 1; fi; \
+	  else echo '  selfhost: asm1 refuses the dialect text cc emitted for src/cc.c'; head -3 $(WORK)/asm1.err; exit 1; fi; \
+	else echo '  selfhost: cc refuses src/cc.c'; head -3 $(WORK)/cc1.err; exit 1; fi
+
 # ---- nothing outside the tree -------------------------------------------------
 # Invariant 13. A file in /tmp is invisible to git, to review and to the next
 # session, and it can be deleted by anything at any time -- the generator that

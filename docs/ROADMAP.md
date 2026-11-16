@@ -1660,3 +1660,27 @@ cc < src/cc.c > .work/cc1.s ; asm1 < .work/cc1.s > .work/cc1 ; ./.work/cc1 | cmp
 
 Fixed this session and worth not re-breaking: the block-id counter grows monotonically (a gate covers
 it, and `asm1` refuses duplicate labels loudly), and `div` saves the live registers around itself.
+
+## The port: slice 1 passes
+
+`make test-selfhost` runs the real pipeline and compares against text written before the code:
+
+```
+cc < src/cc.c > .work/cc1.s ; asm1 < .work/cc1.s > .work/cc1 ; ./.work/cc1 | cmp - tests/selfhost/slice1.expected
+```
+
+Slice 1 is the output side — a byte buffer, `emitstr`, `emitc`, `putn`, `line` — and it is the first
+piece of the port that is *verified* rather than asserted.
+
+Next slices, in order, each with its own expected text written first:
+
+2. the literal section and one function's prologue/epilogue (so the same program can be emitted from a
+   table rather than by hand),
+3. the symbol table: names, kinds, offsets — the machine that `src/cc.s` implements in dialect,
+4. statements: `int x = N`, assignment, `while`, `if`,
+5. expressions with precedence, and the emitter for calls,
+6. then the acceptance test: `cc1 < src/cc.c > cc2.s ; cmp cc1.s cc2.s`.
+
+What the port still lacks in the language, and will hit in that order: `&&`/`||` (write nested `if`s
+instead), and a way to return a pointer (`emit(char *s)` has no equivalent; a string is a buffer and a
+length).

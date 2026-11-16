@@ -55,9 +55,12 @@ entry main
 m1:
 db "."
 m1end:
+db 0
 m2:
 db "!"
 m2end:
+db 0
 m3:
 db "?"
 m3end:
+db 0

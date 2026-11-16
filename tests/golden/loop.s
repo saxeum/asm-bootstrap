@@ -31,3 +31,4 @@ entry main
 m1:
 db "."
 m1end:
+db 0
