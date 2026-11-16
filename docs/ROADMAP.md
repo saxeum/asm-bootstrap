@@ -1458,3 +1458,19 @@ What is left before `cc` could compile a C version of itself:
    buffer — a compiler's `emit(char *buf)` has no equivalent.
 5. Then the port itself: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole
    corpus, with the dialect frozen as the witness.
+
+## Compiler: a subscript of a scalar is a pointer
+
+`p[i]` where `p` holds an address works, so a buffer can cross a call: `sumbuf(&s, 3)` reads the
+caller's array and exits 198. The element kind in the flags table (0 pointer, 1 char, 8 int) picks the
+base (load or `lea`), the stride and the width, so an array and a pointer are one path with different
+constants.
+
+What is left before `cc` could compile a C version of itself:
+
+1. **`.data`** — string literals that live in memory, so a program can address its own text. Today
+   `write("...")` emits a `db` and writes it out; a compiler needs bytes it can index.
+2. `<=`/`>=` against a variable.
+3. **More than eight variables per function** and a symbol table that can grow: a compiler has tables,
+   and cc has eight slots.
+4. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.

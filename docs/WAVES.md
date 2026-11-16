@@ -2669,3 +2669,34 @@ Three awk slips this wave, all caught by `diff` before anything was built:
   on did not exist, and an edit silently did nothing.
 
 `cc` 8 430 → 8 693 bytes. 25 checks, 35 refusals, 23 goldens. 52 check lines.
+
+## A buffer can cross a call
+
+`int y = i[0]` in a callee used to be refused. It compiles now, and the reason it can is that the
+refusal was the wrong question: with no type system, **a subscript of a scalar is a pointer
+subscript** — `p[i]` loads `p` as an address, adds the index (no stride), and reads one byte. An array
+subscript stays what it was (`lea` the frame slot, scale by eight for an `int`). The element kind in the
+flags table — 0 pointer, 1 char, 8 int — decides all three of base, stride and width, so the two cases
+are one path with different constants.
+
+`&s` already gave the address of an array's slot, so the whole idiom works:
+
+```c
+int sumbuf(int p, int n) { int t = 0; int i = 0; while (i < n) { t = t + p[i]; i = i + 1; } return t; }
+int main(void) { char s[4]; s[0] = 65; s[1] = 66; s[2] = 67; return sumbuf(&s, 3); }   /* 198 */
+```
+
+Gate: 198 — a callee reading three bytes of its caller's array. That is the `emit(buf)` shape that was
+missing, and it is a real gate: with the stride still applied it returns 66, which is what the first
+run did.
+
+Three defects on the way, and the first is the interesting one:
+
+- **`defvar` never cleared the array flag.** A scalar's flag byte was whatever the frame held, so a
+  scalar could be treated as an array. Nothing read that byte before this wave; the pointer path reads
+  it, and the first symptom was a stride on a pointer.
+- The stride test compared against 1 (`char`) instead of 8 (`int`), so pointers and chars scaled.
+- One refusal had to be retired: `int y = i[0];` is now legal. Replaced with `read(&s, 4)`, which is
+  refused because `read` wants a name.
+
+`cc` 8 693 → 8 744 bytes. 26 checks, 35 refusals, 24 goldens.

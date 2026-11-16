@@ -507,7 +507,6 @@ call isarr
 mov [rbp-308], eax
 cmp eax, 0
 jnz stsok
-jmp.l fail
 stsok:
 mov eax, [rbp-236]
 cmp eax, 0
@@ -519,8 +518,8 @@ mov [rbp-236], eax
 mov eax, 1
 call exprd              ; the index into depth 1
 mov eax, [rbp-308]
-cmp eax, 1              ; a char element is one byte
-jz stsnosc
+cmp eax, 8              ; only an int element strides
+jnz stsnosc
 mov eax, 3
 mov [rbp-280], eax
 stscl:
@@ -551,7 +550,14 @@ call want
 mov esi, 4194424+f_eq
 call want
 call expr               ; the value into rax
+mov eax, [rbp-308]
+cmp eax, 0
+jz stsbp
 mov esi, 4194424+f_lea1
+jmp stsbb
+stsbp:
+mov esi, 4194424+f_mov  ; a pointer: the base is the variable's value
+stsbb:
 call emitstr
 mov eax, 1
 call emitreg
@@ -583,8 +589,8 @@ call emitreg
 mov esi, 4194424+f_nl
 call emitstr
 mov eax, [rbp-308]
-cmp eax, 1              ; a char element is one byte
-jz stsbyte
+cmp eax, 8              ; only an int element stores 64 bits
+jnz stsbyte
 mov esi, 4194424+f_lst1
 call emitstr
 mov esi, 4194424+f_rax
@@ -946,7 +952,6 @@ call isarr
 mov [rbp-308], eax      ; 1 = int array, 2 = char array
 cmp eax, 0
 jnz ex3sok
-jmp.l fail              ; `x[i]` where x is not an array
 ex3sok:
 mov eax, [rbp-236]
 cmp eax, 0
@@ -960,7 +965,14 @@ mov [rbp-288], eax      ; d, the base's register
 mov eax, [rbp-268]
 call varoff
 mov [rbp-272], eax
+mov eax, [rbp-308]
+cmp eax, 0
+jz ex3sbp
 mov esi, 4194424+f_lea1
+jmp ex3sbb
+ex3sbp:
+mov esi, 4194424+f_mov  ; a pointer: the base is the variable's value
+ex3sbb:
 call emitstr
 mov eax, [rbp-288]
 call emitreg
@@ -977,8 +989,8 @@ call exprd
 mov eax, [rbp-288]
 mov [rbp-128], eax      ; exprd left its own depth behind: restore d
 mov eax, [rbp-308]
-cmp eax, 1              ; a char element is one byte
-jz ex3snosc             ; a char element is one byte: no stride
+cmp eax, 8              ; an int element is eight bytes
+jnz ex3snosc             ; only an eight-byte element strides
 mov eax, 3
 mov [rbp-280], eax
 ex3scl:
@@ -1009,8 +1021,8 @@ call emitreg
 mov esi, 4194424+f_nl
 call emitstr
 mov eax, [rbp-308]
-cmp eax, 1              ; a char element is one byte
-jz ex3sbyte
+cmp eax, 8              ; only an int element loads 64 bits
+jnz ex3sbyte
 mov esi, 4194424+f_mov
 call emitstr
 mov eax, [rbp-288]
@@ -1338,6 +1350,11 @@ mov eax, [rbp-108]
 inc eax
 mov [rbp-108], eax
 dec eax                 ; the new variable's index
+mov edx, eax
+lea rcx, [rbp-14000]
+add rcx, rdx
+mov edx, 0
+mov [rcx], dl           ; a scalar is not an array: its subscript is a pointer
 ret
 
 ; ---- arrays ---------------------------------------------------------------

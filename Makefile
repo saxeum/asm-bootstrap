@@ -466,6 +466,15 @@ test-cc: cc asm1
 	  printf 'ABCDEFGHIJ' | $$tmp/rl; if [ $$? -eq 193 ]; then g2=0; else g2=1; fi; \
 	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ]; then \
 	    printf '  cc    read in a loop with i < n: 198 for ABC, 193 for ten bytes\n'; \
+	if $(CC) < tests/golden/sumbuf.c > $$tmp/sb.s 2>/dev/null && cmp -s $$tmp/sb.s tests/golden/sumbuf.s; then :; \
+	else echo "  sumbuf.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/sumbuf.s > $$tmp/sb 2>/dev/null; then \
+	  chmod +x $$tmp/sb; \
+	  if $$tmp/sb; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 198 ]; then \
+	    printf '  cc    a buffer crosses a call: sumbuf(&s, 3) exits 198\n'; \
+	  else echo "  sumbuf exited $$g1, wanted 198 -- the callee cannot read the caller's array"; fail=1; fi; \
+	else echo "  asm1 refuses sumbuf.s"; fail=1; fi; \
 	  else echo "  readloop: wanted 198/193"; fail=1; fi; \
 	else echo "  asm1 refuses readloop.s"; fail=1; fi; \
 	  else echo "  readsum: three inputs want 198/193/0"; fail=1; fi; \
@@ -540,7 +549,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { int p = &nope; }'; \
 	refuse 'int main(void) { int a[4]; a = 1; }'; \
 	refuse 'int main(void) { int a[4]; int y = a; }'; \
-	refuse 'int main(void) { int i = 0; int y = i[0]; }'; \
+	refuse 'int main(void) { char s[4]; int n = read(&s, 4); }'; \
 	refuse 'int main(void) { int a[4]; int b[4]; int y = a[b[0]]; }'; \
 	refuse 'int main(void) { int a[9]; }'; \
 	refuse 'int main(void) { int a[2]; int a[2]; }'; \
