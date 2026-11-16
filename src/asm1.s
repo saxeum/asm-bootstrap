@@ -146,18 +146,70 @@ cmp al, 32
 jz.l psp
 cmp al, 59
 jz.l pcom
-cmp al, 115             ; 's'
+cmp al, 115             ; 's'  syscall or sub
+jnz.l d_m
+movzx edx, byte [rbx+1]
+cmp dl, 121             ; 'y'
 jz.l psys
-cmp al, 109             ; 'm'
-jnz.l dnotm
+mov eax, 72             ; sub r64,r64: REX.W (0x48), opcode 29
+mov [rbp+44], eax
+mov eax, 41
+mov [rbp+48], eax
+jmp.l prr
+d_m:
+cmp al, 109             ; 'm'  mov or movzx
+jnz.l d_d
 movzx eax, byte [rbx+3]
-cmp al, 122             ; 'z' => movzx
+cmp al, 122             ; 'z'
 jz.l pzx
 jmp.l pmov
-dnotm:
-cmp al, 100             ; 'd'
+d_d:
+cmp al, 100             ; 'd'  db or div
+jnz.l d_a
+movzx edx, byte [rbx+1]
+cmp dl, 98              ; 'b'
 jz.l pdb
-jmp.l fail
+mov eax, 246            ; div r8: F6 /6
+mov [rbp+44], eax
+mov eax, 6
+mov [rbp+48], eax
+jmp.l pu8
+d_a:
+cmp al, 97              ; 'a'  add r8,imm8: 80 /0, with the al special case
+jnz.l d_c
+mov eax, 128
+mov [rbp+44], eax
+mov eax, 0
+mov [rbp+48], eax
+mov eax, 1
+mov [rbp+52], eax
+jmp.l p8i
+d_c:
+cmp al, 99              ; 'c'  cmp r8,imm8: 80 /7
+jnz.l d_i
+mov eax, 128
+mov [rbp+44], eax
+mov eax, 7
+mov [rbp+48], eax
+mov eax, 0
+mov [rbp+52], eax
+jmp.l p8i
+d_i:
+cmp al, 105             ; 'i'  inc r8: FE /0
+jnz.l d_x
+mov eax, 254
+mov [rbp+44], eax
+mov eax, 0
+mov [rbp+48], eax
+jmp.l pu8
+d_x:
+cmp al, 120             ; 'x'  xor r32,r32: 31 /r
+jnz.l fail
+mov eax, 0
+mov [rbp+44], eax
+mov eax, 49
+mov [rbp+48], eax
+jmp.l prr
 psp:
 lea rbx, [rbx+1]
 jmp.l pline
@@ -192,6 +244,11 @@ call reg32
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
+movzx eax, byte [rbx]
+cmp al, 101             ; 'e' => register source, not a number
+jz.l pmovrr
+cmp al, 114             ; 'r'
+jz.l pmovrr
 call num32
 mov [rbp+36], ecx
 mov eax, [rbp+32]
@@ -250,31 +307,47 @@ add ecx, edx            ; 10x
 add ecx, eax            ; + digit (0..9)
 lea rbx, [rbx+1]
 jmp.l ndigit
-reg32:
-mov eax, [rbx]
+reg32:                  ; e??/r?? -> edx = 0..7 ; matches the last two chars only
+movzx eax, byte [rbx]
+cmp al, 101             ; 'e'
+jz.l regok
+cmp al, 114             ; 'r'
+jnz.l fail
+regok:
+movzx edx, byte [rbx+1]
+movzx ecx, byte [rbx+2]
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, edx
 mov edx, 7
-cmp eax, 745104485
+cmp ecx, 26980
 jz.l regret
 mov edx, 6
-cmp eax, 745108325
+cmp ecx, 26995
 jz.l regret
 mov edx, 5
-cmp eax, 745562725
+cmp ecx, 28770
 jz.l regret
 mov edx, 4
-cmp eax, 745567077
+cmp ecx, 28787
 jz.l regret
 mov edx, 3
-cmp eax, 746087013
+cmp ecx, 30818
 jz.l regret
 mov edx, 2
-cmp eax, 746087525
+cmp ecx, 30820
 jz.l regret
 mov edx, 1
-cmp eax, 746087269
+cmp ecx, 30819
 jz.l regret
 mov edx, 0
-cmp eax, 746086757
+cmp ecx, 30817
 jz.l regret
 jmp.l fail
 regret:
@@ -357,6 +430,99 @@ call emital
 mov eax, 182
 call emital
 mov eax, [rbp+36]
+call emital
+jmp.l pline
+
+pmovrr:                 ; mov r32,r32 -> 89 /r (reg=source, rm=dest)
+call reg32
+mov [rbp+36], edx
+mov eax, 137
+call emital
+mov eax, [rbp+36]
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+32]
+add eax, edx
+mov edx, 192
+add eax, edx
+call emital
+jmp.l pline
+
+p8i:                    ; add/cmp r8,imm8 ; [rbp+44]=opcode [rbp+48]=digit [rbp+52]=al-special
+lea rbx, [rbx+4]
+call r8
+mov [rbp+32], edx
+lea rbx, [rbx+1]
+call skipsp
+call num32
+mov [rbp+36], ecx
+mov eax, [rbp+52]
+cmp al, 0
+jz.l p8gen
+mov eax, [rbp+32]
+cmp al, 0
+jnz.l p8gen
+mov eax, 4              ; add al,imm8 has its own opcode
+call emital
+jmp.l p8imm
+p8gen:
+mov eax, [rbp+44]
+call emital
+mov eax, [rbp+48]
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+32]
+add eax, edx
+mov edx, 192
+add eax, edx
+call emital
+p8imm:
+mov eax, [rbp+36]
+call emital
+jmp.l pline
+
+pu8:                    ; inc/div r8 ; [rbp+44]=opcode [rbp+48]=digit
+lea rbx, [rbx+4]
+call r8
+mov eax, [rbp+48]
+add eax, eax
+add eax, eax
+add eax, eax
+add eax, edx
+mov edx, 192
+add eax, edx
+mov [rbp+36], eax
+mov eax, [rbp+44]
+call emital
+mov eax, [rbp+36]
+call emital
+jmp.l pline
+
+prr:                    ; reg,reg ; [rbp+44]=REX byte or 0 [rbp+48]=opcode
+lea rbx, [rbx+4]
+call reg32
+mov [rbp+32], edx
+lea rbx, [rbx+1]
+call skipsp
+call reg32
+mov [rbp+36], edx
+mov eax, [rbp+44]
+cmp al, 0
+jz.l prr_nr
+call emital
+prr_nr:
+mov eax, [rbp+48]
+call emital
+mov eax, [rbp+36]
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+32]
+add eax, edx
+mov edx, 192
+add eax, edx
 call emital
 jmp.l pline
 

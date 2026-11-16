@@ -1411,3 +1411,52 @@ missing:  mov [mem],r8, mov r32,[mem], mov byte[mem],imm8, lea r64,[mem],
 ```
 
 Labels are at 29/32, so the next stage needs a couple freed before adding handlers.
+
+## asm1 step 2 of the count10 plan — arithmetic, and a latent xor defect in asm0a
+
+`asm0a`, 3727 bytes, sha `f70134958d60a05af75495641f656362aae6b07ab5f936d4e3d53daca633e9fa`. `src/asm1.s`, 2081 bytes, 41 labels.
+
+### New forms in asm1, all differential-verified
+
+```
+add al,48 / add ah,48 / add bl,7   identical    inc bl / inc al      identical
+cmp bl,11 / cmp al,10              identical    div cl / div al      identical
+sub rsi,rcx / sub rdi,rsi          identical    xor edi,edi          identical
+mov eax,ecx / mov edi,eax          identical    mov ebx,esi          identical
+```
+
+22 of 24 probes byte-identical; the other two (`dec`, `mov r32x`) are rejected by **both** tools,
+which is the correct agreement.
+
+Three forms are one handler each because they are parameterisable: `p8i` carries the opcode, the
+`/digit` and an "al special case" flag; `pu8` carries opcode and `/digit`; `prr` carries an optional
+REX byte and an opcode.
+
+### Two defects found in asm0a, one of them silent
+
+1. **`xor eax, ecx` emitted the operands swapped.** The handler built `modrm = dest<<3 | src`, but
+   `31 /r` is `XOR r/m32, r32` — destination in **rm**, source in **reg**. `xor eax,ecx` came out as
+   `31 c1`, which decodes as `xor ecx,eax`. Nobody noticed because every fixture that uses xor
+   (`xor edi,edi`) is symmetric. Fixed by swapping two 2-byte instructions at `0x2f9`/`0x2fe`;
+   `xor eax,ecx` now emits `31 c8` and the symmetric cases are unchanged.
+2. **The label limit was 32**, and `asm1` hit it. Raised to 64 — one immediate byte at `0x3e1`, and
+   the table (12 bytes per entry) fits: 64 entries at `0x1f800` end at `0x1fb00`, inside the stack.
+   Verified with a 40-label source: rejected before, assembles after. Corpus unchanged at 18/18.
+
+### Three defects in asm1
+
+1. **`0x48` written as `48`.** `sub rsi,rcx` emitted `30 29 ce` — the REX byte was decimal 48
+   (`0x30`) instead of `0x48` (72). A constant that looked right and was off by 0x18.
+2. **`mov r32,r32` was parsed as `mov r32,imm32`.** After the comma the handler went straight to
+   `num32`, which saw `ecx`, found no digit, returned 0, and the leftover text then failed the line.
+   Fixed by testing for `e`/`r` after the spaces and routing to a register-register path.
+3. **`reg32` matched a name only when followed by a comma**, so a *trailing* operand (`sub rsi,rcx`)
+   could never match. Rewritten to key on the last two characters — `ax`,`cx`,…,`di` — which are the
+   same pair for `e??` and `r??` forms, so one 8-entry chain serves both and the delimiter no longer
+   matters. This is also what let `prr` handle 64-bit names without a second table.
+
+### Remaining for count10
+
+```
+missing: mov [mem],r8 · mov r32,[mem] · mov byte[mem],imm8 · lea r64,[mem] · label · jb rel8
+```
