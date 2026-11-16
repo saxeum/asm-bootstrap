@@ -197,30 +197,52 @@ Then **immediately**: `make` (check exit code and sha changed), fixtures 18/18, 
 | `tools/shape.awk` | how two source lines are decided to reach the same encoder path |
 | `docs/toolchain.tsv`, `docs/provenance.tsv`, `docs/SHAS`, `docs/branches.tsv` | the records |
 
-## Next task: the name limit, then `char` and `.data`
+## Next task: `add r32, imm` in `asm1`, then the name limits
 
-`cc` now does everything a compiler needs *except* the things a symbol table is made of. In order:
+`cc` now has functions, locals, recursion (tail or not), pointers, int and char arrays, and a 64-bit
+value model. What it does not have is entirely on the *assembler* side, and the first two are the ones
+that bite daily.
 
-1. **Names longer than seven characters.** This is `asm1`'s limit, not `cc`'s, and `cc` refuses them
-   everywhere — including its own source. Raising it is a bootstrap step: raise the limit, promote
-   that intermediate (`make promote`), and only then write source using longer names. Reversed,
-   nothing can build the result. The identifiers a compiler needs (`identifier`, `keyword`,
-   `emitstr`) are all longer than seven.
-2. **`char` and byte strings** in `cc`: a `char s[8];` of bytes, `s[i]` load and store with
-   `movzx`/byte stores (the dialect has both), and a `char *` walk of a literal.
-3. **`.data`** in `asm1`: a second read-write `PT_LOAD`, `filesz`/`memsz` from label differences, and
-   `0x400078+label` stops being a constant for data. It is the last assembler feature with no user,
-   and a string table is the user.
-4. `div r32` (assembler) so that `/` can be implemented.
+### 1. `add r32, imm` (and `sub`, `cmp`)
 
-### Three slots that will bite, and the pattern
+`add r32, imm` is refused, and it has cost `cc` three separate workarounds (`mov edx, 7; add ecx, edx`
+appears wherever a constant is added). `add r8, imm` exists; `and`/`or`/`xor`/`test` have the 32-bit
+immediate form. The machinery is there:
 
-Every defect of the last three waves was the same one: a **fixed frame slot shared across a nested
-parse**. `-140` (the term scratch), `-268` (an array index), `-128` (the depth) and `-244` (a pointer
-store) each got clobbered exactly once, and each time the symptom looked like something else — a
-wrong combine, a wrong base, a wrong stride.
+- `pc32` emits `op r/m32, imm32` — opcode in `[rbp+44]` (129 = `0x81`), the `/digit` in `[rbp+48]`,
+  four immediate bytes. `d_and` reaches it by setting those and jumping.
+- `d_add` decides the form by looking at the byte where a three-character register ends
+  (`[rbx+6]`), and falls into `daddreg` — the register form — when it is not a comma or a space.
+  For `add ecx, 7` that byte is `x`, so it takes the register path and then refuses the immediate.
+- The change: after `daddreg` consumes the destination and the comma, peek at the next token; if it
+  is a digit, go to `pc32` with `[rbp+44] = 129`, `[rbp+48] = 0` (0 add, 5 sub, 7 cmp). `cmp` is a
+  different handler and needs its own check.
 
-Before adding a slot: check nothing else writes it, and remember that `expr`, `exprd`, `want`,
-`skipws`, `emitstr`, `emitnum` and `emitreg` all run *between* the two uses. `-256` … `-300` are in
-use; `-304` upward is free. A slot allocation comment at the top of the frame state would have
-prevented all four defects; there is one now in `docs/cc.md`.
+Gates that must be extended with it: a capability pair (`asm0a` refuses `add eax, 5`, `asm1` emits
+`83 c0 05` or `81 c0 …`), a coverage form in `tests/coverage/forms.tsv`, and a fixture. Then
+`make promote`, because after that `src/asm1.s` itself may use the form.
+
+### 2. The name limits
+
+Two separate limits, and only the second needs a bootstrap step:
+
+- **`asm1` labels ≤ 7 characters**, 256 of them. `cc` is at 252 labels of 256: the *label* budget is
+  now the binding constraint on `cc`'s growth, and a C function named `emitstr` cannot become a label.
+- **`cc` identifiers ≤ 7 characters**, from an 8-byte name field in its own table (`rbp-16000`,
+  8 entries, 8 bytes each) and an 8-byte name buffer at `rbp-16064`. Widening to 16 bytes is
+  `ident`'s length check, `idfind`'s comparison (two words instead of one), `defvar`/`defarr`'s copy,
+  and the buffer. No bootstrap step: it is `cc`'s own table.
+
+Order: labels first (asm1), because a longer name in `cc`'s output must be assemblable.
+
+### 3. `.data`
+
+The last assembler feature with no user: a second read-write `PT_LOAD`, `filesz`/`memsz` from label
+differences, and `0x400078+label` stops being true for data. A string table that lives in memory is
+the user — today a string exists only as a `write` literal emitted with `db`.
+
+### The rule that would have saved four defects
+
+A fixed frame slot is only safe across a nested parse if nothing else writes it. `-140`, `-268`,
+`-128` and `-244` were each shared by accident; the slot table in `docs/cc.md` lists what owns what
+and which slots are unsafe across a call. `-304` upward is free.
