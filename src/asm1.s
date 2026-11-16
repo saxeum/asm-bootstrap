@@ -782,11 +782,15 @@ call emital
 jmp.l pline
 
 prr:
+movzx eax, byte [rbx+4]
+call prrck
 lea rbx, [rbx+4]
 call reg32
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
+movzx eax, byte [rbx]
+call prrck
 call reg32
 mov [rbp+36], edx
 mov eax, [rbp+44]
@@ -1829,3 +1833,15 @@ mov [rbp+44], eax
 mov eax, 3
 mov [rbp+48], eax
 jmp.l pu32
+
+prrck:
+cmp al, 114
+jnz.l prrc_ok
+mov ecx, [rbp+44]
+cmp ecx, 0
+jnz.l prrc_ok
+mov eax, 4
+mov [rbp+2], al
+jmp.l fail
+prrc_ok:
+ret

@@ -709,3 +709,56 @@ check into a no-op. Rewriting whole costs a diff to read and nothing else.
 
 Still deferred: `r8`–`r15` with REX, scale factors `*2`/`*4`/`*8`, and `.data` sections with two
 program headers.
+
+## The next phase, measured rather than planned
+
+Before choosing, the question was asked in a form that could be answered: **what would rebuilding
+`asm0a` from source actually require?** `objdump` over `asm0a`'s own 3 745 bytes gives the instruction
+mix it uses, and comparing that against what `asm1` accepts gives the gap:
+
+```
+mov 135   add 130   jmp 117   inc 107   cmp 101   je 67    call 37
+movzbl 36 movb 29   jne 29    or 21     sub 17    cmpb 16  xor 14
+test 12   jb 12     jae 12    ja 10     ret 9     shl 8    imul 8
+lea 6     js 6      syscall 5 ...
+```
+
+| needed by a rebuilt `asm0a` | uses | `asm1` |
+|---|---|---|
+| `add r64, imm8` (`48 83 c3 04`) | 60 | **missing** |
+| `add r64, r64` | many | **missing** (see below) |
+| `cmp r8/r32, [mem]` (`cmpb`, `cmp (%rcx),%rax`) | 10 | **missing** |
+| `imul r32, r32, imm8` (`6b /r ib`) | 8 | **missing** |
+| `ja` / `jae` / `js` / `jg` / `jo` | ~30 | **missing** (only `jb`, `jz`, `jnz`, `jmp`) |
+| `movzbl` (from memory) | 36 | have (`movzx`) |
+| `movb [mem], imm8` | 29 | have (`mov byte`) |
+| `shl`, `or`, `test`, `sub` | — | have |
+
+### And one wrong answer found on the way
+
+`add rbx, rcx` emitted **`01 cb`** — the *32-bit* encoding of a 64-bit instruction. The reg-reg ALU
+handler never emitted REX.W, so `add`/`and`/`or`/`xor`/`test`/`mov` with 64-bit operands were silently
+assembling as 32-bit. Exactly the class of defect found in `asm0a`'s `and`, in `asm1` itself, and
+caught by asking what `asm0a` would need.
+
+Fixed by **refusing** rather than guessing: a 64-bit operand in a form whose opcode carries no REX is
+now rejected with a line number (`mov rax, rbx` → `line 1: rejected`), and `sub rsi, rcx` — whose
+opcode *does* set REX.W — is unchanged. Emitting the REX byte is the right fix and belongs with
+`r8`–`r15`, which needs the same machinery.
+
+### So the order is
+
+1. **REX.W for the reg-reg ALU forms** plus `r8`–`r15`. One mechanism: compute a REX byte from operand
+   codes ≥ 8 and the 64-bit flag, emit it before the opcode, mask the codes with `and` (now available).
+   This turns the refusals above into support and gives 16 registers. Gate: capability pairs against
+   hand-computed dumps for `add rbx,rcx` → `48 01 c9`, `add r8, r9` → `4d 01 c8`, and so on.
+2. **The forms `asm0a` itself needs** (table above): `add r64,imm8`, `cmp` against memory,
+   `imul r32,r32,imm8`, and the missing condition codes. Each is a handler; each gets a capability
+   pair or a hand-computed dump.
+3. **`src/asm0a.s`** — Stage 5. With 1 and 2 done, the frozen 3 745 bytes become *derivable*:
+   `asm1 < src/asm0a.s | cmp - asm0a`. That is the strongest statement the project can make, and it is
+   finally reachable rather than aspirational.
+4. **`.data` sections**, then **scale factors**, then the self-testing generator (Stage 6).
+
+The order changed because of the measurement: **Stage 5 is no longer the far end.** It is two
+mechanisms away, and those two mechanisms are the ones `asm0a`'s own instruction mix says are needed.
