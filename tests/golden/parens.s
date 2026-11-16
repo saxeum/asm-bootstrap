@@ -8,9 +8,10 @@ mov rax, 34
 mov [rbp-8], rax
 mov rax, [rbp-8]
 mov rcx, 10
+mov r9, rcx
 mov rax, rax
 xor rdx, rdx
-div rcx
+div r9
 mov rax, rax
 mov [rbp-16], rax
 mov rax, 48

@@ -569,6 +569,15 @@ test-cc: cc asm1
 	  if $$tmp/sl; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 2 ]; then \
 	    printf '  cc    a literal as a value: the length of (%chi%c) is 2\n' '"' '"'; \
+	if $(CC) < tests/golden/twoloops.c > $$tmp/tl.s 2>/dev/null && cmp -s $$tmp/tl.s tests/golden/twoloops.s; then :; \
+	else echo "  twoloops.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/twoloops.s > $$tmp/tl 2>/dev/null; then \
+	  chmod +x $$tmp/tl; \
+	  if $$tmp/tl; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 5 ]; then \
+	    printf '  cc    two functions, one loop each: sibling blocks get distinct labels, exits 5\n'; \
+	  else echo "  twoloops exited $$g1, wanted 5"; fail=1; fi; \
+	else echo "  asm1 refuses twoloops.s -- sibling blocks share a label"; fail=1; fi; \
 	  else echo "  strlit exited $$g1, wanted 2"; fail=1; fi; \
 	else echo "  asm1 refuses strlit.s"; fail=1; fi; \
 	  else echo "  chrltrl exited $$g1, wanted 9"; fail=1; fi; \

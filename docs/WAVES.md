@@ -3065,3 +3065,37 @@ What was in `/tmp`: about 135 files whose *content* named this repository, plus 
 are deleted. Roughly 900 files remain that I cannot attribute to this project — other tools' caches and
 other agents' scratch — and they are left in place rather than removed on a guess, because deleting
 someone else's work is a worse defect than leaving a file.
+
+## Two defects fixed, and the port stops at a third
+
+**Sibling blocks shared a label.** `stwhile` and `stif` pushed the block id, ran the body, and then
+*restored the counter*, so a second block at the same nesting level reallocated the id the first had
+used. One function with two loops emitted two `L1` labels and `asm1` refused the file. The id is now
+pushed per nesting level and the counter is only allowed to grow; the block's own id is kept in a
+scratch slot after its body, where no nested block can run. Gate: two functions with one loop each, both
+labels distinct, exits 5.
+
+**`div` destroyed live operands.** `div` divides `rdx:rax`, so `cc` moved the dividend into `rax` and
+zeroed `rdx` — clobbering the enclosing expression's values in exactly the way a `call` does, which had
+been handled and this had not. `d = (n / place) - ((n / place) / 10) * 10` died with SIGFPE. The fix is
+the call's shape: move the divisor to `r9` first (at depth 1 the divisor's register *is* `rdx`), push
+`reg 0..d-1`, divide, restore. Gate: `putn(p, l, 42)` prints `42`.
+
+**And then the third, which is where the port stops.** A call with more than one argument *and* a string
+literal among them emits code that writes to the wrong offsets:
+
+```c
+int main(void) { char b[8000]; int p = &b; int l = 0;
+                 l = line(p, l, "ab"); l = putn(p, l, 42); l = line(p, l, "cd");
+                 int k = write(b, l); return 0; }
+```
+
+prints `abcd\n42cd\n` where it should print `ab\n42cd\n` — the second `line` writes at offset 2, not 5.
+So `l` reaches the second call stale, or the literal's index is mis-assigned: `ex3lit` increments the
+literal counter and `wblock` computes its label as `[rbp+20]+1`, and the two are not obviously in step
+when three literals are registered in one argument list.
+
+This was not chased further. Every other gate passes, `src/cc.c` compiles and assembles, and it crashes
+at run time for the same reason. That is the state the port is handed on in: two defects down, one
+reproduced and named, and the acceptance test (`cc < src/cc.c` → `cc1` → `cc1 | cmp - expected`) not yet
+passing.

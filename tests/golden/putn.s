@@ -38,9 +38,10 @@ jmp.l L2e
 L2b:
 mov rax, [rbp-32]
 mov rcx, 10
+mov r9, rcx
 mov rax, rax
 xor rdx, rdx
-div rcx
+div r9
 mov rax, rax
 mov [rbp-40], rax
 mov rcx, [rbp-24]

@@ -55,9 +55,10 @@ jmp.l L1
 L1e:
 mov rax, [rbp-16]
 mov rcx, 251
+mov r9, rcx
 mov rax, rax
 xor rdx, rdx
-div rcx
+div r9
 mov rax, rdx
 mov rdi, rax
 mov eax, 60

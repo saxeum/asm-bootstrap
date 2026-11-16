@@ -10,16 +10,18 @@ mov rax, 7
 mov [rbp-16], rax
 mov rax, [rbp-8]
 mov rcx, [rbp-16]
+mov r9, rcx
 mov rax, rax
 xor rdx, rdx
-div rcx
+div r9
 mov rax, rax
 mov [rbp-24], rax
 mov rax, [rbp-8]
 mov rcx, [rbp-16]
+mov r9, rcx
 mov rax, rax
 xor rdx, rdx
-div rcx
+div r9
 mov rax, rdx
 mov [rbp-32], rax
 mov rax, [rbp-24]

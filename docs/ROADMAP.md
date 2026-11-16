@@ -1642,3 +1642,21 @@ slice 4 (statements), slice 5 (expressions), and the acceptance test
 ```
 cc < src/cc.c > cc1.s ; asm1 < cc1.s > cc1 ; cc1 < src/cc.c > cc2.s ; cmp cc1.s cc2.s
 ```
+
+## Next: one defect between the port and its first slice
+
+`src/cc.c` compiles and assembles but crashes at run time. The reproduction is in `docs/WAVES.md`:
+a call with several arguments and a string literal among them writes at the wrong offsets (three
+literals registered in one argument list). Prime suspect: `ex3lit` increments the literal counter while
+`wblock` computes its label as `[rbp+20]+1`, so the two indices may disagree when a literal is a *value*
+rather than a `write` argument.
+
+After that, the slices in order — the literal section, the prologue and epilogue, the symbol table,
+statements, expressions — and the acceptance test:
+
+```
+cc < src/cc.c > .work/cc1.s ; asm1 < .work/cc1.s > .work/cc1 ; ./.work/cc1 | cmp - tests/selfhost/slice1.expected
+```
+
+Fixed this session and worth not re-breaking: the block-id counter grows monotonically (a gate covers
+it, and `asm1` refuses duplicate labels loudly), and `div` saves the live registers around itself.

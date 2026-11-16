@@ -725,9 +725,11 @@ ex2rem:
 mov eax, 0
 mov [rbp-312], eax      ; keep the remainder
 ex2dv:
-; `/` and `%` bind like `*`. div divides rdx:rax, so the left operand is moved
-; into rax and rdx is zeroed; the right operand is at d+1, harmlessly, because
-; nothing else is live between the zeroing and the division.
+; `/` and `%` bind like `*`. div divides rdx:rax, so the dividend goes into rax
+; and rdx is zeroed -- and both clobber live operands of the expressions
+; enclosing this one, so reg 0..d-1 are pushed first, exactly as a call does.
+; The divisor is moved to r9 before the zeroing, because at d = 1 the divisor's
+; register *is* rdx.
 mov eax, 1
 call bump
 mov eax, [rbp-128]
@@ -740,12 +742,41 @@ dec eax
 mov [rbp-128], eax
 mov esi, 4194424+f_mov
 call emitstr
+mov esi, 4194424+f_r9
+call emitstr
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, [rbp-128]
+inc eax
+call emitreg             ; mov r9, <reg d+1>: the divisor, out of harm's way
+mov esi, 4194424+f_nl
+call emitstr
+mov eax, 0
+mov [rbp-300], eax
+ex2dps:
+mov eax, [rbp-300]
+mov ecx, [rbp-128]
+cmp eax, ecx
+jz ex2dpe
+mov esi, 4194424+f_push
+call emitstr
+mov eax, [rbp-300]
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+mov eax, [rbp-300]
+inc eax
+mov [rbp-300], eax
+jmp ex2dps
+ex2dpe:
+mov esi, 4194424+f_mov
+call emitstr
 mov esi, 4194424+f_rax
 call emitstr
 mov esi, 4194424+f_sep
 call emitstr
 mov eax, [rbp-128]
-call emitreg             ; mov rax, <reg d>
+call emitreg             ; mov rax, <reg d>: the dividend
 mov esi, 4194424+f_nl
 call emitstr
 mov esi, 4194424+f_xor
@@ -760,9 +791,8 @@ mov esi, 4194424+f_nl
 call emitstr
 mov esi, 4194424+f_div
 call emitstr
-mov eax, [rbp-128]
-inc eax
-call emitreg             ; div <reg d+1>
+mov esi, 4194424+f_r9
+call emitstr
 mov esi, 4194424+f_nl
 call emitstr
 mov esi, 4194424+f_mov
@@ -778,6 +808,22 @@ ex2dvr:
 mov esi, 4194424+f_mrdx
 ex2dvg:
 call emitstr
+mov eax, [rbp-128]
+mov [rbp-300], eax
+ex2dpl:
+mov eax, [rbp-300]
+cmp eax, 0
+jz ex2dpl2
+dec eax
+mov [rbp-300], eax
+mov esi, 4194424+f_pop
+call emitstr
+mov eax, [rbp-300]
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+jmp ex2dpl
+ex2dpl2:
 jmp.l ex2l
 ex2d:
 ret
@@ -1981,19 +2027,19 @@ call emitnum
 mov esi, 4194424+f_dlb
 call emitstr
 mov eax, [rbp+96]
-push rax
-call body
-pop rax
-mov [rbp+96], rax
+push rax                ; this block's id, one per nesting level
+call body               ; the counter grows and is NOT restored: a sibling needs
+pop rax                 ; its own label, and restoring made two siblings share one
+mov [rbp-332], eax      ; safe scratch: no nested block runs below
 mov esi, 4194424+f_jl
 call emitstr
-mov eax, [rbp+96]
+mov eax, [rbp-332]
 call emitnum
 mov esi, 4194424+f_nl
 call emitstr
 mov esi, 4194424+f_L
 call emitstr
-mov eax, [rbp+96]
+mov eax, [rbp-332]
 call emitnum
 mov esi, 4194424+f_dle
 call emitstr
@@ -2024,10 +2070,10 @@ call emitnum
 mov esi, 4194424+f_dlt
 call emitstr
 mov eax, [rbp+96]
-push rax
-call body
+push rax                ; this block's id, one per nesting level
+call body               ; the counter is not restored: siblings need their own ids
 pop rax
-mov [rbp+96], rax
+mov [rbp-332], eax      ; the if's id, for every label below
 call skipws
 mov esi, 4194424+f_else
 call isword
@@ -2035,26 +2081,26 @@ cmp eax, 0
 jz stif_nel
 mov esi, 4194424+f_jl
 call emitstr
-mov eax, [rbp+96]
+mov eax, [rbp-332]
 call emitnum
 mov esi, 4194424+f_nlx
 call emitstr
 mov esi, 4194424+f_L
 call emitstr
-mov eax, [rbp+96]
+mov eax, [rbp-332]
 call emitnum
 mov esi, 4194424+f_dle
 call emitstr
 mov esi, 4194424+f_lbrc
 call want
-mov eax, [rbp+96]
-push rax
+mov eax, [rbp-332]
+push rax                ; still the if's id, across the else body
 call body
 pop rax
-mov [rbp+96], rax
+mov [rbp-332], eax
 mov esi, 4194424+f_L
 call emitstr
-mov eax, [rbp+96]
+mov eax, [rbp-332]
 call emitnum
 mov esi, 4194424+f_dlx
 call emitstr
@@ -2062,7 +2108,7 @@ jmp.l bodloop
 stif_nel:
 mov esi, 4194424+f_L
 call emitstr
-mov eax, [rbp+96]
+mov eax, [rbp-332]
 call emitnum
 mov esi, 4194424+f_dle
 call emitstr
@@ -2908,4 +2954,7 @@ db "4194424+m"
 db 0
 f_isav2:
 db "mov [rbp-328], "
+db 0
+f_r9:
+db "r9"
 db 0
