@@ -50,7 +50,7 @@ emit() {
 	done
 }
 
-TMP=$(mktemp -d)
+TMP=$(mkdir -p "$(dirname "$0")/../.work" && mktemp -d "$(dirname "$0")/../.work/XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 
 # the no-oracle artifacts, assembled by asm1 and compared with the built file

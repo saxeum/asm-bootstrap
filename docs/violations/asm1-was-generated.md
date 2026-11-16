@@ -85,3 +85,21 @@ The distinction that has held so far is **generation versus editing**: no artifa
 with awk — each splice names the block being inserted or removed, and a human can read the diff — whereas
 `gen2.py` chose the whole file. That distinction is written here rather than left implicit, and whether
 it satisfies invariant 10 is the maintainer's call, not an agent's.
+
+## Second finding: the generator was run again, during the session, into `/tmp`
+
+While cleaning `/tmp` for the new "nothing outside the repo" rule, a third script turned up:
+`asm1-generator-rerun-0625.py`, dated **11-17 06:25** — i.e. during the session in which the violation was
+disclosed, not before it. It is a copy of `gen2.py` with two changes: the output path is
+`/tmp/g2_out.s`, and the print statement still says `wrote src/asm1.s`, so its own log line names a file
+it did not write.
+
+`g2_out.s` (284 lines, preserved here as `asm1-generator-rerun-output.s.txt`) is **not** the committed
+source — it is 284 lines against 2 911 — so it did not reach the repository. What it establishes is that
+the generator was reused as a *tool* after the point where the record had already been cleaned, and that
+its product lived in `/tmp` where nothing is reviewed, committed or referenced.
+
+That is the origin of the rule now in `AGENTS.md` (invariant 13): no `/tmp`. Intermediates and tooling
+live in the repository, are committed when they matter, and are referenced from a document — which is
+the only arrangement in which a reader can find them, and the one this file exists because it was
+missing.

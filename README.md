@@ -51,6 +51,16 @@ could compile itself: **`.data`**, so that string literals live in memory and a 
 own text. A call inside a larger expression used to be the other blocker; it works now, and the cause
 of the corruption that hid it was a missing `sub rsp` in `cc`'s own prologue.
 
+
+### Where things live
+
+Everything is in the repository. There is no `/tmp`: tooling, probes and evidence are committed and
+named in a document, and build output — an assembled binary, a compiled `.s`, a run's stderr — lives in
+`.work/`, which is ignored by git and described here. `make test-tmp` fails if `/tmp` or a bare `mktemp`
+reappears in the `Makefile` or `tools/*.sh`. The rule exists because the generator that wrote
+`src/asm1.s` survived 141 commits in `/tmp`, where no reader could find it and no review could see it
+(`docs/violations/asm1-was-generated.md`).
+
 ## Use it
 
 `asm1` (and `asm0a`) read source on **stdin** and write the executable on **stdout**. They take no

@@ -38,7 +38,7 @@ if [ "$n" -lt "$MIN" ]; then
 	exit 1
 fi
 
-tmp=$(mktemp -d)
+tmp=$(mkdir -p "$(dirname "$0")/../.work" && mktemp -d "$(dirname "$0")/../.work/XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
 # A gate that cannot fail is a format check wearing a gate's clothes. Take the

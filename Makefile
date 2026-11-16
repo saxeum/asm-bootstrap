@@ -64,7 +64,7 @@ asm1: src/asm1.s $(SEED)
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(SEED)"
 test: test-asm0a asm1 test-asm1 test-dis test-reject test-reject-msg test-capability test-superior
 test-asm0a:
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	@tmp=$$(mkdir -p $(WORK) && mktemp -d $(WORK)/XXXXXX); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(PAIRS); do \
 	  $(ASM0A) < src/$$f.s > $$tmp/$$f || { echo "  asm0a cannot assemble $$f.s"; fail=1; continue; }; \
 	  if cmp -s $$tmp/$$f ref/$$f; then ok=$$((ok+1)); else echo "  MISMATCH $$f"; fail=1; fi; \
@@ -83,7 +83,7 @@ test-asm0a:
 	printf '  asm0a  %s/%s oracles reproduced\n' $$ok $(TOTAL); \
 	exit $$fail
 test-asm1: asm1
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	@tmp=$$(mkdir -p $(WORK) && mktemp -d $(WORK)/XXXXXX); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(PAIRS); do \
 	  $(ASM1) < src/$$f.s > $$tmp/$$f || { echo "  asm1 cannot assemble $$f.s"; fail=1; continue; }; \
 	  if cmp -s $$tmp/$$f ref/$$f; then ok=$$((ok+1)); else echo "  MISMATCH $$f"; fail=1; fi; \
@@ -128,7 +128,7 @@ verify-provenance: asm1 dis
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: test-tools test-header asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
+check: test-tools test-tmp test-header asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -182,7 +182,7 @@ promote: asm1 fixpoint
 # exactly `dis: <reason>` on stderr -- the reason is pinned, so a refusal that
 # names the wrong rule fails.
 test-dis: dis
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; n=0; \
+	@tmp=$$(mkdir -p $(WORK) && mktemp -d $(WORK)/XXXXXX); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; n=0; \
 	while read -r hex site want; do \
 	  case "$$hex" in ''|'#'*) continue ;; esac; \
 	  n=$$((n+1)); \
@@ -224,6 +224,10 @@ test-dis: dis
 # done with objdump, and that is now forbidden", which is the record; what must
 # not survive is an invocation.
 FORBIDDEN := objdump|objcopy|readelf|gcc|g\+\+|clang|nasm|gas|gdb|lldb|strace|python|python3|perl|ruby|node
+
+# Scratch space for every gate. Invariant 13: nothing outside the tree, so this is
+# .work/ in the repository rather than a directory in /tmp that nothing can find.
+WORK := $(CURDIR)/.work
 test-tools:
 	@scan() { grep -v '^[[:space:]]*#' "$$1" | grep -nwE '$(FORBIDDEN)'; }; \
 	mscan() { awk '/^\t/' Makefile | grep -nwE '$(FORBIDDEN)'; }; \
@@ -236,7 +240,7 @@ test-tools:
 	    echo "  FORBIDDEN TOOL invoked in $$f:"; scan $$f | sed 's/^/    /'; fail=1; \
 	  fi; \
 	done; \
-	tmp=$$(mktemp); trap 'rm -f $$tmp' EXIT; \
+	tmp=$$(mkdir -p $(WORK) && mktemp $(WORK)/XXXXXX); trap 'rm -f $$tmp' EXIT; \
 	tool=$$(echo '$(FORBIDDEN)' | cut -d'|' -f1); \
 	printf '%s -d artifact\n' "$$tool" > $$tmp; \
 	if [ -z "$$(scan $$tmp)" ]; then \
@@ -278,7 +282,7 @@ hello: cc asm1 helloworld.c
 # on matching itself is a regression pin, not an oracle; the machine is the
 # oracle, and it judges gate 3.
 test-cc: cc asm1
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; n=0; \
+	@tmp=$$(mkdir -p $(WORK) && mktemp -d $(WORK)/XXXXXX); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; n=0; \
 	$(CC) < helloworld.c > $$tmp/got.s 2>/dev/null || { echo "  cc cannot compile helloworld.c"; exit 1; }; \
 	if cmp -s $$tmp/got.s tests/golden/hello.s; then \
 	  printf '  cc    helloworld.c -> tests/golden/hello.s byte for byte\n'; \
@@ -682,6 +686,31 @@ test-cc: cc asm1
 # assemble, and its normalised shape (tools/shape.awk) must appear in some test
 # input. A form nobody tests is a red gate with a name on it, which is the
 # difference between "we have 18 fixtures" and "we know what they reach".
+# ---- nothing outside the tree -------------------------------------------------
+# Invariant 13. A file in /tmp is invisible to git, to review and to the next
+# session, and it can be deleted by anything at any time -- the generator that
+# wrote src/asm1.s survived 141 commits because its script lived there and
+# nothing named it (docs/violations/). So: every gate's scratch is .work/ in the
+# tree, and this target fails if /tmp or a bare mktemp comes back.
+#
+# docs/ is not scanned: it has to be able to discuss /tmp, as this comment does.
+test-tmp:
+	@needle="/t""mp"; \
+	bad=""; \
+	for f in Makefile tools/*.sh; do \
+	  if grep -v '^[[:space:]]*#' "$$f" \
+	     | grep -nE "$$needle|mktemp[[:space:]]*(-d)?[[:space:]]*$$|mktemp -d\)|mktemp\)" >/dev/null; then \
+	    bad="$$bad $$f"; \
+	  fi; \
+	done; \
+	if [ -n "$$bad" ]; then \
+	  echo "  something outside the tree is used in:$$bad"; \
+	  for f in $$bad; do \
+	    grep -v '^[[:space:]]*#' $$f | grep -nE "$$needle|mktemp[[:space:]]*(-d)?[[:space:]]*$$|mktemp -d\)|mktemp\)" | sed "s|^|    $$f:|"; \
+	  done; \
+	  exit 1; \
+	fi; \
+	printf '  nothing outside the tree: no %s and no bare mktemp in the gates\n' "$$needle"
 # ---- the header constant -----------------------------------------------------
 # The 120 bytes at src/asm1.s lines 16-23 were copied out of a reference binary
 # by a Python script (docs/violations/asm1-was-generated.md). That is not
@@ -690,7 +719,7 @@ test-cc: cc asm1
 # field named for each group, so a reader can check them against the spec. This
 # target is what makes the table load-bearing rather than decorative.
 test-header:
-	@tmp=$$(mktemp); trap 'rm -f $$tmp' EXIT; \
+	@tmp=$$(mkdir -p $(WORK) && mktemp $(WORK)/XXXXXX); trap 'rm -f $$tmp' EXIT; \
 	sed -n '16,23p' src/asm1.s | sed 's/^db //' | tr ',' '\n' | tr -d ' ' | grep -v '^$$' > $$tmp; \
 	grep -v '^#' tests/header/elf64.nums > $$tmp.want; \
 	if cmp -s $$tmp $$tmp.want; then \
@@ -711,7 +740,7 @@ test-coverage: asm1
 REJECT := $(sort $(wildcard tests/reject/*.s))
 
 test-reject: asm1
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	@tmp=$$(mkdir -p $(WORK) && mktemp -d $(WORK)/XXXXXX); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(REJECT); do \
 	  $(ASM0A) < $$f > $$tmp/o 2>/dev/null; a=$$?; as=$$(wc -c < $$tmp/o); \
 	  $(ASM1) < $$f > $$tmp/o 2>/dev/null; b=$$?; bs=$$(wc -c < $$tmp/o); \
@@ -738,7 +767,7 @@ test-reject: asm1
 CAP := $(sort $(wildcard tests/capability/*.cap.s))
 
 test-capability: asm1
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	@tmp=$$(mkdir -p $(WORK) && mktemp -d $(WORK)/XXXXXX); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(CAP); do \
 	  b=$${f%.cap.s}; \
 	  $(ASM0A) < $$f > $$tmp/x 2>/dev/null && { echo "  $$f: asm0a ACCEPTS the new syntax (it should not)"; fail=1; continue; }; \
@@ -775,7 +804,7 @@ triage:
 # and the `entry` directive (asserted through e_entry and by running it).
 SUP := $(sort $(wildcard tests/superior/*.s))
 test-superior: asm1
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	@tmp=$$(mkdir -p $(WORK) && mktemp -d $(WORK)/XXXXXX); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for s in $(SUP); do \
 	  b=$${s%.s}; \
 	  $(ASM1) < $$s > $$tmp/a 2>/dev/null || { echo "  asm1 cannot assemble $$s"; fail=1; continue; }; \
@@ -842,7 +871,7 @@ test-reject-msg: asm1
 # The message must name the line AND the reason. Each expectation below is written
 # out exactly as it must appear, so a vague message fails rather than passes.
 test-msg-exact: asm1
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	@tmp=$$(mkdir -p $(WORK) && mktemp -d $(WORK)/XXXXXX); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	check() { \
 	  printf '%b\n' "$$2" > $$tmp/m.s; \
 	  got=$$($(ASM1) < $$tmp/m.s 2>&1 >/dev/null); \

@@ -3038,3 +3038,30 @@ The replacements are `x = x & 2` (no bitwise operators), `b[i][0]` (no nested su
 `int a[3000]` (24 000 bytes past a 16 000 limit).
 
 `cc` 9 452 → 9 681 bytes. 39 checks, 36 refusals, 36 goldens.
+
+## Invariant 13: nothing outside the repository
+
+Addressed at the maintainer's direction, and rooted in the disclosure above: the generator that wrote
+`src/asm1.s` survived 141 commits precisely because its script and its outputs lived in `/tmp`, where
+nothing is reviewed, committed, or findable by the next session. While clearing `/tmp` a *third* script
+turned up — a copy of the generator, dated inside the session that disclosed the violation, writing to
+`/tmp/g2_out.s` while printing `wrote src/asm1.s`. It did not reach the repository (284 lines against
+2 911), so nothing was overwritten; it is preserved as evidence in `docs/violations/`.
+
+The rule, now invariant 13 in `AGENTS.md`: **no `/tmp`, no `$HOME` scratch, no directory outside the
+tree.** Tooling and evidence are committed and named in a document; build output lives in `.work/` in
+the repository, is ignored by git, and is described where a reader will look.
+
+Enforced by `make test-tmp`, which fails if `/tmp` or a bare `mktemp` appears in any Makefile recipe or
+`tools/*.sh` — demonstrated to fail by appending `cd /tmp` to `tools/triage.sh` and to pass again when
+it was removed. Its own needle is assembled as `"/t""mp"` so that the tripwire cannot match itself, and
+comment lines are skipped so that documentation is still allowed to *discuss* `/tmp`.
+
+And the gates' own scratch moved with it: ten `mktemp` calls in the Makefile and four in `tools/*.sh`
+now create their directories under `.work/` in the tree. A rule that exempted the thing checking it
+would be the same species of defect as the one that made the rule necessary.
+
+What was in `/tmp`: about 135 files whose *content* named this repository, plus the generator copies,
+are deleted. Roughly 900 files remain that I cannot attribute to this project — other tools' caches and
+other agents' scratch — and they are left in place rather than removed on a guess, because deleting
+someone else's work is a worse defect than leaving a file.

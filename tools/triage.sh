@@ -23,7 +23,7 @@
 cd "$(dirname "$0")/.." || exit 1
 src=${1:-src/asm1.s}
 
-TMP=$(mktemp -d)
+TMP=$(mkdir -p "$(dirname "$0")/../.work" && mktemp -d "$(dirname "$0")/../.work/XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 
 [ -f "$src" ] || { echo "triage: no such source: $src" >&2; exit 2; }

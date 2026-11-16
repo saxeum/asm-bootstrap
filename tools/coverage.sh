@@ -33,7 +33,7 @@ VALID="src/*.s tests/capability/*.s tests/superior/*.s"
 [ -f "$FORMS" ] || { echo "  coverage: no $FORMS"; exit 1; }
 [ -f tools/shape.awk ] || { echo "  coverage: no tools/shape.awk"; exit 1; }
 
-tmp=$(mktemp -d)
+tmp=$(mkdir -p "$(dirname "$0")/../.work" && mktemp -d "$(dirname "$0")/../.work/XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
 # census of the corpus, and of a file of probes
