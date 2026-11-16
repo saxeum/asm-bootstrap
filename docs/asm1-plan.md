@@ -13,6 +13,43 @@ The I/O skeleton is already written and verified (`src/cat.s`): read all of stdi
 loop over it with a moving pointer, emit one byte per iteration, exit. That is the shape of an
 assembler with the parsing removed, and it runs.
 
+## CORRECTION: text scanning is not currently expressible
+
+The first draft of this plan claimed "nothing in the design needs a form this assembler cannot
+emit". **That is false**, and step 2 of the build order exposed it.
+
+Finding a `'\n'`, or testing whether a byte is `';'`, needs to read **one byte**. Probed against
+`asm0a` directly:
+
+```
+mov al, [rsi]                rejected
+movzx eax, byte [rsi]        rejected        <- the form that is missing
+shr eax, 8                   rejected
+and eax, 255                 rejected
+cmp al, 10                   accepted, but al can only arrive from a register
+mov eax, [rsi]               accepted, 4-byte window only
+```
+
+A 4-byte window cannot substitute: `cmp eax, 10` matches only when the whole dword is
+`0x0000000a`, which real text is not. Without a byte load or a shift/mask, **no byte can be
+isolated from memory**, and therefore no text can be scanned. The mnemonic-matching trick from
+`src/window.s` works because it compares four *known* characters at a known position; it cannot
+search for an unknown one.
+
+### The fix, and why it is small
+
+Add one form to `asm0a`: **`movzx r32, byte [mem]`** (`0F B6 /r` with a memory operand). Everything
+it needs already exists — `do_movzx` resolves `r32 <- r8`, and `memop2` + `emit_mem` already turn
+`[base]` / `[base+disp8]` into `modrm`+`SIB`+`disp`, exactly as `mov r32,[mem]` uses. The change is
+a branch after the comma: if the operand begins with `[`, call `memop2`, emit `0F B6`, call
+`emit_mem`. Roughly 25 bytes, using two helpers that are already verified.
+
+Then byte scanning is expressible as `movzx eax, byte [rsi]` + `cmp al, 10` — and `cmp r8,imm8`
+already exists.
+
+**So the ordering is:** add `movzx [mem]` to `asm0a`, verify it (fixture: a program that finds the
+end of the first line and exits with its length), and only then write step 2 of `asm1.s`.
+
 ## The three dialect constraints the design is built around
 
 1. **No `movzx r32, byte [mem]`.** Read four bytes with `mov r32,[mem]` and compare the whole word

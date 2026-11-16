@@ -1052,3 +1052,35 @@ per syscall it gives up speed and removes the output buffer, its fill, its flush
 at flush. 600–800 instructions is the estimate; the build order keeps it runnable at every step,
 and step 5 changes the oracle from "matches a hand-emitted fixture" to "two independent
 implementations agree".
+
+## asm1.s step 2 blocked: no byte load — the plan was wrong and is corrected
+
+Building step 2 (line awareness: skip `;` comments and blank lines) hit a wall immediately. Finding
+a `'\n'` requires reading one byte, and this dialect cannot:
+
+```
+mov al, [rsi]                rejected
+movzx eax, byte [rsi]        rejected
+shr eax, 8                   rejected
+and eax, 255                 rejected
+cmp al, 10                   accepted, but al must come from a register
+mov eax, [rsi]               accepted, 4-byte window only
+```
+
+The 4-byte window trick from `src/window.s` compares four *known* characters at a known position. It
+cannot search for an unknown byte: `cmp eax, 10` matches only when the whole dword is
+`0x0000000a`.
+
+So the plan's claim — "nothing in the design needs a form this assembler cannot emit" — was false.
+It is corrected in `docs/asm1-plan.md`, in the place a reader would meet the claim, not in a
+comment.
+
+The fix is one form and small: `movzx r32, byte [mem]` (`0F B6` with a memory operand).
+`do_movzx` already resolves `r32 <- r8`; `memop2` and `emit_mem` already produce modrm+SIB+disp for
+`mov r32,[mem]`. The change is a branch after the comma in `do_movzx`: if the operand starts with
+`[`, call `memop2`, emit `0F B6`, call `emit_mem`. About 25 bytes, both helpers already verified.
+
+Worth noting what this cost and what it saved: the probe is six lines and one tool call, and it
+prevented writing the scanner of a 700-instruction program against a form that does not exist. The
+same class of mistake — assuming a capability instead of testing it — is what produced the earlier
+two rel32 reverts.
