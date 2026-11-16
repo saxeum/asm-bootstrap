@@ -19,10 +19,11 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 test test-asm0a test-asm1 fixpoint bootstrap-check promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject fixpoint bootstrap-check promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1 (the promoted previous stage)'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
+	@echo 'make test-reject  sources that must be refused, with no output'
 	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
 	@echo 'make bootstrap-check  asm0a and seed/asm1 must agree on src/asm1.s'
 	@echo 'make promote    replace seed/asm1 with the built asm1 (deliberate)'
@@ -43,7 +44,7 @@ asm1: src/asm1.s $(SEED)
 	@chmod +x $@
 	@printf '  asm1  %s bytes  sha %s  (built by %s from src/asm1.s)\n' \
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(SEED)"
-test: test-asm0a asm1 test-asm1
+test: test-asm0a asm1 test-asm1 test-reject
 test-asm0a:
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(PAIRS); do \
@@ -109,7 +110,7 @@ verify-provenance: asm1
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: asm1 fixpoint bootstrap-check verify-provenance
+check: asm1 fixpoint bootstrap-check test-reject verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -155,3 +156,25 @@ promote: asm1 fixpoint
 	   echo "  promoted seed/asm1: $${new%%????????????????} (was $${old%%????????????????})"; \
 	 fi
 	@./tools/provenance.sh record
+
+# ---- rejection parity -------------------------------------------------------
+# A positive suite cannot see a silently truncated encoding: a wrong byte is
+# still a byte. These sources must be REFUSED -- non-zero exit and NO output --
+# by both assemblers. Partial output would be worse than nothing, which is why
+# asm1 has a validate pass that resolves every label before it writes a byte.
+REJECT := $(sort $(wildcard tests/reject/*.s))
+
+test-reject: asm1
+	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	for f in $(REJECT); do \
+	  $(ASM0A) < $$f > $$tmp/o 2>/dev/null; a=$$?; as=$$(wc -c < $$tmp/o); \
+	  $(ASM1) < $$f > $$tmp/o 2>/dev/null; b=$$?; bs=$$(wc -c < $$tmp/o); \
+	  if [ $$a -ne 0 ] && [ $$b -ne 0 ] && [ $$as -eq 0 ] && [ $$bs -eq 0 ]; then \
+	    ok=$$((ok+1)); \
+	  else \
+	    echo "  NOT REFUSED $$f: asm0a exit $$a ($$as bytes), asm1 exit $$b ($$bs bytes)"; \
+	    fail=1; \
+	  fi; \
+	done; \
+	printf '  reject %s/%s refused by both, with no output\n' $$ok $(words $(REJECT)); \
+	exit $$fail

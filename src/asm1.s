@@ -58,7 +58,15 @@ mov eax, [rbp+20]       ; filesz = 120 + count
 mov ecx, 120
 add eax, ecx
 mov [rbp+24], eax
-mov eax, 1              ; the header is written, not counted
+mov eax, 1              ; pass 1: validate -- resolve every label and range-check
+mov [rbp+16], eax       ; with no output, so a bad source writes nothing at all
+mov eax, 0
+mov [rbp+20], eax
+lea rbx, [rbp+1]
+mov ecx, 26001
+sub rbx, rcx
+call parse
+mov eax, 2              ; pass 2: the header is written, not counted
 mov [rbp+16], eax
 mov ebx, 4194426        ; 0x40007a, the header template
 mov eax, 96
@@ -117,7 +125,7 @@ mov [rbp+40], eax
 cmp eax, 0
 jnz.l hdr2
 
-mov eax, 1              ; pass 1: emit
+mov eax, 2              ; pass 2: emit
 mov [rbp+16], eax
 mov eax, 0
 mov [rbp+20], eax       ; the header is not part of the body offset
@@ -132,8 +140,8 @@ syscall
 emital:
 mov [rbp+8], al
 movzx eax, byte [rbp+16]
-cmp al, 0
-jnz.l emit_w
+cmp al, 2              ; only the emit pass writes; 0 counts, 1 validates
+jz.l emit_w
 mov eax, [rbp+20]
 inc eax
 mov [rbp+20], eax
@@ -395,6 +403,8 @@ movzx eax, byte [rbx]
 cmp al, 34              ; '"' => a string literal
 jz.l pdbstr
 call num32
+mov edx, 256
+call chklim
 mov eax, ecx
 call emital
 dbnext:
@@ -405,6 +415,8 @@ jnz.l pline
 lea rbx, [rbx+1]
 call skipsp
 call num32
+mov edx, 256
+call chklim
 mov eax, ecx
 call emital
 jmp.l dbnext
@@ -563,6 +575,8 @@ mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
 call num32
+mov edx, 256
+call chklim
 mov [rbp+36], ecx       ; spill: emital's syscall destroys rcx
 mov eax, [rbp+32]
 mov edx, 176            ; 0xB0
@@ -621,6 +635,8 @@ mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
 call num32
+mov edx, 128
+call chklim
 mov [rbp+36], ecx
 mov eax, [rbp+52]
 cmp al, 0
@@ -704,6 +720,8 @@ cmp al, 43              ; '+'
 jnz.l fail
 lea rbx, [rbx+1]
 call num32
+mov edx, 128
+call chklim
 mov [rbp+60], ecx
 memend:
 movzx eax, byte [rbx]
@@ -770,6 +788,8 @@ mov [rbp+64], eax       ; C6 /0
 lea rbx, [rbx+1]
 call skipsp
 call num32
+mov edx, 256
+call chklim
 mov [rbp+36], ecx
 mov eax, 198            ; C6
 call emital
@@ -929,6 +949,13 @@ mov esi, 2
 add edx, esi            ; no add r32,imm32 in the dialect
 sub rax, rdx
 mov [rbp+84], eax
+mov eax, [rbp+84]
+mov ecx, 128
+add eax, ecx            ; rel + 128 must land in 0..255
+cmp eax, 256
+jb.l pbr_chk
+jmp.l fail
+pbr_chk:
 mov eax, [rbp+92]       ; the opcode for this branch
 call emital
 mov eax, [rbp+84]
@@ -1144,3 +1171,11 @@ mov eax, 182
 call emital
 call emitmem
 jmp.l pline
+
+chklim:                 ; ecx must be below edx, or the value does not fit
+mov eax, ecx            ; no cmp r32,r32 in the dialect: sub sets CF, so
+sub rax, rdx            ; compare through a copy and leave ecx intact
+jb.l chkok
+jmp.l fail
+chkok:
+ret
