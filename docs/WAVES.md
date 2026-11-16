@@ -3665,3 +3665,38 @@ The new evidence is `tools/differential.sh`: five programs in the intersection o
 built by `cc`+`asm1` and by `gcc -O0 -funsigned-char`, comparing stdout bytes and exit status. It is
 `5/5 AGREE` and `1/5` against the pre-signed `seed/cc`, which is how it was shown able to fail. gcc
 is the one named exemption in `make test-tools`; it is a second opinion, never an artifact.
+
+## Wave: lisp.c -- a reader, an arena, and eval
+
+`tests/programs/lisp.c` is a small Lisp interpreter: numbers, symbols, lists and quote; `if`,
+`define`, `quote`, `+ - * /`, comparisons, `car`, `cdr` and `cons`; one value per line. Memory is one
+`char[140000]` passed as an `int`, with the input at 0, 4096 sixteen-byte nodes at 65536, and the
+parser/name/env/output state above 131072. Arena, definitions (64), input (60000 bytes) and output
+are fixed; exhaustion exits 1 with `lisp: error`, and a value is written only after eval and printing
+succeed.
+
+The first working version failed at the edges of the C subset, each found by compiling and running:
+
+- a condition's right-hand side must be a variable or a literal, so `hi > 128*256*256*256 - 1` was
+  refused; the limit is now a local (`top`).
+- `x >= 0` is refused by the compiler's normalisation; descending loops use `while (i > 0)` with the
+  decrement first, and `env_find` returns `0 - 1` as its miss sentinel.
+- a call may not appear in another call's argument list: `eval(m, car(m, a))` became a `ca` local in
+  every case, including `apply`'s arithmetic.
+- duplicate local names anywhere in one function are refused, so `apply`'s three arg pairs are
+  `ca/a`, `ca2/a2/b2`, `ca3/a3/b3`.
+- two subscripts compared directly (`m[a+i] != m[b+i]`) are refused; each side goes through a local.
+- a bare array name is not an argument: the state is passed as `&mem` everywhere except `read`.
+- `write(p, len)` takes a pointer value, not a base-relative offset; the output pointer is
+  `&mem + 133000`.
+- arithmetic was first done on node indices instead of number values (`(+ 1 2)` printed 5);
+  `apply` now checks `tag` and calls `numv`.
+- `'x` built `(quote . x)` instead of `(quote x)`, so the quote form failed; the reader conses the
+  operand into a proper list.
+- `eval` of node 0 (nil) died; it now returns nil.
+
+The 29-value table covers signed arithmetic and comparison, `if` with nil/0, quote, definitions across
+lines, proper and improper cons, and blank lines. The 17 refusals cover wrong arity, unbound symbols,
+car/cdr of non-lists, division by zero, unclosed/stray parentheses, trailing input, a non-symbol
+`define`, an empty quote, arena exhaustion (1500 flat definitions) and a 60000-byte input. Both
+`cc`+`asm1` and `cc1`+`asm2` pass the same table. Issued as #7.

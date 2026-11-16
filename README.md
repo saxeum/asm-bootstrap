@@ -1,9 +1,50 @@
 # asm-bootstrap
 
-An assembler built from nothing, and a C compiler on top of it. `asm0a` is 3 745 bytes of
-hand-written machine code that assembles source into Linux ELF executables; it built a better
-assembler, which assembles itself. `cc` is a compiler written *in that dialect* whose output is
-that dialect, so the pipeline is `cc` → text → `asm1` → an executable.
+**A self-hosting assembler and C compiler, bootstrapped from machine code that an LLM wrote by
+hand.**
+
+Nothing at the bottom of this repository came out of another program. The seed is 3 745 bytes of
+x86-64 written as literal bytes — no compiler, assembler, linker, interpreter or script produced
+them — and every artifact above it exists because a source file was assembled by something that
+descends from those bytes. The seed and four stages above it, each with a gate that is a property of the
+build rather than a claim about it:
+
+| stage | what it is | what makes it true |
+|---|---|---|
+| 0 | `asm0a`, 3 745 B of machine code, no tool involved | it runs, and assembles the stage-1 source |
+| 1 | the assembler in its own dialect (`src/asm1.s`, frozen witness) | 8 053 B when promoted; `make test-frozen` pins the source, and `src/cc.s` still assembles to `seed/cc` |
+| 2 | the assembler in C (`src/asm1.c`) | `seed/cc1` + `seed/asm1` build it; it reproduces itself from its own C text: 54 416 B, sha `ccb1607d…` |
+| 3 | the compiler in C (`src/cc.c`) | `asm1` builds it from its own C text to 44 154 B, sha `5e9ad682…`, and it recompiles that text identically |
+| 4 | the programs (`wc`, `calc`, `sort`, `lisp`) | each is built and run by both `cc`+`asm1` and the C-only `cc1`+`asm2`, with identical bytes |
+
+**Status: the C-only chain is complete.** `make check` and `make from-c` are green, and the three
+filed programs (#5 calc, #6 sort, #7 lisp) are implemented and exercised on both chains. The
+remaining roadmap items — `.data`, wider addressing forms, closures/GC in the Lisp — are deliberately
+out of scope for this repository's goal, not hidden gaps in it.
+
+"Self-hosting" is therefore not a description of this project but the *failure condition* of its
+build: `make check` stops if an assembler cannot reproduce itself, or a compiler cannot compile its
+own source to the same text.
+
+## What the model changes about the method
+
+An LLM emits confident bytes. Its failure mode is not that it cannot write machine code — it wrote
+every byte of `asm0a` with no assembler to check them, and later a compiler in a language it was
+inventing as it went. Its failure mode is the plausible wrong one: a byte count that forgot the REX
+prefix, a patch written one byte into a two-byte opcode, a symbol address that is a file offset
+where a segment offset was meant. None of that is visible by reading, and the model is the last
+thing in the loop you should ask.
+
+So the method is oracles, not care. Every wave is judged against bytes written *before* the tool
+that produced them existed; every gate has been demonstrated failing at least once; every claim in
+the log names the mechanism that caught it. Over thirty defects are recorded in `docs/WAVES.md` with
+their cause and their catcher, and every one of them was caught by decoding, comparing or executing
+the artifact — **none by re-reading the code**. A rule written down as prose was violated again two
+waves later; the same rule mechanised (`tools/check-branches.sh`: 290 pinned branch sites, with a
+`--selftest` that must fail) has held ever since.
+
+That is what this project is about: not that a model can bootstrap a toolchain, but that a bootstrap
+is a chain of trust, and an LLM is exactly the kind of producer that needs one.
 
 **No compiler, no system assembler, no disassembler, no interpreter, no debugger** appears in the
 *verification* path: `make test-tools` fails if one is invoked anywhere in the `Makefile` or `tools/`;
@@ -28,9 +69,9 @@ in one session's editing and diagnosis path. It produced no artifact's content, 
 still passed, which is exactly why it is written down — `make test-tools` cannot see an interactive
 invocation.
 
-The shape of the project is a chain: build a better assembler, use it to build a better one, repeat.
-`docs/pdp8-to-gcc.md` has the history; `docs/WAVES.md` is the log, failures included;
-`docs/continue-here.md` is where a session starts.
+`docs/pdp8-to-gcc.md` has the history that motivates the shape (PAL-III, its unnamed original
+author, the paper-tape two-pass design, and the line from there to `as` and `gcc`); `docs/WAVES.md`
+is the log, failures included; `docs/continue-here.md` is where a session starts.
 
 ## Where this stands
 
@@ -48,7 +89,7 @@ The shape of the project is a chain: build a better assembler, use it to build a
 
 Past the bootstrap. The canonical `asm1` is now the **C assembler** built from `src/asm1.c`; it
 reaches its own fixpoint, reproduces `asm1` on the whole corpus, and is demonstrably better than what
-built it — 8 byte-level cases where `asm0a` answers wrongly and 36 syntax pairs it cannot parse.
+built it — 9 byte-level cases where `asm0a` answers wrongly and 36 syntax pairs it cannot parse.
 `src/asm1.s` is frozen history and the witness; `make bootstrap-check` says **NOT APPLICABLE** out
 loud rather than passing quietly.
 
@@ -64,10 +105,12 @@ assembler in the same subset; `asm1` builds `src/asm1.c` to itself and passes `m
 (`seed/cc1`, `seed/asm1`) in the assembler-then-compiler order, with both fixpoints; `make test-frozen`
 pins all **161** `.s` sources, including the signed-form fixture.
 
-**Two real programs exercise the C-only chain.** `tests/programs/wc.c` counts lines, words and
+**Four real programs exercise the C-only chain.** `tests/programs/wc.c` counts lines, words and
 characters; `tests/programs/calc.c` is a signed recursive-descent calculator; `tests/programs/sort.c`
-sorts lines over the full 200000-byte input. `make test-program` builds all three with `cc`+`asm1`;
-`make from-c` builds them with the C-built `cc1`+`asm2`, after rebuilding both tools from source.
+sorts lines over the full 200000-byte input; `tests/programs/lisp.c` is a small Lisp interpreter with a
+reader, a fixed 4096-node arena, `define`, `if`, arithmetic, comparisons, `car`/`cdr`/`cons` and a
+single fixed error path. `make test-program` builds all four with `cc`+`asm1`; `make from-c` builds
+them with the C-built `cc1`+`asm2`, after rebuilding both tools from source.
 
 ### Differences from C
 
@@ -78,8 +121,9 @@ express against `gcc -O0 -funsigned-char`:
 - `int` is **64-bit**; there is no `sizeof`, no `struct`, no global, no `&&`/`||`, no `else if`, no
   `for`, `break` or `switch`.
 - `read` and `write` are two-argument builtins (`read(buf, n)`, `write(buf, n)`); `exit(n)` stops.
-- Functions take up to four `int` arguments, have 32 variables, a 260000-byte frame, and the input is
-  capped at 200000 bytes; constants go to 16 777 215.
+- Functions take up to four `int` arguments, have 32 variables, a 260000-byte frame and
+  arrays up to 255000 bytes; the compiler reads at most 200000 bytes of source, and constants go to
+  16 777 215. A program may cap its own input smaller (60000 in lisp, 200000 in sort).
 - `<=` and `>=` are normalised to `<`/`>` with an adjusted bound, so `x <= 255` and `x >= 0` are
   refused; write `x < 256` instead.
 - A string is an address; `db` literals are zero-terminated; a bare array name is not a value (use
@@ -136,7 +180,7 @@ that produces an executable, so every assembler gate applies to the compiler's o
 begins with a `;` comment saying what it is — a comment to the assembler, a shell syntax error to
 anything that tries to run it directly.
 
-| stage | what it added | gate |
+| step | what it added | gate |
 |---|---|---|
 | 1 | `int x = N`, `x = x ± N`, `while (x)` | `twowrites` golden; `loop` compared by output with `tests/oracle/dots.s` |
 | 2 | `== != < > <= >=`, `if`/`else` — no new instruction, `jb`/`jz`/`jnz` plus an operand swap | same output as `tests/oracle/branch.s` |
@@ -151,22 +195,22 @@ anything that tries to run it directly.
 | 11 | `(expr)` grouping, `write(buf, n)`, `read(buf, n)`, and a term in a condition | `putn(1234)` prints 1234; `cat` copies stdin byte for byte |
 | 12 | `/`, `%`, character literals, 15-character names, `exit(n)` | `q=100/7; r=100%7; q*10+r` exits 142; `exit(3)` stops with 3 |
 | 13 | **the port** — the compiler written in the subset it compiles | `make test-port` 43/43 byte-identical; `make test-d2` self-hosted |
+| 14 | signed `< > <= >=`, signed `/` and `%` (`jl`/`jg`, `cqo` + `idiv`) | `tools/differential.sh` 5/5 vs `gcc -O0`; `calc` 10/10, including negative division |
 
 The subset, exactly: `int` scalars, `int a[N]` and `char a[N]` arrays, assignment (through `*p` and
 `a[i]`), `while`, `if`/`else`, `return`, six comparisons, `+ - * / %` with precedence, parentheses,
 `&`/`*` on a name, function definitions with up to four `int` arguments, calls, recursion,
 `read(buf, n)`, `write(buf, n)`, `exit(n)`, and string/char/number literals. Values are 64-bit; an
 `int` may hold an address and the compiler neither knows nor checks which.
-
 Limits: 32 variables per function, names up to 15 characters, four arguments, expression depth 6, a
-65 536-byte frame, arrays up to 64 000 bytes in total, and comparison bounds that are a literal,
-character or variable — `x <= 255` and `x >= 0` are refused because normalising them would need a
-bound outside 0..255.
+260000-byte frame, arrays up to 255000 bytes in total, 2048 labels, and comparison bounds that are a
+literal, character or variable — `x <= 255` and `x >= 0` are refused because normalising them would
+need a bound outside 0..255.
 
 Boundaries are refusals with no output, and all **36** are pinned in `make test-cc`: `int main()`
 without `void`, `void main`, an undeclared name, a duplicate declaration, a 33rd variable, a
 16-character name, an assignment inside a condition, `else if`, `x <= 255`, `x >= 0`, a bitwise `&`,
-an unterminated string or comment, a literal above 65535, `write(x)` with no string, `read` into a
+an unterminated string or comment, a literal above 16 777 215, `write(x)` with no string, `read` into a
 non-array or without a count, five arguments, a call inside an argument list (`f(f())`), `&5`, `*q`
 with `q` undeclared, `&nope`, a bare array or an array used as a value, `read(&s, 4)`, a nested
 subscript, an `int a[9000]` (72 000 bytes), a duplicate array, a `char` scalar, `char a[4]; a = 1;`,
@@ -211,14 +255,14 @@ caller. The old layout only worked while the first array was small and its indic
 
 `src/cc.c` is the compiler written in the subset it compiles: scanner, symbol table, arrays,
 expressions with precedence, division, calls, recursion, conditions, literals, `read`, `write` and
-`exit`. It keeps its world in one `char mem[31500]`, because a pointer subscript in this dialect is a
+`exit`. It keeps its world in one `char mem[210000]`, because a pointer subscript in this dialect is a
 byte subscript, and it validates in one pass and emits in a second.
 
 The proof has two halves, and both are run by `make check`:
 
 ```
 make test-port    43/43 goldens byte-identical to cc, and the port-built putn prints 4321
-make test-d2      THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 129752 bytes
+make test-d2      THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 140388 bytes
 ```
 
 `test-port` is the part that is not self-consistency: the port's output is compared with the dialect
@@ -234,8 +278,9 @@ src/asm1.c  →  cc  →  asm1  →  asm2
 
 `cc` in C is done (step 4), and so is `asm2` (step 5): `src/asm1.c` is compiled by `cc`, assembled
 by `asm1`, and required to be **byte-identical to `asm1` on the whole corpus** — every fixture, every
-capability pair, every rejection and exact message, the 99 KB source, `src/asm1.s`, and its own
-compiler text. Only then is `asm2` accepted; `asm1` stays as the witness.
+capability pair, every rejection and exact message, the 99 KB source, and its own compiler text. The
+C-only chain then rebuilds both tools from `seed/cc1` + `seed/asm1` (`make from-c`), with `cc2 == cc1`
+and `asm2b == asm2`.
 
 What that buys, and why the corpus is the criterion rather than "it runs": an assembler that produces
 the same bytes on 18 hand-emitted references, 36 syntax pairs, 290 pinned branches and a fixpoint is
@@ -245,21 +290,18 @@ between implementations is evidence about *them* until neither is known to be wr
 
 Why it matters at all is Thompson, 1984: a tool can carry a miscompilation that no amount of reading
 its source reveals. The defence is never one check. It is a ladder of independent ones — hand-written
-references, refusals, superiority cases, a fixpoint, a provenance ledger, and one decoder written in
-the dialect so that no forbidden tool is in the loop. `docs/oracles.md` ranks the rungs and says what
-each one does *not* prove.
+references, refusals, superiority cases, a fixpoint, a provenance ledger, one decoder written in the
+dialect, and a differential against gcc for the parts both dialects can express. `docs/oracles.md`
+ranks the rungs and says what each one does *not* prove.
 
-`asm1`'s dialect stays frozen as the witness: it is the one thing every artifact in the chain must
-reproduce, so it must not move while `asm2` is being made to match it.
-
-Reaching the goal needs what is still missing on the assembler side: `.data` (a read-write segment),
-`add r32, imm32` (and `sub`/`cmp`), `cmp`/`test`/`mov` with `[mem]` operands,
-`[base+index*scale]`, and `imul r, r, imm`. Pointers, arrays, `div r32/r64` and `char` arrays exist;
-`docs/ROADMAP.md` orders the rest.
+The frozen `src/asm1.s` and `src/cc.s` are the witnesses; the canonical `asm1` and `cc` are the C
+builds. The assembler still lacks `.data`, `add r32, imm32`, `cmp`/`test`/`mov` with `[mem]`,
+`[base+index*scale]`, and `imul r, r, imm`. Those are the ordered roadmap, not prerequisites for the
+C-only chain: the four programs are the evidence that the subset is useful without them.
 
 ## Provenance: which assembler built this?
 
-`asm0a` is frozen and only `src/asm1.s` moves, so `asm1` changes and an artifact is meaningful only
+`asm0a` is frozen; the live sources are `src/asm1.c` and `src/cc.c`, so the tools change and an artifact is meaningful only
 together with *which build of which assembler* produced it. "asm1" identifies nothing once asm1 has
 been rebuilt, so every record is a sha256 pair.
 
@@ -349,7 +391,7 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div r32`/`div r64`, `idiv r32`/`idiv r64`, `cqo`, `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jl`/`jle`/`jg`/`jge`/`js` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `imul r,r,imm`, `div`/`idiv` need a register of 32 or 64 bits, not 8, `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`jo` as mnemonics, `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 15 characters |
 | compiler | `cc`, 44 154 bytes, built by `asm1` from `src/cc.c`: C subset → dialect **text** → `asm1` → executable. Signed `<`/`>`/`<=`/`>=`, signed `/` and `%`. 43 text goldens, 3 output oracles, 36 refusals (`make test-cc`, `docs/cc.md`). **The compiler compiles itself**; `make test-port` shows its output byte-identical on all 43 goldens, and `make test-d2` shows `cc1.s == cc2.s` |
-| `make check` | forbidden tools, `frozen: 161 assembly sources unchanged`, nothing-outside-the-tree, frozen `src/cc.s` still equals `seed/cc`, the port's 43/43 goldens, `cc1.s == cc2.s`, header table, coverage 113/113, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, nine superiority cases plus three behavioural, 38/38 decoder cases, the compiler's 45 checks including `exit(3)` and the callee-local array, the assembler-in-C gate (234 checks), the wc program (4/4 inputs), the calc program (10/10 results, 2/2 refusals), the sort program (6/6 ordered, 2/2 refusals), 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| `make check` | forbidden tools, `frozen: 161 assembly sources unchanged`, nothing-outside-the-tree, frozen `src/cc.s` still equals `seed/cc`, the port's 43/43 goldens, `cc1.s == cc2.s`, header table, coverage 113/113, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, nine superiority cases plus three behavioural, 38/38 decoder cases, the compiler's 45 checks including `exit(3)` and the callee-local array, the assembler-in-C gate (234 checks), the wc program (4/4 inputs), the calc program (10/10 results, 2/2 refusals), the sort program (6/6 ordered, 2/2 refusals), the lisp program (29/29 values, 17/17 refusals including arena and buffer limits), 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.

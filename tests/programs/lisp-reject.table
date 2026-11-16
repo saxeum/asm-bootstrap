@@ -1,0 +1,16 @@
+# input | reason (all must exit 1 with "lisp: error" and no stdout)
+(+ 1)|wrong arity
+(car 1)|car of a number
+(foo 1)|unbound symbol
+(/ 1 0)|division by zero
+(quote)|wrong arity
+(1 2)|call of a number
+(|unclosed list
+)|stray close
+(+ 1 2|unclosed list
+(+ 1 2) extra|two expressions on one line
+(define 3 4)|define of a non-symbol
+(if 1)|if without a branch
+'|quote without an operand
+(cons 1)|wrong arity
+(cdr (quote ()))|cdr of nil
