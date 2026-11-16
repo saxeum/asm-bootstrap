@@ -19,6 +19,8 @@ function regclass(t) {
 	if (t ~ /^(rax|rbx|rcx|rdx|rsi|rdi|rbp|rsp)$/) return "r64"
 	if (t ~ /^(eax|ebx|ecx|edx|esi|edi|ebp|esp)$/) return "r32"
 	if (t ~ /^(al|bl|cl|dl|ah|bh|ch|dh|sil|dil|bpl|spl)$/) return "r8"
+	if (t ~ /^r(8|9|1[0-5])d$/) return "r32"
+	if (t ~ /^r(8|9|1[0-5])$/) return "r64"
 	return ""
 }
 

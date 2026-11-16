@@ -365,6 +365,16 @@ test-superior: asm1
 	    echo "  entry case: e_entry bytes $$entry, exit $$got (wanted 7c004000 / 42)"; fail=1; fi; \
 	else \
 	  echo "  asm1 cannot assemble the entry case"; fail=1; fi; \
+	printf 'mov r8d, 40\nmov r9d, 2\nadd r8d, r9d\nmov edi, r8d\nmov eax, 60\nsyscall\n' > $$tmp/r.s; \
+	if $(ASM0A) < $$tmp/r.s > $$tmp/ra 2>/dev/null; then \
+	  echo "  asm0a accepts r8d: this test no longer discriminates"; fail=1; fi; \
+	if $(ASM1) < $$tmp/r.s > $$tmp/rb 2>/dev/null; then \
+	  chmod +x $$tmp/rb; \
+	  if $$tmp/rb; then got=0; else got=$$?; fi; \
+	  if [ $$got -eq 42 ]; then \
+	    printf '  superior: r8d-r15d arithmetic runs and exits 42 (asm0a cannot assemble it)\n'; \
+	  else echo "  the r8d program exited $$got, wanted 42"; fail=1; fi; \
+	else echo "  asm1 cannot assemble the r8d program"; fail=1; fi; \
 	exit $$fail
 
 test-reject-msg: asm1

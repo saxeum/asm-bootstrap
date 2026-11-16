@@ -1,1 +1,2 @@
-mov r9, 1
+mov r7, 1
+mov r16, 1

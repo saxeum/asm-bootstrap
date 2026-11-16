@@ -1,26 +1,29 @@
 # Continue here
 
-State of the project at the end of the session that gave the gate its own decoder, fixed `[rbp]`, and
-added the coverage gate. Written so a new session can start without re-deriving anything.
+State of the project at the end of the session that added REX.W, `r8`–`r15`, the coverage gate and the
+`[rbp]` fix. Written so a new session can start without re-deriving anything.
 
-**The goal, since this session: a compiler.** A high-level language whose backend emits this dialect.
-That is what the roadmap is now ordered by; `docs/ROADMAP.md` has the requirement table and why
-`REX.W` + `r8`–`r15` is first.
+**The goal: a compiler.** A high-level language whose backend emits this dialect. That is what the
+roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.data` is next.
+
+
+**The goal: a compiler.** A high-level language whose backend emits this dialect. That is what the
+roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.data` is next.
 
 ## The numbers
 
 | | bytes | sha256 (16) | notes |
 |---|---|---|---|
 | `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
-| `asm1` | 6 947 | `3c932ea1cfc5b897` | built by `seed/asm1` from `src/asm1.s` |
-| `seed/asm1` | 6 947 | `3c932ea1cfc5b897` | the promoted stage; identical to `asm1` |
+| `asm1` | 7 488 | `158b79648e5a2a1f` | built by `seed/asm1` from `src/asm1.s` |
+| `seed/asm1` | 7 488 | `158b79648e5a2a1f` | the promoted stage; identical to `asm1` |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
-| `src/asm1.s` | 25 422 | — | 1 878 lines, 188 labels (limit 256, 7 of them duplicated dead code) |
+| `src/asm1.s` | 28 337 | — | 2 043 lines, 192 labels (limit 256, 7 of them duplicated dead code) |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
 
 Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 12 reject sources · **29 capability
-pairs** · **4 superiority cases** (byte-level) + 2 behavioural · 5 exact messages · 38 decoder cases ·
-**77 coverage forms** · 290 branch pins · 35 provenance records.
+pairs** · **5 superiority cases** (byte-level) + 3 behavioural · 5 exact messages · 38 decoder cases ·
+**88 coverage forms** · 290 branch pins · 35 provenance records.
 
 ## Verify before touching anything
 
@@ -30,7 +33,7 @@ make clean && make && make check
 
 `make check` must print, in order: **forbidden tools: none invoked** · **coverage 60/60 forms
 exercised** · fixpoint holds · bootstrap NOT APPLICABLE · 12/12 rejections · 5/5 exact messages ·
-29/29 capability pairs · 4/4 superiority cases (plus the 99 KB and `entry` cases) · 38/38 decoder
+29/29 capability pairs · 5/5 superiority cases (plus the 99 KB, `entry` and r8d cases) · 38/38 decoder
 cases · 35 provenance records · SHAS match · `asm1.sha` match · and a real **`branch pins: 290/290`**
 line naming both the subject's sha and the decoder's. If any line is missing or red, stop and fix
 that first.
@@ -44,58 +47,65 @@ Two traps that have each cost a session:
   After any change to `src/asm1.s`: `make promote` and `make record`, or `make check` fails on
   `docs/asm1.sha` and the ledger. Those failures are correct — each has caught an omission once.
 
-## What changed in the last three sessions
+## What changed in the last four sessions
 
-**The branch gate is ours.** `tools/check-branches.sh` no longer mentions `objdump`. It runs `./dis`,
-compares all 290 pins in `docs/branches.tsv` with `cmp`, and prints the sha of `asm0a` and of `dis`
-beside the count. The pins themselves were transcribed from objdump in earlier waves, so a green gate
-is an independent check *of the decoder* and no check of either encoder — stated in `AGENTS.md`.
+**The branch gate is ours** (`src/dis.s`, 290/290 pins, no objdump), **`[rbp]` disp 0 is fixed**
+(`8b 45 00`, held by `tests/superior/rbp0`), and **coverage is measurable** (`make test-coverage`, 88
+forms). Details in `docs/WAVES.md` and `docs/encodings.md`.
 
-**A wrong answer fixed: `[rbp]` with displacement 0.** It encoded as `8b 05` (RIP-relative, the next
-four bytes read as the displacement) and no test input had ever written it. `emitmem` now takes
-`mod = 01` when the displacement is non-zero, a SIB is present, or the base is `rbp`, and emits the
-disp byte under the same condition. Held by `tests/superior/rbp0.s`. `asm0a` still gets it wrong.
+**REX.W, then `r8`–`r15`.** The width of a reg-reg instruction now comes from the operand names
+(`reg32` records it in `[rbp+9]`; a mixed pair is refused), and one helper computes
+`REX = 0x40|W<<3|R<<2|X<<1|B` from three slots each handler fills — `[rbp-64]` reg field,
+`[rbp-68]` rm/base, `[rbp-72]` SIB index. Every code is masked with `and 7` before it enters a ModRM
+or SIB byte. `r13`/`r12` needed no new code because the `mod = 00` and SIB rules are masks
+(`base & 7 == 5`, `base & 7 == 4`).
 
-**Coverage is measurable.** `make test-coverage`: every claimed form must be exercised by some test
-input, and every mnemonic a test uses must be claimed. 77 forms. Its first run found two untested
-shapes and two unclaimed mnemonics; it found three more untested forms the hour after REX.W landed.
+**The method that made it possible, and it is worth repeating:** the machinery went in *inert* —
+after every step `asm1 < src/dis.s` had to be byte-identical to the previous build, proving no
+8-register encoding had moved — and only then did the parser learn the new names. `asm1` 6 947 →
+7 488.
 
-**REX.W: the width comes from the operand names.** Before this, `add`/`xor` refused 64-bit operands
-while `mov`/`and`/`or`/`test`/`cmp` silently encoded 32-bit, and `sub` always encoded 64-bit. Now
-`reg32` records the width, two-register handlers refuse a mixed pair, and `0x48` is emitted iff the
-width is 64-bit. `asm1` 6 679 → 6 947. Details: `docs/encodings.md`.
+## The next task: `.data`, the compiler's hard blocker
 
-## The next task: `r8`–`r15`
+Everything a compiled program needs to *be* a program rather than a sequence of instructions lives in
+writable memory: a global, a string built at runtime, a heap. `asm1` still emits one `R+X` `PT_LOAD`,
+so every byte of the image is code.
 
-The width machinery is in place; the extended codes are not. What it needs, in this order:
+What it needs:
 
-1. **The parser.** `reg32` accepts three characters (`eax`, `rax`). `r8`…`r15` are 2–3 (`r8`, `r10`),
-   and `r8d`…`r15d` are 3–4, so the register matcher has to stop assuming a fixed width. Codes 8–15
-   come out of it.
-2. **The REX bits.** `REX.R` for the ModRM *reg* field, `REX.B` for the rm/base, `REX.X` for the SIB
-   index: `0x40|W<<3|R<<2|X<<1|B`, emitted where the `0x48` is emitted now — one helper, called from
-   the same nine handlers.
-3. **The mask.** Every code must be `and`ed with 7 before it is shifted into a ModRM or SIB byte; the
-   extended bit lives only in REX. `emitmem` and `memop` are where this is decided.
-4. **`r13`** is the second member of the `mod = 00` exception `rbp` already has.
+1. **A directive to switch segment** (`.data`) — opt-in, so the 18 fixtures stay byte-identical.
+2. **A second program header**: `PT_LOAD` with `R+W` (flags 6) covering the data, and the first one
+   covering only code. `filesz`/`memsz` become two values computed from label differences — which is
+   what the expression support was for (`dataend - datastart`).
+3. **The `db`/label path must know which segment it is in**, because the file offset and the virtual
+   address no longer differ by the same constant for both segments — `mov eax, 0x400078+label` in the
+   dialect stops being true for data.
+4. Entry: `e_entry` still points into `.text`; the default (first body byte) must keep working.
 
-Gate: hand-computed cases for `mov r8, rax` → `49 89 c0`, `add r8, r9` → `4d 01 c8`,
-`add rax, r8` → `4c 01 c0`, `mov r9, [r8]` → `4d 8b 08`, `lea r10, [r8+r9]` → `4f 8d 14 08`, plus
-`r13` with displacement 0; the 18 fixtures byte-identical; fixpoint; coverage green; then
-`make promote`, `make record`, and **re-pin `docs/SHAS`** (it pins `seed/asm1`, and `make check` fails
-until it is).
+Gate: `syscall` write from a `.data` buffer assembled by `asm1` prints the right bytes and exits 0;
+the 18 fixtures byte-identical; fixpoint; coverage green; then `make promote`, `make record`, and
+re-pin `docs/SHAS`.
 
-Then, in order: `.data` (a second `R+W` `PT_LOAD`, opt-in), disp32 + `[base+index*scale]`, the signed
-condition codes and `imul …,imm8`, a calling convention with a fixture that exercises it.
-`src/asm0a.s` is the strongest statement the project can make and is *not* on the compiler path.
+Then, in order: disp32 and `[base+index*scale]` (arrays), the signed condition codes and
+`imul …,imm8`, and a calling convention with a fixture that exercises it. `src/asm0a.s` is the
+strongest statement the project can make and is *not* on the compiler path.
 
 ## How to edit `src/asm1.s` (this is not optional)
 
-**Whole-block replacement, anchored on a label and the next label.** Five positional edits were
-attempted in one session and all five failed: deleted live lines, duplicated labels (three times),
-handlers inserted inside a neighbour's body (four times), a stray label before a branch, and an
-insertion inside `chklim`'s flag-dependent sequence that turned a range check into a no-op. Tests
-caught every one, none was caught by reading.
+**Whole-block replacement, anchored on a label and — this is the part that bit last time — on where
+the block *ends*.** Five positional edits were attempted in one session and all five failed: deleted
+live lines, duplicated labels (three times), handlers inserted inside a neighbour's body (four
+ times), a stray label before a branch, and an insertion inside `chklim`'s flag-dependent sequence
+that turned a range check into a no-op. Tests caught every one, none was caught by reading.
+
+A replacer that skips "to the next label" is wrong for `memop`, `emitmem` and anything else with
+labels inside them: it stopped at `memend:` and appended the block's tail a second time, producing
+seven duplicate label definitions that the assembler accepted silently (first wins). **Always say
+where the block ends, and count duplicate labels after every replacement:**
+
+```
+grep -o '^[a-z_0-9]*:' src/asm1.s | sort | uniq -d
+```
 
 The working pattern, used for `memop`, `emitmem`, `chklim`, `trm`, `lfind`, `msg`, `d_n`:
 

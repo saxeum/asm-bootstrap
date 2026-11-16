@@ -248,3 +248,67 @@ Two notes worth keeping:
 Not done yet: `r8`–`r15`. The width is in place, but the extended-register codes (REX.R/X/B and the
 3-bit masking of every code) are the next step; until then `mov r8, rax` is a rejection, not a wrong
 answer.
+
+## `r8`–`r15`: REX.R/X/B, and three traps the register names set
+
+`reg32` now parses `r8`…`r15` and `r8d`…`r15d` (the `d` suffix is the 32-bit form), and every
+handler feeds three slots — the code destined for the ModRM *reg* field, the *rm*/base field, and the
+SIB index — to one helper:
+
+```
+REX = 0x40 | W<<3 | R<<2 | X<<1 | B        emitted only when it is not 0x40
+```
+
+Every register code is masked with `and ..., 7` before it is shifted into a ModRM or SIB byte: the
+extended bit lives in REX and nowhere else. `r13` needed no special case for the `mod = 00` trap,
+because the test is `base & 7 == 5`, which `rbp` and `r13` share — and `r12` shares `rsp`'s
+`base & 7 == 4`, so the SIB rule holds for it too.
+
+| form | bytes | why |
+|---|---|---|
+| `mov r8, rax` | `49 89 c0` | W + B (rm = r8) |
+| `add r8, r9` | `4d 01 c8` | W + R (reg = r9) + B (rm = r8) |
+| `add rax, r8` | `4c 01 c0` | W + R |
+| `mov r9, [r8]` | `4d 8b 08` | W + R + B, mod 00 |
+| `mov [r13], rax` | `49 89 45 00` | B; base & 7 = 5 → mod 01, disp8 00 |
+| `mov rax, [r12]` | `49 8b 04 24` | B; base & 7 = 4 → SIB, sib 00 100 100 |
+| `lea r10, [r8+r9]` | `4f 8d 54 08 00` | W + R + X + B, mod 01 + disp8 00 |
+| `movzx r11, cl` | `4c 0f b6 d9` | W + R |
+| `mov r10d, 1` | `41 ba 01 00 00 00` | B only, no W |
+| `mov r8d, [r9]` | `45 8b 01` | R + B, no W |
+| `inc r12` | `49 ff c4` | W + B, ModRM /0 |
+| `pop r15` | `41 5f` | B only |
+
+### Trap 1: dispatch by fixed offset
+
+Three handlers decided which form they were looking at by the *position of the comma*:
+`mov r8, 1` has a comma at offset 2 (like `mov al, 1`), so it took the 8-bit immediate path and was
+rejected; `add r8, r9` has one at offset 6 (where `add eax, …` has its last letter), so it took
+`add r8, imm8`. Both now test for `r` followed by a digit *before* deciding by position. A parser
+that keys on offsets is keyed on the length of a register name, and `r8` is shorter than `eax`.
+
+### Trap 2: `push`/`pop` must not set REX.W
+
+`50` pushes eight bytes in long mode, so the width is not a field of the instruction. The first
+version of `ppsh` set W like every other handler, which turned `push rax` into `48 50` — legal, and
+wrong as an encoding. **Nothing in the fixture corpus uses `push`/`pop`**, and the capability pairs
+compare two *spellings* of the same instruction, so both moved together and stayed green. It was
+found because `dis` (built by this assembler from `src/dis.s`, which does use `pop`) came out 3 bytes
+longer than the previous build. A systematic encoding change passes a spelling comparison by
+construction; only a hand-computed byte or a byte-identity fixture catches it.
+
+### Trap 3: `B8+rd` has no ModRM reg field
+
+`mov r10d, 1` is `B8+rd`, so the register number lives in the opcode and only `REX.B` applies. The
+first version set `REX.R` as well (`45 ba …` where `41 ba …` is canonical): harmless on the machine,
+wrong as an encoding. Caught by the hand-computed `.hex` in `tests/superior/regs64`, which is exactly
+what that file is for — the coverage gate cannot see this, because `r8` and `rax` are the same *shape*
+(`r64`). Register identity is pinned by hand-computed bytes, not by the census.
+
+### A reject case that stopped rejecting
+
+`tests/reject/bad-register.s` was `mov r9, 1`, which this assembler rejected because `r9` did not
+exist. It exists now, so the case assembled and `make test-reject` failed — the suite saying its own
+premise had changed. It now holds `mov r7, 1` and `mov r16, 1`, which are still not registers. A
+reject case that passes for a reason nobody intended is a hole, and the fix is to replace the input,
+never to delete the case.

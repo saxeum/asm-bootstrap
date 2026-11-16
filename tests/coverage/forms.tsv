@@ -110,3 +110,16 @@ imul rax, rbx
 push rax
 pop rax
 lea rax, [rbx]
+
+# --- extended registers: r8-r15 (64-bit) and r8d-r15d (32-bit) --------------
+mov r8, rax
+mov r8d, 1
+add r8, r9
+add r10d, r11d
+mov r9, [r8]
+mov [r13], rax
+lea r10, [r8+r9]
+movzx r11, cl
+inc r12
+push r12
+pop r15

@@ -1870,3 +1870,60 @@ aimed at `sub` would have pinned `48 29 c8` as correct.
 **The coverage gate earned its keep in the same wave.** Adding 17 rows for the 64-bit shapes made the
 gate red for `mov rax, 1`, `cmp rax, rbx` and `neg rax` — forms I had just implemented and not yet
 tested. That is the gate doing the job it was built for, three hours after it was built.
+
+## Sixteen registers, and four traps
+
+`r8`–`r15` (`r8d`–`r15d` for the 32-bit forms) landed with one REX helper and a mask on every code.
+`asm1` 6 947 → 7 488.
+
+**The ordering was the method.** The machinery went in first and had to be *inert*: after each of
+seven steps, `asm1 < src/dis.s` was compared with the previous build and had to be byte-identical.
+That check is what kept "did I break the memory operands?" from being a question — a build failure or
+a byte change would have pointed at the step that caused it. Only when every emit site was converted
+did the parser learn the new names, and the 18 fixtures stayed green throughout.
+
+### Trap 1: my own slot arithmetic clobbered the pass flag
+
+The first attempt put the three REX code slots at `[rbp+13]`, `[rbp+14]`, `[rbp+15]` and reset them
+at the top of every line. `mov [rbp+13], eax` stores **four** bytes, so it wrote `[rbp+16]` — the pass
+flag — to zero on every line. The assembler stayed in counting mode forever and produced a 120-byte
+file with an empty body, which is at least a loud failure. The slots moved to `[rbp-64]`, `[rbp-68]`,
+`[rbp-72]`, which are real four-byte slots below the frame and above the label table.
+
+### Trap 2: the block replacer stopped at internal labels
+
+Replacing `memop:` and `emitmem:` with a replacer that skips "to the next label" duplicated seven
+label definitions, because both blocks have labels *inside* them (`memend`, `emzib`, `emrm`, …). The
+build passed anyway — duplicate labels assemble and the first wins — which is the trap `AGENTS.md`
+warns about. Caught by counting duplicate labels after every replacement, and redone with explicit
+end anchors. The rule now written in `continue-here.md`: a block replacer must be told where the
+block *ends*, not left to guess from the next label.
+
+### Trap 3: `push`/`pop` took a REX.W they must never have
+
+`48 50` is a legal encoding of `push rax` and not the canonical one. No fixture uses push/pop; the
+capability pairs compare two spellings of the same instruction, so both spellings grew the same byte
+and the pair still agreed. The tell was `dis` — assembled by this assembler, and a user of `pop` —
+coming out three bytes longer than the previous build. A systematic encoding change is invisible to a
+spelling comparison by construction.
+
+### Trap 4: `B8+rd` and a non-canonical REX.R
+
+`mov r10d, 1` emitted `45 ba …` where `41 ba …` is right: the register is in the opcode of `B8+rd`,
+so there is no ModRM reg field and `REX.R` must stay clear. Found by the hand-computed `.hex` in
+`tests/superior/regs64` disagreeing with the assembler — and the *expectation* was mine to defend, so
+the assembler was fixed rather than the file. This is the one the coverage gate cannot catch: `r8` and
+`rax` have the same shape.
+
+### Two dispatchers keyed on a register's length
+
+`mov` and `add` decided the operand form by where the comma was. `mov r8, 1` has it at offset 2 (like
+`mov al, 1`) and took the 8-bit path; `add r8, r9` has it at offset 6 (where `add eax, ecx` has its
+last letter) and took `add r8, imm8`. Both now test for `r`+digit before deciding by position. Any
+parser that keys on offsets is keyed on the length of a register name.
+
+### And the reject suite announced that its own premise had moved
+
+`tests/reject/bad-register.s` was `mov r9, 1` — a register that did not exist. It exists, so the case
+assembled and `make test-reject` went red with `asm1 exit 0 (126 bytes)`. Replaced with `mov r7, 1`
+and `mov r16, 1`. The gate did its job by failing; the fix is a new input, never a deleted case.

@@ -1034,3 +1034,65 @@ which is exactly the direction that gate was built to force: a form with no test
 3-bit mask on every code before it is shifted into a ModRM or SIB byte — one pass over the same
 handlers, and `r13` needs the `mod = 00` exception that `rbp` already has. Until then `mov r8, rax`
 is a rejection, not a wrong answer, and the compiler work that needs 16 registers waits.
+
+## `r8`–`r15` landed: sixteen registers, and the width machinery paid for itself
+
+```
+mov r8, rax -> 49 89 c0     add r8, r9 -> 4d 01 c8     mov r9, [r8] -> 4d 8b 08
+mov [r13], rax -> 49 89 45 00                            lea r10, [r8+r9] -> 4f 8d 54 08 00
+mov r10d, 1 -> 41 ba 01 00 00 00                         mov r8d, [r9] -> 45 8b 01
+```
+
+`asm1` 6 947 → **7 488**. One helper computes `0x40|W<<3|R<<2|X<<1|B` from three slots that each
+handler fills, and every code is masked to three bits before it enters a ModRM or SIB byte. The width
+slot that REX.W introduced last wave is exactly what the extended registers needed — no second
+mechanism.
+
+`r13` and `r12` needed no new code: the `mod = 00` exception and the SIB-forced-rm rule are written
+as `base & 7 == 5` and `base & 7 == 4`, which `rbp`/`r13` and `rsp`/`r12` share. That is what
+writing those rules as masks bought.
+
+**Ordering mattered.** The machinery went in first and provably *inert*: after every step in that
+pass, `asm1 < src/dis.s` was byte-identical to the previous build, which meant no 8-register encoding
+had moved. Only then did the parser open, and the corpus stayed 18/18 throughout. Doing it the other
+way round would have made a build failure ambiguous between "the parser" and "the sixteen emit
+sites".
+
+Three traps, all in `docs/encodings.md`:
+
+1. **Dispatch by fixed offset.** `mov r8, 1` puts the comma where `mov al, 1` has it, and `add r8, r9`
+   puts it where `add eax, …` has its last letter. Both handlers now detect `r`+digit first.
+2. **`push`/`pop` must not set REX.W.** `48 50` is legal and wrong, and nothing in the fixture corpus
+   uses push/pop; the capability pairs compare spellings, so both sides moved together and stayed
+   green. Found because `dis`, which does use `pop`, came out 3 bytes longer.
+3. **`B8+rd` has no ModRM reg field**, so `mov r10d, 1` takes `REX.B` only. The first version also
+   set `REX.R` (`45 ba` vs canonical `41 ba`): harmless on the machine, wrong as an encoding, and
+   caught only by the hand-computed `.hex`. The coverage census cannot see it — `r8` and `rax` are
+   the same shape.
+
+`tests/superior/regs64` pins 15 lines against hand-computed bytes, and the superiority suite gained a
+*behavioural* case: a program that adds in `r8d`/`r9d` and exits 42, which `asm0a` cannot assemble at
+all. Bytes and behaviour fail differently, so both are there.
+
+### The reject suite's premise moved, and it said so
+
+`tests/reject/bad-register.s` was `mov r9, 1` — refused because `r9` did not exist. It exists now, so
+the case assembled, and `make test-reject` failed. Replaced with `mov r7, 1` and `mov r16, 1`, which
+are still not registers. A case that passes for a reason nobody intended is a hole: replace the
+input, never delete the case.
+
+### What the compiler still needs
+
+| | |
+|---|---|
+| **writable memory** — the hard blocker | one `R+X` `PT_LOAD`; no `.data`, so every byte is code |
+| `[base+index*scale]` | index without scale |
+| disp32 | disp8 only |
+| signed comparisons `ja/jae/js/jg/jo` | absent |
+| `imul r,r,imm8` | absent |
+| a calling convention, tested | absent |
+
+`.data` is next because it is the one that makes a *program* possible rather than more instructions:
+a global, a string built at runtime, a heap. It needs a second `PT_LOAD` with `R+W`, an opt-in
+directive so the 18 fixtures stay byte-identical, and a way for `db`/labels to know which segment
+they belong to.

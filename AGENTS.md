@@ -5,9 +5,9 @@ Repo-specific rules for `saxeum/asm-bootstrap`. Universal rules live in the glob
 
 ## Where this is
 
-Past the bootstrap. `asm1` (6 947 bytes, built by `seed/asm1` from `src/asm1.s`) is self-hosting and
+Past the bootstrap. `asm1` (7 488 bytes, built by `seed/asm1` from `src/asm1.s`) is self-hosting and
 **demonstrably better than the thing that built it**: 18/18 hand-emitted fixtures, 29 capability
-pairs of syntax `asm0a` cannot parse, 4 superiority cases where `asm0a` fails or answers wrongly, and
+pairs of syntax `asm0a` cannot parse, 5 superiority cases where `asm0a` fails or answers wrongly, and
 12 rejections that name their line. The goal is now a **compiler** emitting this dialect — see
 `docs/ROADMAP.md` for what a high-level language still needs. `asm0a` is frozen history — it can no
 longer build the assembler, and it has a known wrong-answer defect (`and` assembled as `add`) that

@@ -197,8 +197,46 @@ inc eax
 mov [rbp+20], eax
 ret
 
+rex:
+; The REX byte for the instruction being parsed, from four inputs and nothing
+; else: [rbp+11] = W (0 or 1), [rbp-64]/[rbp-68]/[rbp-72] = the codes destined
+; for the ModRM reg field, the rm/base field and the SIB index. A slot holding 0
+; means "no such operand", which is also the correct answer for rax (code 0), so
+; one representation serves both. 0x40 alone is not emitted: it changes nothing
+; and would cost a byte on every instruction.
+mov eax, 64
+movzx edx, byte [rbp+11]
+add edx, edx
+add edx, edx
+add edx, edx
+add eax, edx
+mov edx, [rbp-64]
+shr edx, 3
+and edx, 1
+add edx, edx
+add edx, edx
+add eax, edx
+mov edx, [rbp-72]
+shr edx, 3
+and edx, 1
+add edx, edx
+add eax, edx
+mov edx, [rbp-68]
+shr edx, 3
+and edx, 1
+add eax, edx
+cmp eax, 64
+jz rex_r
+call emital
+rex_r:
+ret
+
 parse:
 pline:
+mov eax, 0
+mov [rbp-64], eax
+mov [rbp-68], eax
+mov [rbp-72], eax
 movzx eax, byte [rbx]
 cmp al, 0
 jz.l pdone
@@ -311,11 +349,22 @@ jmp.l pc32
 d_add:
 cmp al, 97
 jnz.l d_c
+; r8..r15 have their comma at offset 6, where a three-character register has its
+; last character; check for the extended form before deciding by position.
+movzx edx, byte [rbx+4]
+cmp dl, 114
+jnz daddc8
+movzx edx, byte [rbx+5]
+add dl, -48
+cmp dl, 10
+jb daddreg
+daddc8:
 movzx edx, byte [rbx+6]
 cmp dl, 44
 jz.l padd8
 cmp dl, 32
 jz.l padd8
+daddreg:
 mov eax, 0
 mov [rbp+44], eax
 mov eax, 1
@@ -464,14 +513,28 @@ jz.l pmovmem
 movzx eax, byte [rbx+1]
 cmp al, 121
 jz.l pmbyte
+; An extended register (r8..r15) puts a comma at offset 2, exactly where a
+; two-character register like `al` has it. So the offset test below must be
+; skipped for it, before anything decides the form by position.
+movzx eax, byte [rbx]
+cmp al, 114
+jnz pmvc8
+movzx eax, byte [rbx+1]
+add al, -48
+cmp al, 10
+jb.l pmvreg
+pmvc8:
 movzx eax, byte [rbx+2]
 cmp al, 44
 jz.l pmov8
 cmp al, 32
 jz.l pmov8
+pmvreg:
 call reg32
 mov [rbp+32], edx
 movzx eax, byte [rbp+9]
+mov [rbp-64], edx
+mov [rbp-64], edx
 mov [rbp+10], al
 lea rbx, [rbx+1]
 call skipsp
@@ -484,13 +547,15 @@ cmp al, 114
 jz.l pmovrr
 call expr
 mov [rbp+36], ecx
+mov eax, 0
+mov [rbp-64], eax
 movzx eax, byte [rbp+10]
-cmp eax, 0
-jz pmovi_n
-mov eax, 72
-call emital
-pmovi_n:
+mov [rbp+11], al
 mov eax, [rbp+32]
+mov [rbp-68], eax
+call rex
+mov eax, [rbp+32]
+and eax, 7
 mov edx, 184
 add eax, edx
 call emital
@@ -593,6 +658,13 @@ cmp al, 101
 jz.l r32e
 cmp al, 114
 jnz.l fail
+; 'r' followed by a digit is an extended register (r8..r15), which needs REX;
+; 'r' followed by a letter is one of the original eight.
+movzx edx, byte [rbx+1]
+mov ecx, edx
+add cl, -48
+cmp cl, 10
+jb.l regx
 mov eax, 1
 jmp.l r32w
 r32e:
@@ -638,6 +710,41 @@ jmp.l fail
 regret:
 lea rbx, [rbx+3]
 ret
+regx:
+cmp cl, 1
+jz regx10
+cmp cl, 8
+jb.l fail
+mov eax, edx
+add al, -48
+movzx eax, al
+lea rbx, [rbx+2]
+jmp regxw
+regx10:
+movzx edx, byte [rbx+2]
+mov ecx, edx
+add cl, -48
+cmp cl, 5
+jb regx10b
+jz regx10b
+jmp.l fail
+regx10b:
+mov eax, 10
+movzx ecx, cl
+add eax, ecx
+lea rbx, [rbx+3]
+regxw:
+movzx edx, byte [rbx]
+cmp edx, 100
+jnz regx64
+lea rbx, [rbx+1]
+mov edx, 0
+jmp regxst
+regx64:
+mov edx, 1
+regxst:
+mov [rbp+9], dl
+mov edx, eax
 ret
 r8:
 movzx edx, byte [rbx]
@@ -701,28 +808,35 @@ pzx:
 lea rbx, [rbx+6]
 call reg32
 mov [rbp+32], edx
+mov [rbp-64], edx
+movzx eax, byte [rbp+9]
+mov [rbp+10], al
 lea rbx, [rbx+1]
 call skipsp
 movzx eax, byte [rbx+1]
 cmp al, 121
 jz.l pzmem
 call r8
-mov eax, [rbp+32]
-add eax, eax
-add eax, eax
-add eax, eax
-add eax, edx
-mov edx, 192
-add eax, edx
-mov [rbp+36], eax
+mov [rbp-68], edx
+movzx eax, byte [rbp+10]
+mov [rbp+11], al
+call rex
 mov eax, 15
 call emital
 mov eax, 182
 call emital
-mov eax, [rbp+36]
+mov eax, [rbp+32]
+and eax, 7
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp-68]
+and edx, 7
+add eax, edx
+mov edx, 192
+add eax, edx
 call emital
 jmp.l pline
-
 pmovrr:
 call reg32
 mov [rbp+36], edx
@@ -730,10 +844,26 @@ movzx eax, byte [rbp+9]
 movzx ecx, byte [rbp+10]
 cmp eax, ecx
 jnz.l fail
-cmp eax, 0
-jz pmvnr
-mov eax, 72
+mov [rbp+11], al
+mov eax, [rbp+36]
+mov [rbp-64], eax
+mov eax, [rbp+32]
+mov [rbp-68], eax
+call rex
+mov eax, 137
 call emital
+mov eax, [rbp+36]
+and eax, 7
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+32]
+and edx, 7
+add eax, edx
+mov edx, 192
+add eax, edx
+call emital
+jmp.l pline
 pmvnr:
 mov eax, 137
 call emital
@@ -810,36 +940,38 @@ lea rbx, [rbx+1]
 call skipsp
 call reg32
 mov [rbp+36], edx
-; both operands must be the same width. 32-bit and 64-bit are different
+; both operands must be the same width: 32-bit and 64-bit are different
 ; instructions, and picking one of them is how 64-bit code silently becomes
-; 32-bit: this is the check that replaced prrck's "no 64-bit here".
+; 32-bit.
 movzx eax, byte [rbp+9]
 movzx ecx, byte [rbp+10]
 cmp eax, ecx
 jnz.l fail
-cmp eax, 0
-jz prr_nr
-mov eax, 72
-call emital
-prr_nr:
+mov [rbp+11], al
+mov eax, [rbp+36]
+mov [rbp-64], eax
+mov eax, [rbp+32]
+mov [rbp-68], eax
+call rex
 mov eax, [rbp+48]
 call emital
 mov eax, [rbp+36]
+and eax, 7
 add eax, eax
 add eax, eax
 add eax, eax
 mov edx, [rbp+32]
+and edx, 7
 add eax, edx
 mov edx, 192
 add eax, edx
 call emital
 jmp.l pline
-jmp.l pline
-
 memop:
 lea rbx, [rbx+1]
 call reg32
 mov [rbp+56], edx
+mov [rbp-68], edx
 mov eax, 0
 mov [rbp+60], eax
 mov [rbp+124], eax
@@ -857,6 +989,7 @@ jz.l memidx
 jmp.l memnum
 memidx:
 call reg32
+mov [rbp-72], edx
 inc edx
 mov [rbp+124], edx
 movzx eax, byte [rbx]
@@ -879,7 +1012,11 @@ jnz.l fail
 lea rbx, [rbx+1]
 ret
 emitmem:
+; Every register code is masked to three bits here: the extended bit of a
+; register number belongs in the REX byte, which the handler has already
+; emitted, not in the ModRM or SIB byte.
 mov eax, [rbp+64]
+and eax, 7
 add eax, eax
 add eax, eax
 add eax, eax
@@ -887,15 +1024,13 @@ mov edx, [rbp+124]
 cmp edx, 0
 jnz.l emrm4
 mov edx, [rbp+56]
+and edx, 7
 cmp edx, 4
 jnz.l emrm
 emrm4:
 mov edx, 4
 emrm:
 add eax, edx
-; mod = 01 when a displacement byte follows. That is: disp != 0, or a SIB is
-; present, or the base is rbp -- because mod 00, rm 101 means RIP-relative,
-; not [rbp]. (r13 as a base will need the same test when r8-r15 land.)
 mov edx, [rbp+60]
 cmp edx, 0
 jnz.l emm1
@@ -903,6 +1038,7 @@ mov edx, [rbp+124]
 cmp edx, 0
 jnz.l emm1
 mov edx, [rbp+56]
+and edx, 7
 cmp edx, 5
 jz.l emm1
 jmp.l emm2
@@ -912,6 +1048,7 @@ add eax, edx
 emm2:
 call emital
 mov edx, [rbp+56]
+and edx, 7
 cmp edx, 4
 jz.l emsib
 mov edx, [rbp+124]
@@ -922,10 +1059,12 @@ mov eax, [rbp+124]
 cmp eax, 0
 jz.l emsib0
 dec eax
+and eax, 7
 add eax, eax
 add eax, eax
 add eax, eax
 mov edx, [rbp+56]
+and edx, 7
 add eax, edx
 call emital
 jmp.l emnd
@@ -933,10 +1072,6 @@ emsib0:
 mov eax, 36
 call emital
 emnd:
-; The disp byte is emitted under exactly the condition that chose mod 01:
-; disp != 0, or a SIB is present, or the base is rbp. Two expressions of one
-; rule, adjacent, held together by tests/superior/rbp0.s (rbp, disp 0) and by
-; every fixture that uses [base] with no displacement (mod 00, no byte).
 mov eax, [rbp+60]
 cmp eax, 0
 jnz.l emdsp
@@ -944,6 +1079,7 @@ mov eax, [rbp+124]
 cmp eax, 0
 jnz.l emdz
 mov eax, [rbp+56]
+and eax, 7
 cmp eax, 5
 jnz.l em_done
 emdz:
@@ -952,7 +1088,6 @@ emdsp:
 call emital
 em_done:
 ret
-
 pmovmem:
 call memop
 lea rbx, [rbx+1]
@@ -971,12 +1106,10 @@ jmp.l pline
 pms32:
 call reg32
 mov [rbp+64], edx
+mov [rbp-64], edx
 movzx eax, byte [rbp+9]
-cmp eax, 0
-jz pms32_n
-mov eax, 72
-call emital
-pms32_n:
+mov [rbp+11], al
+call rex
 mov eax, 137
 call emital
 call emitmem
@@ -1003,43 +1136,33 @@ pmovld:
 call memop
 mov eax, [rbp+32]
 mov [rbp+64], eax
+mov eax, [rbp-64]
+mov [rbp-64], eax
 movzx eax, byte [rbp+10]
-cmp eax, 0
-jz pmld_n
-mov eax, 72
-call emital
-pmld_n:
+mov [rbp+11], al
+call rex
 mov eax, 139
 call emital
 call emitmem
 jmp.l pline
 plea:
 lea rbx, [rbx+4]
-movzx eax, byte [rbx]
-mov edx, 0
-cmp al, 114
-jnz.l plea1
-mov edx, 72
-plea1:
-mov [rbp+68], edx
 call reg32
 mov [rbp+64], edx
+mov [rbp-64], edx
+movzx eax, byte [rbp+9]
+mov [rbp+11], al
 lea rbx, [rbx+1]
 call skipsp
 movzx eax, byte [rbx]
 cmp al, 91
 jnz.l fail
 call memop
-mov eax, [rbp+68]
-cmp al, 0
-jz.l plea2
-call emital
-plea2:
+call rex
 mov eax, 141
 call emital
 call emitmem
 jmp.l pline
-
 lblchk:
 lea rdx, [rbx]
 ls1:
@@ -1175,19 +1298,25 @@ jmp.l pline
 pu32:
 lea rbx, [rbx+4]
 call reg32
+mov [rbp-68], edx
+movzx eax, byte [rbp+9]
+mov [rbp+11], al
 mov eax, [rbp+48]
 add eax, eax
 add eax, eax
 add eax, eax
+mov edx, [rbp-68]
+and edx, 7
 add eax, edx
 mov edx, 192
 add eax, edx
 mov [rbp+36], eax
-movzx eax, byte [rbp+9]
-cmp eax, 0
-jz pu32_n
-mov eax, 72
+call rex
+mov eax, [rbp+44]
 call emital
+mov eax, [rbp+36]
+call emital
+jmp.l pline
 pu32_n:
 mov eax, [rbp+44]
 call emital
@@ -1208,14 +1337,14 @@ cmp al, 114
 jz.l pc32rr
 call expr
 mov [rbp+36], ecx
-movzx eax, byte [rbp+10]
-cmp eax, 0
-jz pc32ni
-mov eax, 72
-call emital
-pc32ni:
 mov eax, [rbp+32]
-mov edx, [rbp+48]
+mov [rbp-68], eax
+movzx eax, byte [rbp+10]
+mov [rbp+11], al
+call rex
+mov eax, [rbp+48]
+mov edx, [rbp+32]
+and edx, 7
 add eax, edx
 mov edx, 192
 add eax, edx
@@ -1240,16 +1369,19 @@ movzx eax, byte [rbp+9]
 movzx ecx, byte [rbp+10]
 cmp eax, ecx
 jnz.l fail
-cmp eax, 0
-jz pc32nr
-mov eax, 72
-call emital
-pc32nr:
+mov [rbp+11], al
 mov eax, [rbp+36]
+mov [rbp-64], eax
+mov eax, [rbp+32]
+mov [rbp-68], eax
+call rex
+mov eax, [rbp+36]
+and eax, 7
 add eax, eax
 add eax, eax
 add eax, eax
 mov edx, [rbp+32]
+and edx, 7
 add eax, edx
 mov edx, 192
 add eax, edx
@@ -1258,7 +1390,6 @@ mov eax, [rbp+52]
 call emital
 mov eax, [rbp+40]
 call emital
-jmp.l pline
 jmp.l pline
 fail:
 call msg
@@ -1472,13 +1603,17 @@ lea rbx, [rbx+5]
 call memop
 mov eax, [rbp+32]
 mov [rbp+64], eax
+mov eax, [rbp-64]
+mov [rbp-64], eax
+movzx eax, byte [rbp+10]
+mov [rbp+11], al
+call rex
 mov eax, 15
 call emital
 mov eax, 182
 call emital
 call emitmem
 jmp.l pline
-
 chklim:
 mov eax, ecx
 mov esi, 128
@@ -1786,26 +1921,32 @@ ret
 psh:
 lea rbx, [rbx+4]
 call reg32
+mov [rbp+32], edx
+mov [rbp-68], edx
 movzx eax, byte [rbp+9]
 mov [rbp+10], al
-mov [rbp+32], edx
+mov [rbp+11], al
 lea rbx, [rbx+1]
 call skipsp
 call expr
 mov edx, 256
 call chklim
 mov [rbp+36], ecx
-mov eax, [rbp+32]
+mov eax, [rbp-68]
+and eax, 7
 mov edx, [rbp+44]
 add eax, edx
 mov edx, 192
 add eax, edx
 mov [rbp+40], eax
-movzx eax, byte [rbp+10]
-cmp eax, 0
-jz psh_n
-mov eax, 72
+call rex
+mov eax, 193
 call emital
+mov eax, [rbp+40]
+call emital
+mov eax, [rbp+36]
+call emital
+jmp.l pline
 psh_n:
 mov eax, 193
 call emital
@@ -1819,7 +1960,13 @@ call reg32
 movzx ecx, byte [rbp+9]
 cmp ecx, 0
 jz.l fail
+mov [rbp-68], edx
+mov eax, 0
+mov [rbp+11], al
+call rex
 mov eax, [rbp+44]
+mov edx, [rbp-68]
+and edx, 7
 add eax, edx
 call emital
 jmp.l pline
@@ -1837,10 +1984,28 @@ movzx eax, byte [rbp+9]
 movzx ecx, byte [rbp+10]
 cmp eax, ecx
 jnz.l fail
-cmp eax, 0
-jz pim_n
-mov eax, 72
+mov [rbp+11], al
+mov eax, [rbp+32]
+mov [rbp-64], eax
+mov eax, [rbp+36]
+mov [rbp-68], eax
+call rex
+mov eax, 15
 call emital
+mov eax, 175
+call emital
+mov eax, [rbp+32]
+and eax, 7
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+36]
+and edx, 7
+add eax, edx
+mov edx, 192
+add eax, edx
+call emital
+jmp.l pline
 pim_n:
 mov eax, 15
 call emital
