@@ -15,8 +15,8 @@ mov [rbp-24], rax
 L1:
 mov rax, [rbp-24]
 mov rcx, 0
-cmp rcx, rax
-jb.l L1b
+cmp rax, rcx
+jg.l L1b
 jmp.l L1e
 L1b:
 mov rax, 0
@@ -24,8 +24,8 @@ mov [rbp-32], rax
 L2:
 mov rax, [rbp-24]
 mov rcx, 0
-cmp rcx, rax
-jb.l L2b
+cmp rax, rcx
+jg.l L2b
 jmp.l L2e
 L2b:
 mov rax, [rbp-16]
@@ -57,8 +57,8 @@ mov rax, [rbp-16]
 mov rcx, 251
 mov r9, rcx
 mov rax, rax
-xor rdx, rdx
-div r9
+cqo
+idiv r9
 mov rax, rdx
 mov rdi, rax
 mov eax, 60

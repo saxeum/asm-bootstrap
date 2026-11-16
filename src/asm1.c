@@ -56,8 +56,15 @@ int gw(int m, int o)
 
 int pw(int m, int o, int v)
 {
-	m[241000 + o] = v % 256;
-	m[241000 + o + 1] = v / 256 % 256;
+	int t = v;
+	int neg = 0;
+	if (t < 0) { neg = 1; }
+	int r = t % 256;
+	m[241000 + o] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[241000 + o + 1] = r;
 	return 0;
 }
 
@@ -68,10 +75,23 @@ int gd(int m, int o)
 
 int pd(int m, int o, int v)
 {
-	m[241000 + o] = v % 256;
-	m[241000 + o + 1] = v / 256 % 256;
-	m[241000 + o + 2] = v / 256 / 256 % 256;
-	m[241000 + o + 3] = v / 256 / 256 / 256 % 256;
+	int t = v;
+	int neg = 0;
+	if (t < 0) { neg = 1; }
+	int r = t % 256;
+	m[241000 + o] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[241000 + o + 1] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[241000 + o + 2] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[241000 + o + 3] = r;
 	return 0;
 }
 
@@ -83,10 +103,23 @@ int gda(int m, int o)
 
 int pda(int m, int o, int v)
 {
-	m[o] = v % 256;
-	m[o + 1] = v / 256 % 256;
-	m[o + 2] = v / 256 / 256 % 256;
-	m[o + 3] = v / 256 / 256 / 256 % 256;
+	int t = v;
+	int neg = 0;
+	if (t < 0) { neg = 1; }
+	int r = t % 256;
+	m[o] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[o + 1] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[o + 2] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[o + 3] = r;
 	return 0;
 }
 
@@ -579,19 +612,29 @@ int ex(int m, int v)
 
 int ex4(int m, int v)
 {
-	ex(m, v % 256);
-	ex(m, v / 256 % 256);
-	ex(m, v / 256 / 256 % 256);
-	ex(m, v / 256 / 256 / 256 % 256);
+	int t = v;
+	int neg = 0;
+	if (t < 0) { neg = 1; }
+	int r = t % 256;
+	ex(m, r);
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	ex(m, r);
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	ex(m, r);
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	ex(m, r);
 	return 0;
 }
 
 int ex8(int m, int v)
 {
-	ex(m, v % 256);
-	ex(m, v / 256 % 256);
-	ex(m, v / 256 / 256 % 256);
-	ex(m, v / 256 / 256 / 256 % 256);
+	ex4(m, v);
 	ex(m, 0);
 	ex(m, 0);
 	ex(m, 0);
@@ -1310,6 +1353,18 @@ int opcode(int m)
 	if (same(m, "space")) { op = 33; }
 	if (same(m, "entry")) { op = 34; }
 	if (same(m, "imul")) { op = 35; }
+	if (same(m, "cqo")) { op = 36; }
+	if (same(m, "idiv")) { op = 37; }
+	if (same(m, "jl")) { op = 38; }
+	if (same(m, "jl.l")) { op = 39; }
+	if (same(m, "jle")) { op = 40; }
+	if (same(m, "jle.l")) { op = 41; }
+	if (same(m, "jg")) { op = 42; }
+	if (same(m, "jg.l")) { op = 43; }
+	if (same(m, "jge")) { op = 44; }
+	if (same(m, "jge.l")) { op = 45; }
+	if (same(m, "js")) { op = 46; }
+	if (same(m, "js.l")) { op = 47; }
 	return op;
 }
 
@@ -1430,6 +1485,18 @@ int parse(int m)
 						pb(m, 19, 1);
 					}
 					if (op == 35) { two(m); enc_imul(m); }
+					if (op == 36) { ex(m, 72); ex(m, 153); }
+					if (op == 37) { one(m); enc_un(m, 246, 7); }
+					if (op == 38) { reltarget(m); enc_jmp(m, 12, 0); }
+					if (op == 39) { reltarget(m); enc_jmp(m, 12, 1); }
+					if (op == 40) { reltarget(m); enc_jmp(m, 14, 0); }
+					if (op == 41) { reltarget(m); enc_jmp(m, 14, 1); }
+					if (op == 42) { reltarget(m); enc_jmp(m, 15, 0); }
+					if (op == 43) { reltarget(m); enc_jmp(m, 15, 1); }
+					if (op == 44) { reltarget(m); enc_jmp(m, 13, 0); }
+					if (op == 45) { reltarget(m); enc_jmp(m, 13, 1); }
+					if (op == 46) { reltarget(m); enc_jmp(m, 8, 0); }
+					if (op == 47) { reltarget(m); enc_jmp(m, 8, 1); }
 				}
 			}
 		}

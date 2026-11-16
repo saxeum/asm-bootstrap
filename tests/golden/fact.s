@@ -7,7 +7,7 @@ sub rsp, r10
 mov [rbp-8], rdi
 mov rax, [rbp-8]
 cmp rax, 2
-jb.l L1t
+jl.l L1t
 jmp.l L1e
 L1t:
 mov rax, 1

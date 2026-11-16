@@ -137,3 +137,18 @@ lea rax, [rsp+1000]
 mov eax, [rbp+rcx+1000]
 mov rax, [r13+1000]
 space 4
+
+# --- signed forms ----------------------------------------------------------
+a: jl a
+a: jle a
+a: jg a
+a: jge a
+a: js a
+a: jl.l a
+a: jle.l a
+a: jg.l a
+a: jge.l a
+a: js.l a
+cqo
+idiv rbx
+idiv ebx

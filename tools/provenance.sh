@@ -27,7 +27,7 @@ HELLO=hello_num
 # artifacts with no independent oracle: a program assembled by asm1, whose check
 # is that asm1 reproduces the built file byte for byte. asm0a cannot assemble
 # these -- that is the point of them -- so they are recorded for asm1 only.
-NOORACLE="dis cc"
+NOORACLE="dis"
 
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
@@ -68,19 +68,26 @@ emit_no() {
 	done
 }
 
+# cc is built from src/cc.c: seed/cc makes the text, asm1 assembles it. The
+# ledger names the assembler that produced the bytes; the compiler that made
+# the text is recorded by seed/cc's own sha and by docs/toolchain.tsv.
+emit_cc() {
+	[ -x ./cc ] || { echo "provenance: ./cc is not executable" >&2; exit 1; }
+	printf 'cc\t%s\tasm1\t%s\n' "$(sha ./cc)" "$(sha ./asm1)"
+}
 case "$1" in
 record)
 	[ -x ./asm1 ] || { echo "provenance: build asm1 first (make asm1)" >&2; exit 1; }
 	sha256sum ./asm1 > "$ASM1_SHA.tmp"
 	printf '  %s\n' "$(cat "$ASM1_SHA.tmp")" | sed 's/^  /asm1 sha256 /'
 	mv "$ASM1_SHA.tmp" "$ASM1_SHA"
-	{ emit asm0a asm1; emit_no; } | sort > "$LEDGER.tmp"
+	{ emit asm0a asm1; emit_no; emit_cc; } | sort > "$LEDGER.tmp"
 	mv "$LEDGER.tmp" "$LEDGER"
 	echo "  recorded $LEDGER ($(wc -l < "$LEDGER" | tr -d ' ') lines) and $ASM1_SHA"
 	;;
 verify)
 	[ -f "$LEDGER" ] || { echo "provenance: $LEDGER missing; run make record" >&2; exit 1; }
-	{ emit asm0a asm1; emit_no; } | sort > "$TMP/now.tsv"
+	{ emit asm0a asm1; emit_no; emit_cc; } | sort > "$TMP/now.tsv"
 	if cmp -s "$TMP/now.tsv" "$LEDGER"; then
 		echo "  provenance: $(wc -l < "$LEDGER" | tr -d ' ') records reproduced exactly"
 	else

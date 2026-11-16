@@ -76,7 +76,7 @@ mov [rbp-40], rax
 L2:
 mov rax, [rbp-40]
 cmp rax, 2
-jb.l L2b
+jl.l L2b
 jmp.l L2e
 L2b:
 mov rcx, [rbp-24]

@@ -263,3 +263,29 @@ Residual risks that continue with us, and where each is addressed:
 | shared-authorship bias on new forms | `ref/jmp` is built so bytes and behaviour disagree (7 vs 99) |
 | `asm0a` error paths coarse (`mov eax,` → `mov eax,0`, exit 0) | recorded as a defect; fixed with 2b's operand handling |
 | ELF header judged by one kernel on one machine | accepted for now; the entry field is asserted as four bytes at offset 24 with `od`, which is the check that exists |
+
+## Rung 4: the differential
+
+`tools/differential.sh` compares the compiler's programs with `gcc -O0 -funsigned-char` on stdout
+bytes and exit status. It is the only oracle here that is independent of every implementation in this
+repository, and it is deliberately **not** part of `make check`: gcc is named in `FORBIDDEN`, so the
+script is the one explicit exemption in `make test-tools`, and it is run by hand.
+
+It is in `tests/differential/*.c`, in the intersection of both dialects (no pointer-typed ints, no
+`&&`, no `for`). The prelude maps the subset's two-argument `read`/`write` to POSIX
+`read(0,...)`/`write(1,...)`.
+
+The gate was shown failing before it was trusted:
+
+```
+tools/differential.sh seed/cc ./asm1
+  negcmp     DIFFERS (exit 2 vs 1)
+  negdiv     DIFFERS (exit 252 vs 253)
+  negmod     DIFFERS (exit 0 vs 255)
+  signedloop DIFFERS (exit 0 vs 15)
+  1/5 programs agree
+```
+
+With the signed compiler it is `5/5 AGREE`. A green differential is evidence about the cases it
+contains, not a proof of the dialect: `char` is zero-extended, `int` is 64-bit, and the programs avoid
+the documented differences.

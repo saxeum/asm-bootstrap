@@ -3639,3 +3639,29 @@ comparisons are unsigned, so `-1 > 0` was true and insertion sort shifted in the
 It now returns 1 only for "greater"; equal and less are 0, which is all stable insertion sort needs.
 `make test-program` reports `sort: 6/6 inputs ordered and 2/2 refusals`; `make from-c` builds and
 runs the same table with `cc1` + `asm2`. Issued as #6.
+
+## Wave: signed values -- the compiler stops lying about `0 - 5`
+
+`cc` accepted `int a = 0 - 5; if (a < 0)` and compiled it with unsigned semantics; `return -5;` was
+refused only at the literal, so negative values were accepted and then handled as huge positives.
+`asm1` refused `jl`, `jle`, `jg`, `jge`, `js`, `idiv` and `cqo` loudly.
+
+The assembler now has those forms (rel8 and `.l` for the jumps, `idiv r32/r64`, `cqo`), each with a
+hand-written hex fixture and a coverage row. `cc` emits `jl`/`jg` for `<`/`>`, `cqo` + `idiv` for
+`/`/`%`, and the normalised `<=`/`>=` use the same signed jumps. `calc.c` was rewritten to use
+`v < 0` and signed division; its magnitude workaround is gone, and its table includes negative
+division and remainder.
+
+Making a signed compiler build itself exposed two byte-packing defects in both `src/cc.c` and
+`src/asm1.c`: `pw`/`pd`/`pda` (and `ex4`/`ex8`) split with `/ 256`, which is wrong for negative
+values under truncating division. They now subtract one after a negative remainder; `dis.s` and the
+corpus assemble again.
+
+The promotion boundary moved: `seed/asm1` is the C assembler and `seed/cc1` the C compiler;
+`src/asm1.s` and `src/cc.s` are frozen witnesses. `make check` is green at 161 frozen sources, 234
+asm2 checks, 113 coverage forms, signed superiority, and calc 10/10.
+
+The new evidence is `tools/differential.sh`: five programs in the intersection of both dialects,
+built by `cc`+`asm1` and by `gcc -O0 -funsigned-char`, comparing stdout bytes and exit status. It is
+`5/5 AGREE` and `1/5` against the pre-signed `seed/cc`, which is how it was shown able to fail. gcc
+is the one named exemption in `make test-tools`; it is a second opinion, never an artifact.

@@ -9,7 +9,7 @@ mov [rbp-8], rax
 L1:
 mov rax, [rbp-8]
 cmp rax, 5
-jb.l L1b
+jl.l L1b
 jmp.l L1e
 L1b:
 mov rax, [rbp-8]

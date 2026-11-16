@@ -10,7 +10,7 @@ mov [rbp-24], rax
 L1:
 mov rax, [rbp-24]
 cmp rax, 900
-jb.l L1b
+jl.l L1b
 jmp.l L1e
 L1b:
 mov rcx, [rbp-24]
