@@ -181,7 +181,7 @@ Each prints `identical`, and `milestone-fixpoint` produces 4295 bytes with sha25
 | rejections | 11 sources refused by both assemblers with no output, and 5 exact messages: line number *and* reason |
 | capability | 28 pairs where asm1 accepts syntax asm0a cannot parse; both spellings must agree byte for byte |
 | superior | asm1 assembles a 99 KB source asm0a cannot, and a chosen `entry` point -- both must RUN |
-| branches | 290 sites pinned in `docs/branches.tsv`, verified by decoding |
+| branches | 290 sites in `docs/branches.tsv` — **unverified**: the decoder that checked them used `objdump` and has been removed |
 | source language | `mov` 8/32/64-bit, `movzx` from registers and memory, `lea`, `add`/`sub`/`cmp`/`xor`/`and`/`or`/`test`/`inc`/`dec`/`div`/`neg`/`not` in immediate and register forms, `shl`/`shr`/`sar`, `push`/`pop`, `imul`, `call`/`ret`, branches rel8 and `.l` rel32, `[base]` and `[base+index]`, `syscall`, `db` with strings, labels, expressions, `entry`, two-pass assembly with validation, hex/char/negative literals |
 
 `src/asm1.s` assembles every fixture, including `src/count10.s` → exactly `ref/count10`.

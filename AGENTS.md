@@ -113,6 +113,21 @@ in four ways that this repo mirrors (`docs/pdp8-to-gcc.md` has the sources):
 What none of it catches is a deliberately miscompiling tool (Thompson, 1984). When `src/asm1.s`
 outgrows `asm0a`, only 2–4 remain, which is exactly DEC's position.
 
+## Known violation, now removed: the branch pins were checked with `objdump`
+
+`tools/check-branches.sh` decoded `asm0a` with `objdump`, so `make check` depended on a binutils
+disassembler to verify this project's output. That is now **suspended, not fixed**: the script refuses
+to run, prints that the pins are unverified, and exits 2. `make check` prints that line rather than a
+green one.
+
+`docs/branches.tsv` — 290 recorded sites — stays. It is hand-recorded evidence and it should be
+validated, by `src/dis.s`, the moment a decoder in the dialect exists. Until then **no claim in this
+repo may describe the branch pins as verified.**
+
+The lesson, since it was earned twice in one hour: writing the rule down is not obeying it. The test is
+whether the tool is still in the loop, and for the branch gate it was, right up to the point where the
+check said so out loud and stopped.
+
 ## Known violation: `tools/check-branches.sh` uses `objdump`
 
 Recorded because it is currently load-bearing: `make check` runs the branch decoder, and the branch
