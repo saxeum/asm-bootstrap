@@ -209,8 +209,8 @@ check: test-tools test-frozen test-tmp test-header test-cc-source test-port test
 	       echo "  if that is intended: make record"; exit 1; }
 	@./tools/check-branches.sh
 clean:
-	@rm -f asm1 asm1b count10 dis cc hello hello.s
-	@echo "  removed asm1, asm1b, count10, dis, cc, hello, hello.s"
+	@rm -f asm1 asm1b count10 count10b dis cc hello hello.s
+	@echo "  removed asm1, asm1b, count10, count10b, dis, cc, hello, hello.s"
 
 # ---- bootstrap chain --------------------------------------------------------
 # Two builders exist while the dialect is still within asm0a's reach:

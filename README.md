@@ -1,5 +1,11 @@
 # asm-bootstrap
 
+![From hand-written machine code to Lisp](docs/from-machine-code-to-lisp.svg)
+
+*The chain: hand-written machine code → the dialect assembler → the dialect compiler → the
+C-only rebuild → `lisp.c` compiled, assembled and running.*
+
+
 **A self-hosting assembler and C compiler, bootstrapped from machine code that an LLM wrote by
 hand.**
 
