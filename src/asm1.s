@@ -240,6 +240,9 @@ jmp.l p8i
 d_c:
 cmp al, 99              ; 'c'  cmp r8,imm8 (80 /7) or cmp r32,imm32 (81 /7)
 jnz.l d_i
+movzx edx, byte [rbx+2]
+cmp dl, 108             ; 'l' => call
+jz.l d_call
 movzx edx, byte [rbx+4]  ; operand first char: e/r means a 32-bit name
 cmp dl, 101
 jz.l d_c32
@@ -287,8 +290,8 @@ cmp al, 108             ; 'l'  lea
 jnz.l d_j
 jmp.l plea
 d_j:
-cmp al, 106             ; 'j'
-jnz.l fail
+cmp al, 106             ; 'j'  jb / jz / jnz / jmp, with or without .l
+jnz.l d_r
 movzx edx, byte [rbx+1]
 cmp dl, 98              ; 'b'
 jz.l jb3
@@ -302,23 +305,19 @@ jmp.l fail
 jb3:
 mov eax, 114            ; 0x72
 mov [rbp+92], eax
-lea rbx, [rbx+3]
-jmp.l pbr
+jmp.l jscn
 jz3:
 mov eax, 116            ; 0x74
 mov [rbp+92], eax
-lea rbx, [rbx+3]
-jmp.l pbr
+jmp.l jscn
 jnz4:
 mov eax, 117            ; 0x75
 mov [rbp+92], eax
-lea rbx, [rbx+4]
-jmp.l pbr
+jmp.l jscn
 jmp4:
 mov eax, 235            ; 0xEB
 mov [rbp+92], eax
-lea rbx, [rbx+4]
-jmp.l pbr
+jmp.l jscn
 psp:
 lea rbx, [rbx+1]
 jmp.l pline
@@ -973,3 +972,152 @@ fail:
 mov eax, 60
 mov edi, 1
 syscall
+lku:                    ; look up the name in [rbp+72] -> rcx = entry, else fail
+lea rcx, [rbp+1]
+mov esi, 121
+sub rcx, rsi
+mov edx, [rbp+80]
+lkul:
+cmp edx, 0
+jz.l fail
+mov eax, [rcx]
+mov esi, [rbp+72]
+xor eax, esi
+mov edi, [rcx+4]
+mov esi, [rbp+76]
+xor edi, esi
+add eax, edi
+cmp eax, 0
+jz.l lkux
+lea rcx, [rcx+12]
+dec edx
+jmp.l lkul
+lkux:
+ret
+
+plng:                   ; x.l name ; [rbp+92] = the short opcode
+call skipsp
+call lcpy
+movzx eax, byte [rbp+16]
+cmp al, 0
+jnz.l plng1
+mov eax, 0              ; pass 0: five bytes for jmp, six for a jcc
+call emital
+call emital
+call emital
+call emital
+call emital
+movzx eax, byte [rbp+92]
+cmp eax, 235             ; imm8 is sign-extended: compare at 32 bits
+jz.l pline
+call emital
+jmp.l pline
+plng1:
+call lku
+mov esi, 6              ; jcc: 0F 8x + rel32
+movzx eax, byte [rbp+92]
+cmp eax, 235             ; imm8 is sign-extended: compare at 32 bits
+jnz.l plng2
+mov esi, 5              ; jmp: E9 + rel32
+plng2:
+mov eax, [rcx+8]
+mov edx, [rbp+20]
+add edx, esi
+sub rax, rdx
+mov [rbp+84], eax
+movzx eax, byte [rbp+92]
+cmp eax, 235             ; imm8 is sign-extended: compare at 32 bits
+jz.l plng3
+mov eax, 15             ; 0F
+call emital
+movzx eax, byte [rbp+92]
+mov esi, 16
+add eax, esi            ; short jcc opcode + 0x10
+call emital
+jmp.l plng4
+plng3:
+mov eax, 233            ; E9
+call emital
+plng4:
+movzx eax, byte [rbp+84]
+call emital
+movzx eax, byte [rbp+85]
+call emital
+movzx eax, byte [rbp+86]
+call emital
+movzx eax, byte [rbp+87]
+call emital
+jmp.l pline
+
+pcall:                  ; call name -> E8 rel32
+call skipsp
+call lcpy
+movzx eax, byte [rbp+16]
+cmp al, 0
+jnz.l pcal1
+mov eax, 0
+call emital
+call emital
+call emital
+call emital
+call emital
+jmp.l pline
+pcal1:
+call lku
+mov eax, [rcx+8]
+mov edx, [rbp+20]
+mov esi, 5
+add edx, esi
+sub rax, rdx
+mov [rbp+84], eax
+mov eax, 232            ; E8
+call emital
+movzx eax, byte [rbp+84]
+call emital
+movzx eax, byte [rbp+85]
+call emital
+movzx eax, byte [rbp+86]
+call emital
+movzx eax, byte [rbp+87]
+call emital
+jmp.l pline
+
+pret:                   ; ret -> C3
+mov eax, 195
+call emital
+lea rbx, [rbx+3]
+jmp.l pline
+
+jscn:                   ; after a j-mnemonic: scan for '.' before the space
+lea rdx, [rbx+2]
+jsc1:
+movzx eax, byte [rdx]
+cmp al, 46              ; '.' => .l form
+jz.l jlng
+cmp al, 32              ; ' ' => rel8 form
+jz.l jshrt
+cmp al, 0
+jz.l fail
+lea rdx, [rdx+1]
+jmp.l jsc1
+jlng:
+lea rdx, [rdx+2]        ; past ".l"
+lea rbx, [rdx+1]        ; name
+jmp.l plng
+jshrt:
+lea rbx, [rdx+1]        ; name
+jmp.l pbr
+
+d_r:
+cmp al, 114             ; 'r' ret
+jnz.l fail
+movzx edx, byte [rbx+1]
+cmp dl, 101             ; 'e'
+jnz.l fail
+jmp.l pret
+
+d_call:
+mov eax, 235
+mov [rbp+92], eax
+lea rbx, [rbx+5]        ; past "call "
+jmp.l pcall
