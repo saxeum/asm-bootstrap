@@ -53,6 +53,7 @@ mov eax, 0
 mov [rbp+16], eax
 mov [rbp+20], eax
 mov [rbp+80], eax
+mov [rbp+2], al
 mov ecx, 1
 mov [rbp+120], ecx
 lea rbx, [rbp+1]
@@ -72,6 +73,8 @@ mov byte [rbx], 0
 lea rbx, [rbp+1]
 mov ecx, 300001
 sub rbx, rcx
+mov ecx, 1
+mov [rbp+120], ecx
 call parse
 
 mov eax, [rbp+20]
@@ -85,6 +88,8 @@ mov [rbp+20], eax
 lea rbx, [rbp+1]
 mov ecx, 300001
 sub rbx, rcx
+mov ecx, 1
+mov [rbp+120], ecx
 call parse
 mov eax, 2
 mov [rbp+16], eax
@@ -165,6 +170,8 @@ mov [rbp+20], eax
 lea rbx, [rbp+1]
 mov ecx, 300001
 sub rbx, rcx
+mov ecx, 1
+mov [rbp+120], ecx
 call parse
 mov eax, 60
 xor edi, edi
@@ -1126,7 +1133,11 @@ sub rcx, rsi
 mov edx, [rbp+80]
 lfind:
 cmp edx, 0
-jz.l fail
+jnz.l lfok
+mov eax, 2
+mov [rbp+2], al
+jmp.l fail
+lfok:
 mov eax, [rcx]
 mov esi, [rbp+72]
 xor eax, esi
@@ -1449,7 +1460,11 @@ mov esi, 128
 add eax, esi
 sub rax, rdx
 jb.l chkok
+mov eax, 1
+mov [rbp+2], al
 jmp.l fail
+chkok:
+ret
 chkok:
 ret
 
@@ -1579,6 +1594,11 @@ mov eax, 58
 call putch
 mov eax, 32
 call putch
+movzx eax, byte [rbp+2]
+cmp eax, 1
+jz.l mrng
+cmp eax, 2
+jz.l mlbl
 mov eax, 114
 call putch
 mov eax, 101
@@ -1595,10 +1615,34 @@ mov eax, 101
 call putch
 mov eax, 100
 call putch
+jmp.l mdone
+mrng:
+mov eax, 114
+call putch
+mov eax, 97
+call putch
+mov eax, 110
+call putch
+mov eax, 103
+call putch
+mov eax, 101
+call putch
+jmp.l mdone
+mlbl:
+mov eax, 108
+call putch
+mov eax, 97
+call putch
+mov eax, 98
+call putch
+mov eax, 101
+call putch
+mov eax, 108
+call putch
+mdone:
 mov eax, 10
 call putch
 ret
-
 prd:
 cmp eax, 0
 jnz.l prp
@@ -1687,7 +1731,14 @@ jnz.l termok
 movzx eax, byte [rbp+16]
 cmp eax, 0
 jz.l termok
+mov eax, 2
+mov [rbp+2], al
 jmp.l fail
+termok:
+mov ecx, [rbp+4]
+ret
+termnum:
+jmp.l numlit
 termok:
 mov ecx, [rbp+4]
 ret

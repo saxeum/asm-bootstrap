@@ -683,3 +683,29 @@ a label — and this attempt used it for `msg` (which worked) and then abandoned
 Deferred with the rest: message reasons, `r8`–`r15` with REX, and scale factors. The reason codes need
 a slot that survives `putch` and `msg`, and every four-byte slot within `disp8` is already in use —
 worth solving once, deliberately, rather than by borrowing `[rbp+92]` from the branch opcode.
+
+### Phase 1 item 2, second half: messages that say *what*
+
+```
+mov bl, 300          -> line 1: range
+mov eax, [rbx+1000]  -> line 1: range
+db nosuch            -> line 1: label
+jmp nosuch           -> line 1: label
+frobnicate 1         -> line 2: rejected
+```
+
+`asm1` 6 561 → **6 765 bytes**. A reason byte at `[rbp+2]` — genuinely unused, and it survives
+`putch`, which is what the previous attempt got wrong by borrowing `[rbp+92]` from the branch opcode.
+`make test-msg-exact` asserts each message **verbatim**, so a vague one fails instead of passing.
+
+**And it exposed a real bug in line numbering:** `db nosuch` reported `line 2: label` for a failure on
+line 1. The counter kept advancing *across passes* — pass 0 consumed the newline tolerantly (an
+unknown symbol is fine when counting) and pass 1 then started at 2. The counter is now reset before
+each of the three passes, and `frobnicate` on line 3 reports line 3.
+
+Three functions were rewritten whole (`chklim`, `trm`, `lfind`) rather than patched — the first
+attempt's failure was an insertion inside `chklim`'s flag-dependent sequence, which turned a range
+check into a no-op. Rewriting whole costs a diff to read and nothing else.
+
+Still deferred: `r8`–`r15` with REX, scale factors `*2`/`*4`/`*8`, and `.data` sections with two
+program headers.

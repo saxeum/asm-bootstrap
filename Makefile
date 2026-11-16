@@ -19,7 +19,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-reject-msg test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1 (the promoted previous stage)'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
@@ -113,7 +113,7 @@ verify-provenance: asm1
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: asm1 fixpoint bootstrap-check test-reject test-reject-msg test-capability test-superior verify-provenance
+check: asm1 fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -272,3 +272,21 @@ test-reject-msg: asm1
 	  esac; \
 	done; \
 	[ $$fail -eq 0 ] && echo "  messages: every rejection names its line"; exit $$fail
+
+# The message must name the line AND the reason. Each expectation below is written
+# out exactly as it must appear, so a vague message fails rather than passes.
+test-msg-exact: asm1
+	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	check() { \
+	  printf '%b\n' "$$2" > $$tmp/m.s; \
+	  got=$$($(ASM1) < $$tmp/m.s 2>&1 >/dev/null); \
+	  if [ "$$got" = "$$1" ]; then ok=$$((ok+1)); \
+	  else echo "  message for [$$2]: got '$$got', wanted '$$1'"; fail=1; fi; \
+	}; \
+	check "line 1: range" "mov bl, 300"; \
+	check "line 1: range" "mov eax, [rbx+1000]"; \
+	check "line 1: label" "db nosuch"; \
+	check "line 1: label" "jmp nosuch"; \
+	check "line 2: rejected" "mov eax, 1\nfrobnicate 1"; \
+	printf '  messages %s/5 exact: line number and reason\n' $$ok; \
+	exit $$fail
