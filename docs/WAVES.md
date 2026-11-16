@@ -1256,3 +1256,53 @@ Corpus 17/17.
    at `ecx`, so `eolv` saw `e` where it expected end-of-line and exited 1 — while the emitted bytes
    were already correct. Every other handler advances past the source name; this one did not. Caught
    by the `exit=1` on an otherwise-correct encoding, which is the same tell as wave 2d-13.
+
+## asm1.s step 3, second finding: no subroutines and no byte subtraction
+
+`src/asm1.s` is now written (251 lines: header blob, two passes, parser for `syscall`,
+`mov r32,imm32`, `db`), and **it does not assemble**. Two more forms are missing.
+
+```
+call foo     rejected        sub al, 48   rejected   (only sub r64,r64 exists)
+ret          rejected        push rax     rejected
+pop rax      rejected
+```
+
+`sub al, 48` is fixable inside the dialect: `add al, 100` then `add al, 108` is -48 mod 256, and
+unsigned `cmp al,10; jb` still classifies digits correctly (a byte < 48 wraps to >= 208, > 57 to
+>= 10). That is a workaround, not a missing capability.
+
+**`call`/`ret` is a real gap, and it is the expensive one.** `asm1.s` calls `emital` from ~20 sites
+and `num32`/`reg32` from several more. Neither can be inlined cheaply: `emital` alone is 11
+instructions plus a syscall.
+
+### Route A — add `call`/`ret` to `asm0a` (two forms, plan derived)
+
+`ret` is `C3`, one byte, no operands. `call label` is `E8 rel32`, which is *exactly* `jmp.l`'s
+shape: `jmp.l` already sets `r11d = 0x3EB` (low byte `E9`, bit 8 = long, bit 9 = jmp-not-jcc) and
+jumps into the label-resolution routine at `0x45d`. The plan, which needs no new machinery:
+
+1. `0xceb`: `mov $0x3eb,%r11d` -> `$0x3e9`  (jmp.l keeps working, opcode is now taken from r11b)
+2. `0xd42`: `movb $0xe9,(%r15)` -> `mov %r11b,(%r15)` + nop  (4 bytes -> 3 + 1)
+3. retarget `0x77d` (`'c'` -> cmp handler) to a shim: `[rbx+1] == 'a'` sends `call` to
+   `r11d = 0x3e8; add rbx,5; jmp 0x45d`, everything else falls through to the old `0x7ee`
+4. retarget `0x798` (the chain's tail `jmp 0x2b3` = fail) to a shim: `'r'`+`[rbx+1] == 'e'` emits
+   `C3`, advances 3, else falls through to the failure path
+
+Step 2 is what makes it cheap: the long-jump path stops hardcoding `E9` and emits the opcode from
+`r11b`, so `call` rides the same label resolution as `jmp.l` instead of duplicating it.
+
+### Route B — no new forms: buffer the output
+
+Build each instruction's bytes in a small buffer (`mov [rdi],al; lea rdi,[rdi+1]`, no syscall) and
+flush once per instruction. The flush is inlined at ~6 sites instead of a helper called from 20, and
+`num32`/`reg32` get inlined too. This removes the need for subroutines entirely at the cost of
+reintroducing an output buffer — the thing the design gave up in wave 2d-12 to remove the
+fill/flush/off-by-one class of defect.
+
+Route A is preferred: subroutines are not a workaround for this program, they are the form any
+assembler-shaped program needs, and the patch plan above reuses machinery that is already verified.
+Route B stays on the table if Route A's dispatch chain turns out to be tighter than it looks.
+
+Status: **not landed.** `src/asm1.s` is committed as written, with this note, so the next session
+starts from the real blocker instead of rediscovering it.

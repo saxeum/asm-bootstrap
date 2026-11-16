@@ -152,7 +152,10 @@ About 600–800 instructions. Build it in the order that keeps it runnable at ev
    identical to `sed 's/;.*//'` and 16/16 fixtures round-trip. See `docs/WAVES.md`. Blank lines are
    *kept*, not dropped: dropping them needs a "line has content" flag, and a flag cannot live in
    `rcx` across a syscall. Keeping them costs nothing — the parser ignores them.
-3. **emit one hard-coded instruction per matched mnemonic** — unblocked by `add r32,r32` (2d-14): recognise `syscall`, `mov r32,imm`,
+3. **emit one hard-coded instruction per matched mnemonic** — written (`src/asm1.s`, 251 lines) but
+   **blocked on `call`/`ret`**, which the dialect does not have. Two routes with their patch plans
+   are in `docs/WAVES.md`: add `call`/`ret` to `asm0a` (preferred, reuses `jmp.l`'s label
+   resolution), or buffer the output so no subroutine is needed.: recognise `syscall`, `mov r32,imm`,
    `db` and emit them. Testable: assemble a 3-line source and compare with `asm0a`'s output.
 4. **labels + pass 2**: assemble something with a forward jump.
 5. **the rest of the mnemonic set**, one at a time, each verified against `asm0a` on the same
@@ -181,6 +184,8 @@ output of the bootstrap: the language shrinks to exactly what a self-hosting ass
 | `inc`/`dec r32` | counters, pointer advance | have |
 | `add r32, r32` | decimal parsing: `value*10 + digit` | **added, 2d-14** |
 | `syscall`, `xor r32,r32`, `sub r64,r64` | I/O, exit, length arithmetic | have |
+| **`call rel32`, `ret`** | **subroutines: `emital` is called from ~20 sites** | **missing — next** |
+| `sub r8,imm8` | digit decode; *not needed* — `add al,100`+`add al,108` is -48 mod 256 | workaround |
 | `div r8` | not needed yet; the plan assumes no division | spare |
 
 Not needed, and deliberately absent: `imul`, `shl`, `and`, `or`, `test`, indexed addressing, disp32
