@@ -581,3 +581,31 @@ appended a file containing it. Duplicate labels assemble and the first definitio
 Item 6 remaining: `r8`–`r15` with REX, and indexed addressing `[base+index*scale]`. Both need the
 register and memory machinery extended rather than another handler, and both are worth a session that
 starts with the whole budget.
+
+### A stopped attempt, and the rule it re-taught
+
+Tried to add `neg` / `not` (F7 /3, /2 — the same shape as `inc`/`dec r32`, so a small change). It ended
+in a revert, and the way it ended matters more than the feature.
+
+Sequence: the handler advanced the cursor by 4 *and* `pu32` advanced by 4 as well, so the operand
+landed on `ax` and failed. Fixing that with a line-number delete took out a neighbouring label; the
+build then failed, and **the failed build left the previous `asm1` in place — so the next test run
+reported "ok" and "fixpoint holds" against a stale binary.** That is the worst failure mode in this
+project: a green result about the wrong subject, which `AGENTS.md` names as the most common defect in
+evidence.
+
+Reverted to the last commit. `asm1` is 6 132 bytes, 18/18, fixpoint, all gates green.
+
+The rule, now learned for the third time in this session: **structural edits to `src/asm1.s` are
+whole-block replacements anchored on a label and the next label.** Line-number deletes and mid-block
+inserts have produced: deleted live lines (twice), duplicated labels (three times), and handlers
+inserted inside a neighbour's body (four times). None of those were caught by the compiler; all were
+caught by tests, after the fact.
+
+And the corollary, which cost the most here: **rebuild before testing, and check the build succeeded.**
+`make` failing and `./asm1` still existing is a silent stale-binary trap. `make` should be a
+prerequisite of every test target — it is, for `test-asm1` — but a direct `./asm1` invocation bypasses
+it, and that is what happened.
+
+Remaining in item 6, deliberately deferred to a session that starts with budget: `neg`/`not`,
+`r8`–`r15` with REX, and indexed addressing.
