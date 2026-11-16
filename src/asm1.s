@@ -192,15 +192,34 @@ jnz.l d_a
 movzx edx, byte [rbx+1]
 cmp dl, 98              ; 'b'
 jz.l pdb
+cmp dl, 101             ; 'e' dec
+jz.l d_dec
 mov eax, 246            ; div r8: F6 /6
 mov [rbp+44], eax
 mov eax, 6
 mov [rbp+48], eax
 jmp.l pu8
+d_dec:
+movzx edx, byte [rbx+4]  ; operand first char: e/r means a 32-bit name
+cmp dl, 101
+jz.l d_d32
+cmp dl, 114
+jz.l d_d32
+mov eax, 254            ; dec r8: FE /1
+mov [rbp+44], eax
+mov eax, 1
+mov [rbp+48], eax
+jmp.l pu8
+d_d32:
+mov eax, 255            ; dec r32: FF /1
+mov [rbp+44], eax
+mov eax, 1
+mov [rbp+48], eax
+jmp.l pu32
 d_a:
-cmp al, 97              ; 'a'  add r8,imm8: 80 /0, with the al special case
+cmp al, 97              ; 'a'  add r8,imm8 (80 /0) or add r32,r32 (01 /r)
 jnz.l d_c
-movzx edx, byte [rbx+6]  ; delimiter third => the name was 2 chars: 8-bit
+movzx edx, byte [rbx+6]  ; operand third char: a delimiter means an 8-bit name
 cmp dl, 44
 jz.l padd8
 cmp dl, 32
@@ -229,13 +248,25 @@ mov eax, 0
 mov [rbp+52], eax
 jmp.l p8i
 d_i:
-cmp al, 105             ; 'i'  inc r8: FE /0
+cmp al, 105             ; 'i'  inc r8 (FE /0) or inc r32 (FF /0)
 jnz.l d_x
-mov eax, 254
+movzx edx, byte [rbx+4]  ; operand first char: e/r means a 32-bit name
+cmp dl, 101
+jz.l d_i32
+cmp dl, 114
+jz.l d_i32
+mov eax, 254            ; inc r8: FE /0
 mov [rbp+44], eax
 mov eax, 0
 mov [rbp+48], eax
 jmp.l pu8
+d_i32:
+mov eax, 255            ; inc r32: FF /0
+mov [rbp+44], eax
+mov eax, 0
+mov [rbp+48], eax
+jmp.l pu32
+d_x:
 d_x:
 cmp al, 120             ; 'x'  xor r32,r32: 31 /r
 jnz.l d_l
@@ -846,6 +877,23 @@ mov [rbp+84], eax
 mov eax, [rbp+92]       ; the opcode for this branch
 call emital
 mov eax, [rbp+84]
+call emital
+jmp.l pline
+
+pu32:                   ; inc/dec r32 ; [rbp+44]=opcode [rbp+48]=digit
+lea rbx, [rbx+4]
+call reg32
+mov eax, [rbp+48]
+add eax, eax
+add eax, eax
+add eax, eax
+add eax, edx
+mov edx, 192
+add eax, edx
+mov [rbp+36], eax
+mov eax, [rbp+44]
+call emital
+mov eax, [rbp+36]
 call emital
 jmp.l pline
 
