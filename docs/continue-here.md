@@ -1,8 +1,8 @@
 # Continue here
 
-State after the signed-semantics fix. The assembler and compiler are C-built; `asm1` is the C
-assembler, `cc` the C compiler, and both reach their own fixpoints. The assembly sources are frozen
-witnesses.
+State after the four-program wave: the C-only chain is complete. The assembler and compiler are C-built;
+`asm1` is the C assembler, `cc` the C compiler, and both reach their own fixpoints. The assembly
+sources are frozen witnesses. `wc`, `calc`, `sort` and `lisp` run on both chains.
 
 ## The numbers
 
