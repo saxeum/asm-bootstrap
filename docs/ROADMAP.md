@@ -1708,3 +1708,84 @@ Next slices: the literal section, the symbol table, statements, expressions, the
 The language gaps the port will meet, in order: an `int` array cannot cross a call (use tables in the
 caller, or a `char` buffer with a length); `&&`/`||` (write nested `if`s); returning a pointer
 (`emit(char *s)` has no equivalent).
+
+# Definition of done
+
+"Asking whether we are there" is only answerable if "there" is a command. These are the four criteria, in
+order, each falsifiable, each a target that can be run rather than an adjective.
+
+## D1 — the port is the *same compiler*
+
+For every program in the corpus, the port and the dialect compiler must emit the same text:
+
+```bash
+for f in tests/golden/*.c; do ./.work/cc1 < $f | cmp - <(./cc < $f) || echo "differs: $f"; done
+```
+
+40 programs, including the refusals (both must refuse) and the behaviours (both binaries must exit the
+same). Equivalence, not merely self-consistency: a compiler that agrees with itself and disagrees with
+the one it replaced has changed the language.
+
+## D2 — it compiles itself, and the result compiles itself identically
+
+```bash
+./cc  < src/cc.c > .work/cc1.s      # the dialect compiler compiles the port
+./asm1 < .work/cc1.s > .work/cc1    # the assembler makes a compiler binary
+./.work/cc1 < src/cc.c > .work/cc2.s
+cmp .work/cc1.s .work/cc2.s         # a compiler that emits itself, byte for byte
+./.work/cc1 < src/cc.c > /dev/null  # and it must still work, not just agree
+```
+
+This is the fixpoint the whole project is built on, now for `cc` instead of `asm1`.
+
+## D3 — the assembler too (the stated endgame)
+
+`src/asm1.c` — the assembler in the same C subset — compiled by `cc`, and the resulting `asm2`
+byte-identical to `asm1` on the whole corpus: 18 fixtures, 36 capability pairs, 9 rejections, the
+99 032-byte source, and `src/asm1.s` itself. Only then is the chain `src/asm1.c → cc → asm1 → asm2`
+closed, with `asm1`'s dialect frozen as the witness throughout.
+
+## D4 — and the record stays clean
+
+Every gate in `make check` green at each step; the dialect frozen; no forbidden tool in the creation or
+diagnosis path, disclosed if one ever is; nothing outside the repository; `docs/provenance.tsv`,
+`docs/SHAS` and the toolchain ledger current. A port that passes D1–D3 with a record that says otherwise
+is the defect this repository was founded to prevent, and it has already happened once.
+
+## Where this stands, measured
+
+| | dialect `cc` | port `src/cc.c` |
+|---|---|---|
+| lines | 2 968 | 123 |
+| routines / functions | 312 labels, ~40 areas | 5 functions |
+| gates | 45 checks, 40 goldens | 2 (bytes and behaviour, one fixed program) |
+| what it does | compiles the subset | emits the emitter's primitives |
+
+Done in the port: the emission primitives — `emitc`, `emitstr`, `putn` (the decimal printer), `line`,
+and one literal-section entry.
+
+Not started, in the order the port needs them:
+
+1. **input and scanning**: `gcur`, `bump`, `skipws` (with comments), `ident`, `numval`, `isword`, `want`.
+2. **the symbol table**: `idfind`, `findvar`, `defvar`, `defarr`, `isarr`, `varoff` — names, kinds,
+   offsets, and the byte counter that cost this project three defects.
+3. **statements**: `int x = N`, `char a[N]`, assignment, `a[i] = v`, `while`, `if`/`else`, `return`.
+4. **expressions**: precedence, the six comparison forms, calls, subscripts, literals, `&`/`*`, division.
+5. **the literal section** for arbitrary literals rather than one fixed one.
+6. **the argument path**, once the defect below is fixed.
+
+## The four things that must be fixed in `cc` first, or written around
+
+1. **Arguments collide with depth registers** (found, reproduced, *not* fixed): `cc` computes an
+   argument at depth `d+1`, and at `d = 1` that register is `rdx`, which is the third argument register,
+   so a call as the right operand of `+` with three or more arguments passes the wrong values. Fix: park
+   arguments in frame slots and load the argument registers just before the call.
+2. **An `int` array cannot cross a call** — a pointer subscript is char-indexed by design, so a callee
+   cannot index an `int` array it is given. Written around by keeping tables in the caller.
+3. **No `&&` or `||`.** Written around with nested `if`s.
+4. **No pointer return.** `emit(char *s)` has no equivalent; a string is a buffer and a length.
+
+At the rate of the last three sessions — roughly one slice per session, each slice adding 30–60 lines and
+one or two gates — the port is **four to six sessions** away from D2, and `src/asm1.c` is a further
+project of comparable size. That is the honest number, and it is the one worth writing down: the work
+left is not uncertain, only long.
