@@ -1413,3 +1413,18 @@ Two things follow, in order:
 2. **`.data`** — a read-write segment, `filesz`/`memsz` from label differences, and string literals
    that live in memory. `write("...")` emits its literal with `db` and writes it straight out; a C
    program needs the bytes to be addressable.
+
+## Compiler: `/` and `%`; assembler: 512 labels
+
+`q = 100/7; r = 100%7; return q*10 + r;` exits 142, gated. The label table holds 512 entries so that a
+compiler with three hundred labels still has room.
+
+What is left before `cc` could compile a C version of itself is now a short and specific list:
+
+1. **`.data`** — a read-write segment and string literals that live in memory. Today `write("...")`
+   emits its literal with `db` and writes it straight out; a program cannot *address* its own text.
+2. **`read`** — the compiler's input is stdin; the subset has no way to read it. (The dialect has
+   `syscall`, so this is a `cc` feature: a builtin `read(buf, len)` over a `char` array, using the
+   byte array work already done.)
+3. Then the port itself: `src/cc.c`, compiled by `cc`, assembled by `asm1`, and compared — the way the
+   assembler was bootstrapped, with the dialect frozen as the witness.

@@ -440,6 +440,15 @@ test-cc: cc asm1
 	  if $$tmp/ln; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 42 ]; then \
 	    printf '  cc    names longer than seven: averylongname(xyzlongname) exits 42\n'; \
+	if $(CC) < tests/golden/divmod.c > $$tmp/dm.s 2>/dev/null && cmp -s $$tmp/dm.s tests/golden/divmod.s; then :; \
+	else echo "  divmod.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/divmod.s > $$tmp/dm 2>/dev/null; then \
+	  chmod +x $$tmp/dm; \
+	  if $$tmp/dm; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 142 ]; then \
+	    printf '  cc    division: q=100/7, r=100%%7, q*10+r exits 142\n'; \
+	  else echo "  divmod exited $$g1, wanted 142 -- the quotient or the remainder is wrong"; fail=1; fi; \
+	else echo "  asm1 refuses divmod.s"; fail=1; fi; \
 	  else echo "  longname exited $$g1, wanted 42"; fail=1; fi; \
 	else echo "  asm1 refuses longname.s -- the label limit is the compiler's limit"; fail=1; fi; \
 	  else echo "  charpack exited $$g1, wanted 72 -- the char array overran its slots"; fail=1; fi; \
@@ -490,7 +499,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { y = 1; }'; \
 	refuse 'int main(void) { int x = 1; int x = 2; }'; \
 	refuse 'int main(void) { int abcdefghijklmnopq = 1; }'; \
-	refuse 'int main(void) { int x = 4 / 2; }'; \
+	refuse 'int main(void) { int x = 1 & 1; }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(1, 2, 3, 4, 5); }'; \
 	refuse 'int main(void) { int p = &5; }'; \
 	refuse 'int main(void) { int y = *q; }'; \

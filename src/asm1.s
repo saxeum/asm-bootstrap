@@ -1356,12 +1356,12 @@ mov [rbp+2], al
 jmp.l fail
 lbdnew:
 mov eax, [rbp+80]
-cmp eax, 256
+cmp eax, 512            ; the table holds 512 entries: 20 bytes each, below rbp
 jb.l lok
 jmp.l fail
 lok:
 lea rcx, [rbp+1]
-mov esi, 8601             ; the label table now holds 20-byte entries
+mov esi, 18801            ; 512 entries of 20 bytes, below rbp
 sub rcx, rsi
 mov edx, [rbp+80]
 lget:
@@ -1371,13 +1371,13 @@ lea rcx, [rcx+20]
 dec edx
 jmp.l lget
 lgoth:
-mov eax, [rbp-8700]
+mov eax, [rbp-18900]
 mov [rcx], eax
-mov eax, [rbp-8696]
+mov eax, [rbp-18896]
 mov [rcx+4], eax
-mov eax, [rbp-8692]
+mov eax, [rbp-18892]
 mov [rcx+8], eax
-mov eax, [rbp-8688]
+mov eax, [rbp-18888]
 mov [rcx+12], eax
 mov eax, [rbp+20]
 mov [rcx+16], eax
@@ -1387,15 +1387,15 @@ mov [rbp+80], eax
 jmp.l pline
 
 lcpy:
-; The name scratch lives at rbp-8700, sixteen bytes, zeroed first so a short
+; The name scratch lives at rbp-18900, sixteen bytes, zeroed first so a short
 ; name compares equal only to itself. Fifteen characters plus that zero is the
 ; limit: `cmp edx, 16` refuses the sixteenth.
 mov eax, 0
-mov [rbp-8700], eax
-mov [rbp-8696], eax
-mov [rbp-8692], eax
-mov [rbp-8688], eax
-lea rcx, [rbp-8700]
+mov [rbp-18900], eax
+mov [rbp-18896], eax
+mov [rbp-18892], eax
+mov [rbp-18888], eax
+lea rcx, [rbp-18900]
 xor edx, edx
 lcpyl:
 movzx eax, byte [rbx]
@@ -1435,7 +1435,7 @@ call emital
 jmp.l pline
 pbr1:
 lea rcx, [rbp+1]
-mov esi, 8601             ; the label table now holds 20-byte entries
+mov esi, 18801            ; 512 entries of 20 bytes, below rbp
 sub rcx, rsi
 mov edx, [rbp+80]
 lfind:
@@ -1574,7 +1574,7 @@ mov edi, 1
 syscall
 lku:
 lea rcx, [rbp+1]
-mov esi, 8601             ; the label table now holds 20-byte entries
+mov esi, 18801            ; 512 entries of 20 bytes, below rbp
 sub rcx, rsi
 mov edx, [rbp+80]
 lkul:
@@ -2012,7 +2012,7 @@ lcmp:
 ; sixteen-byte names are equal. rcx, rdx and rbx are preserved, so a caller's
 ; walk and stride survive it; r8..r11 are this routine's own.
 lea r9, [rcx]
-lea r10, [rbp-8700]
+lea r10, [rbp-18900]
 mov edi, 0
 mov r8, 4
 lcml:
@@ -2030,7 +2030,7 @@ ret
 
 lku0:
 lea rcx, [rbp+1]
-mov esi, 8601             ; the label table now holds 20-byte entries
+mov esi, 18801            ; 512 entries of 20 bytes, below rbp
 sub rcx, rsi
 mov edx, [rbp+80]
 lk0l:

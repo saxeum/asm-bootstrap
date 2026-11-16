@@ -2563,3 +2563,39 @@ second attempt used the edit tool with exact anchors, which is what the repo's o
 
 `asm1` 7 903 → 7 979 bytes, promoted. Next: `.data`, and then `/` in `cc` — the operator is still
 refused there even though the instruction now exists.
+
+## `/` and `%` in `cc`, and 512 labels in `asm1`
+
+Two changes that belong together because the second was forced by the first: `cc` needed four new
+labels for division, and it was at 252 of `asm1`'s 256.
+
+**The label table holds 512 now** — 10 240 bytes at `rbp-18800`, with the name scratch moved below it
+at `rbp-18900` (the same mistake as last wave, avoided this time by putting the scratch outside the
+range the table grows through). Raised, built with the old seed, promoted, `docs/SHAS` re-pinned.
+
+**`/` and `%` bind like `*`**, and `div` divides `rdx:rax`, so the left operand moves into `rax`, `rdx`
+is zeroed, and the right operand is `div`'s argument:
+
+```
+mov rax, <reg d>        ; the dividend
+xor rdx, rdx
+div <reg d+1>           ; quotient in rax, remainder in rdx
+mov <reg d>, rax        ; or ", rdx" for %
+```
+
+Gated exact: `q = 100/7; r = 100%7; return q*10 + r;` exits **142** — a wrong quotient, a wrong
+remainder, or a swapped pair gives something else.
+
+Two defects, both mine, both caught by a gate rather than by reading:
+
+- The `awk` that replaced `ex2` also swallowed its terminating `ret`, so `expr` fell through into
+  `ex3` — and `8 * 2`, which had worked for ten waves, stopped working. The multiplication gate caught
+  it; the division work had not been tested yet.
+- A `perl || awk` pipeline wrote a two-line file over `src/cc.s`. `git diff --stat` said 2 397
+  deletions. The file came back from the scratch copy; nothing was lost but an hour's care.
+
+And one refusal had to be retired: `int x = 4 / 2;` is no longer outside the subset, so it is now
+`int x = 1 & 1;`. A refusal that still passes is worse than none.
+
+`cc` 7 888 → 8 184 bytes, `asm1` 7 979 → 7 979 (same size, different bytes: the table base is a bigger
+constant). Gates: 22 → 23 checks, 31 refusals. 49 check lines.

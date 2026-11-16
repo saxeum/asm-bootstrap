@@ -679,7 +679,13 @@ ex2l:
 call skipws
 call gcur
 cmp al, 42
-jnz ex2d
+jz ex2mul
+cmp al, 47
+jz.l ex2div
+cmp al, 37
+jz.l ex2rem
+jmp.l ex2d
+ex2mul:
 push rax
 mov eax, 1
 call bump
@@ -695,9 +701,71 @@ pop rax
 mov [rbp-132], eax
 call emitop
 jmp ex2l
+
+ex2div:
+mov eax, 1
+mov [rbp-312], eax      ; keep the quotient
+jmp.l ex2dv
+ex2rem:
+mov eax, 0
+mov [rbp-312], eax      ; keep the remainder
+ex2dv:
+; `/` and `%` bind like `*`. div divides rdx:rax, so the left operand is moved
+; into rax and rdx is zeroed; the right operand is at d+1, harmlessly, because
+; nothing else is live between the zeroing and the division.
+mov eax, 1
+call bump
+mov eax, [rbp-128]
+inc eax
+call chkdep
+mov [rbp-128], eax
+call ex3
+mov eax, [rbp-128]
+dec eax
+mov [rbp-128], eax
+mov esi, 4194424+f_mov
+call emitstr
+mov esi, 4194424+f_rax
+call emitstr
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, [rbp-128]
+call emitreg             ; mov rax, <reg d>
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_xor
+call emitstr
+mov esi, 4194424+f_rdx
+call emitstr
+mov esi, 4194424+f_sep
+call emitstr
+mov esi, 4194424+f_rdx
+call emitstr
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_div
+call emitstr
+mov eax, [rbp-128]
+inc eax
+call emitreg             ; div <reg d+1>
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov eax, [rbp-312]
+cmp eax, 0
+jz ex2dvr
+mov esi, 4194424+f_rax2
+jmp ex2dvg
+ex2dvr:
+mov esi, 4194424+f_mrdx
+ex2dvg:
+call emitstr
+jmp.l ex2l
 ex2d:
 ret
-
 ex3:
 call skipws
 call gcur
@@ -2396,5 +2464,22 @@ db ", byte ["
 db 0
 f_lstb:
 db "mov [rcx], al"
+db 10
+db 0
+f_xor:
+db "xor "
+db 0
+f_rdx:
+db "rdx"
+db 0
+f_div:
+db "div "
+db 0
+f_mrdx:
+db ", rdx"
+db 10
+db 0
+f_rax2:
+db ", rax"
 db 10
 db 0
