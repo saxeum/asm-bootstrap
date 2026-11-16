@@ -28,14 +28,14 @@ lea rcx, [rbp-8]
 mov rdx, [rbp-284]
 add rcx, rdx
 mov [rcx], rax
-lea rax, [rbp-8]
-mov rcx, [rbp-32]
-add rcx, rcx
-add rcx, rcx
-add rcx, rcx
-add rax, rcx
-mov rax, [rax]
-mov rdi, rax
+lea rcx, [rbp-8]
+mov rdx, [rbp-32]
+add rdx, rdx
+add rdx, rdx
+add rdx, rdx
+add rcx, rdx
+mov rcx, [rcx]
+mov rdi, rcx
 call f
 mov rdi, rax
 mov eax, 60

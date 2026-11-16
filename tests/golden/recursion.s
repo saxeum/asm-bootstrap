@@ -16,14 +16,14 @@ mov rsp, rbp
 pop rbp
 ret
 L1e:
-mov rax, [rbp-8]
-mov rcx, 1
-sub rax, rcx
-mov rdi, rax
-mov rax, [rbp-16]
-mov rcx, 1
-add rax, rcx
-mov rsi, rax
+mov rcx, [rbp-8]
+mov rdx, 1
+sub rcx, rdx
+mov rdi, rcx
+mov rcx, [rbp-16]
+mov rdx, 1
+add rcx, rdx
+mov rsi, rcx
 call f
 mov rsp, rbp
 pop rbp
@@ -33,10 +33,10 @@ push rbp
 mov rbp, rsp
 mov rcx, 64
 sub rsp, rcx
-mov rax, 10
-mov rdi, rax
-mov rax, 0
-mov rsi, rax
+mov rcx, 10
+mov rdi, rcx
+mov rcx, 0
+mov rsi, rcx
 call f
 mov rdi, rax
 mov eax, 60

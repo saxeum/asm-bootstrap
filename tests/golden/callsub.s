@@ -17,10 +17,10 @@ push rbp
 mov rbp, rsp
 mov rcx, 64
 sub rsp, rcx
-mov rax, 3
-mov rdi, rax
-mov rax, 2
-mov rsi, rax
+mov rcx, 3
+mov rdi, rcx
+mov rcx, 2
+mov rsi, rcx
 call sub2
 mov rdi, rax
 mov eax, 60

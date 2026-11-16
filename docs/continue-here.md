@@ -20,11 +20,11 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
 | `src/asm1.s` | 31 236 | — | 2 150 lines, 199 labels (limit 256), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
-| `cc` | 7 179 | `fdef1b6638788994` | built by `asm1` from `src/cc.s` (2 213 lines) — C to dialect TEXT |
+| `cc` | 7 471 | `33727e32d6e6e8c9` | built by `asm1` from `src/cc.s` (2 290 lines) — C to dialect TEXT |
 
 Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **30 capability
 pairs** · **6 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
-**94 coverage forms** · **cc: 17 checks, 29 refusals** · 290 branch pins · 36 provenance records.
+**94 coverage forms** · **cc: 19 checks, 29 refusals** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 
@@ -197,58 +197,30 @@ Then **immediately**: `make` (check exit code and sha changed), fixtures 18/18, 
 | `tools/shape.awk` | how two source lines are decided to reach the same encoder path |
 | `docs/toolchain.tsv`, `docs/provenance.tsv`, `docs/SHAS`, `docs/branches.tsv` | the records |
 
-## Next task: a call inside a larger expression
+## Next task: the name limit, then `char` and `.data`
 
-Arrays landed. Pointers, arrays and recursion all work; what does not is `n * f(n-1)`, and that is
-the last thing between this subset and ordinary non-tail recursion.
+`cc` now does everything a compiler needs *except* the things a symbol table is made of. In order:
 
-### The design
+1. **Names longer than seven characters.** This is `asm1`'s limit, not `cc`'s, and `cc` refuses them
+   everywhere — including its own source. Raising it is a bootstrap step: raise the limit, promote
+   that intermediate (`make promote`), and only then write source using longer names. Reversed,
+   nothing can build the result. The identifiers a compiler needs (`identifier`, `keyword`,
+   `emitstr`) are all longer than seven.
+2. **`char` and byte strings** in `cc`: a `char s[8];` of bytes, `s[i]` load and store with
+   `movzx`/byte stores (the dialect has both), and a `char *` walk of a literal.
+3. **`.data`** in `asm1`: a second read-write `PT_LOAD`, `filesz`/`memsz` from label differences, and
+   `0x400078+label` stops being a constant for data. It is the last assembler feature with no user,
+   and a string table is the user.
+4. `div r32` (assembler) so that `/` can be implemented.
 
-A callee returns its value in `rax`, which is also depth 0's register — so a call anywhere but at
-depth 0 destroys the enclosing term's left operand. Two changes fix it:
+### Three slots that will bite, and the pattern
 
-```
-ex3call:
-; allow depth > 0 ...
-call callargs
-mov eax, [rbp-128]
-cmp eax, 0
-jz ex3cdone
-mov esi, 4194424+f_mov
-call emitstr
-call emitreg              ; mov <reg d>, rax
-mov esi, 4194424+f_mveax
-call emitstr              ; f_mveax is ", rax" + newline
-mov esi, 4194424+f_nl
-call emitstr
-ex3cdone:
-ret
-```
+Every defect of the last three waves was the same one: a **fixed frame slot shared across a nested
+parse**. `-140` (the term scratch), `-268` (an array index), `-128` (the depth) and `-244` (a pointer
+store) each got clobbered exactly once, and each time the symptom looked like something else — a
+wrong combine, a wrong base, a wrong stride.
 
-and the arguments must be evaluated one depth deeper than the call, so that they do not clobber
-`reg 0..d`. Today `callargs` hard-codes `mov eax, 0` before `call expr`; it needs an "argument depth"
-slot of its own (say `[rbp-292]`), set by `ex3call` to `d+1`, and `call expr` becomes
-`mov eax, [rbp-292]; call exprd`.
-
-Then `f(n-1) * n` works, and factorial is a gate: `f(5) = 120`.
-
-### Three traps, each already paid for once
-
-1. **`want` and `skipws` clobber `rax`** (they write `eax`, which zeroes the upper half). Anything that
-   must survive them goes in a fixed slot, not a register.
-2. **`[rbp-140]` is shared by every term**, and `exprd` overwrites `[rbp-128]`. A caller that needs its
-   depth after a nested parse must save it — `ex3sub` does, in `-288`.
-3. **The nested-subscript refusal** (`[rbp-236]`) exists because nesting used to corrupt state. The
-   cause was the missing stack reservation, so that refusal is probably unnecessary now; a test that
-   compares `a[b[0]]` against a hand-written dialect program would settle it.
-
-### And the reason any of this matters
-
-`cc` is meant to compile itself. A C version of `cc` needs: functions with locals that survive calls
-(have it), recursion (have it, tail-shaped), `while`/`if`/`return` (have it), arrays with computed
-indices (have it), `char` and byte strings (do not), `.data` for mutable tables (do not — and it is
-also the last assembler feature with no user), and `/` (refused because the dialect has no `div r32`;
-`div bl` exists).
-
-Order in `docs/ROADMAP.md`. The shortest useful step is `char` + `.data`, because a symbol table of
-names is a byte array and a name longer than seven characters is refused everywhere today.
+Before adding a slot: check nothing else writes it, and remember that `expr`, `exprd`, `want`,
+`skipws`, `emitstr`, `emitnum` and `emitreg` all run *between* the two uses. `-256` … `-300` are in
+use; `-304` upward is free. A slot allocation comment at the top of the frame state would have
+prevented all four defects; there is one now in `docs/cc.md`.

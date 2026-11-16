@@ -648,3 +648,73 @@ no initialiser list, and the eight-slot budget is shared with scalars.
 
 Gates: 42 from `a[0] = 10; a[i] = 32; return a[0] + a[i];` with `i = 2` — a wrong stride, base or slot
 gives anything else — and 42 from `f(a[i])`, an element crossing a call.
+
+## Stage 9: a call inside a larger expression
+
+`n * f(n - 1)` works now, so recursion is ordinary rather than tail-shaped. Two things were needed,
+and the second is the interesting one:
+
+1. **The result arrives in `rax`**, which is depth 0's register. A call at depth `d` therefore moves
+   it: `mov <reg d>, rax`.
+2. **The call destroys `rax`, `rcx`, `rdx` and `rsi`** — and `reg 0..d-1` hold the operands of the
+   expressions enclosing it. They are pushed before the call and popped after it, in reverse:
+
+```
+mov rax, [rbp-8]        ; n            (depth 0)
+push rax                ; save it: fact() will return in rax
+mov rdx, [rbp-8]        ; the argument, at depth 2
+mov rsi, 1
+sub rdx, rsi
+mov rdi, rdx
+call fact
+mov rcx, rax            ; the result to depth 1
+pop rax                 ; n back
+imul rax, rcx
+```
+
+At depth 0 there is nothing live, so the common case — `f(x)` as a whole expression — emits no push
+at all. Arguments are evaluated at `d+1` so they cannot touch `reg 0..d`; that needed an "argument
+depth" slot (`[rbp-292]`), set by `ex3call`.
+
+Gates, both exact: `fact(5)` → **120** (a call inside a product) and `sum(4)` → **10** (a call inside a
+sum). A missing push gives a square or a doubled value, never 120; a wrong result register gives
+garbage from `rcx`.
+
+Three defects while building it, all found by reading the emitted text rather than by testing:
+
+- The argument counter lost its `inc` when the loop was rewritten, so five arguments were accepted —
+  a *refusal* regressed, which is the sort of thing only a refusal test catches.
+- `exprd` leaves `[rbp-128]` at the depth it was given, so `a[0] + a[i]` combined at the wrong depth
+  (`add rdx, rsi`). The restore `mov [rbp-128], <d>` is required after every nested parse.
+- `stptr` read its slot offset from `[rbp-140]`, the shared term scratch, after `expr` had overwritten
+  it — `mov rcx, [rbp-33]`. Fixed by never reading a shared scratch after a nested parse.
+
+## The frame slots, and the rule they taught
+
+`cc` keeps its state in fixed slots off `rbp`. Four defects in three waves were the same defect: **a
+slot shared across a nested parse.** The rule is that a value must survive every call that runs
+between its two uses — and `expr`, `exprd`, `want`, `skipws`, `emitstr`, `emitnum` and `emitreg` all
+run between them.
+
+| slot | owner | safe across a nested parse? |
+|---|---|---|
+| `-100` … `-120` | ident: name length, scan index, variable count, scratch | yes, but `ident` resets them |
+| `-128` | the expression **depth** | **no** — `exprd` sets it to its argument |
+| `-132` | the operator being combined | yes: set after the nested parse |
+| `-140` | value/offset of the current term | **no** — every term writes it |
+| `-144` `-148` | `emitreg` scratch | no |
+| `-160` `-164` `-168` `-176` | function label, is-main, argument index, param index | yes |
+| `-192` | `emitname`'s pointer | yes: set and used immediately |
+| `-200` `-204` | the callee's name, saved across its arguments | yes |
+| `-208` | inside an argument list | yes (a flag) |
+| `-236` | inside a subscript | yes (a flag) |
+| `-244` | `stptr`'s slot offset | **no** — a later fixed version |
+| `-256` … `-300` | arrays: count, base, loop counters, `d`, argument depth | yes if the name says so |
+| `-14000` | array flags, one byte per slot | yes |
+| `-16000` `-16060` / `-16064` | the symbol table / the name being scanned | yes |
+| `-20000` | literal table | yes |
+| `-30000` `-40000` | output buffer, input buffer | yes |
+
+And the `sub rsp, 320` under all of it: a slot above `rsp` is safe from pushes, a slot below it is
+not. `-100` … `-264` are above; the buffers are below and are safe only because no call chain
+reaches 1 750 frames.

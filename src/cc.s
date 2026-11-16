@@ -52,6 +52,10 @@ mov eax, 0
 mov [rbp+96], eax
 mov [rbp-108], eax      ; no variables declared yet
 mov [rbp-208], eax      ; not inside an argument list
+mov [rbp-236], eax      ; not inside a subscript
+mov eax, 1
+mov [rbp-292], eax      ; a call at depth 0 evaluates its arguments at depth 1
+mov eax, 0
 mov [rbp+112], eax
 mov [rbp+116], eax
 
@@ -253,14 +257,17 @@ jz cardskip
 mov eax, 1
 mov [rbp-208], eax
 cargloop:
-mov eax, 0
-mov [rbp-128], eax     ; an argument is one term, not an expression
-call expr              ; an argument is a whole expression
+mov eax, [rbp-292]     ; the argument's depth: one deeper than the call's
+call exprd
 mov esi, 4194424+f_mov
 call emitstr
 mov eax, [rbp-168]
 call emitarg
-mov esi, 4194424+f_mveax
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, [rbp-292]
+call emitreg
+mov esi, 4194424+f_nl
 call emitstr
 mov eax, [rbp-168]
 inc eax
@@ -440,6 +447,8 @@ mov esi, 4194424+f_semi
 call want
 jmp.l bodloop
 stcall:
+mov eax, 1
+mov [rbp-292], eax      ; a statement call takes its arguments at depth 1
 call callargs
 mov esi, 4194424+f_semi
 call want
@@ -677,104 +686,83 @@ mov esi, 4194424+f_nl
 call emitstr
 ret
 ex3call:
-; a call is allowed only as a whole expression: its arguments would clobber the
-; temporaries of an enclosing one
-mov eax, [rbp-128]
-cmp eax, 0
-jz ex3cok
-jmp.l fail
-ex3cok:
+; A call may appear anywhere in an expression now. Two things make that safe:
+;
+; 1. Its value comes back in rax -- depth 0's register -- so a call at depth d
+;    moves it to reg d afterwards.
+; 2. The *call itself* destroys rax, rcx, rdx and rsi, and reg 0..d-1 hold the
+;    operands of enclosing expressions. They are pushed before the call and
+;    popped after it, in reverse. At depth 0 there is nothing live, so the
+;    usual case emits no push at all.
+;
+; Arguments are evaluated at d+1 so they cannot touch reg 0..d. A call inside
+; an *argument list* is still refused: it would overwrite the argument
+; registers, which is a different resource from the depth registers.
 mov eax, [rbp-208]
 cmp eax, 0
 jz ex3fin
-jmp.l fail              ; a call inside an argument list would clobber the arg registers
+jmp.l fail
 ex3fin:
+mov eax, [rbp-128]
+mov [rbp-296], eax      ; d, kept across the arguments
+mov eax, 0
+mov [rbp-300], eax
+ex3cps:
+mov eax, [rbp-300]
+mov ecx, [rbp-296]
+cmp eax, ecx
+jz ex3cpe
+mov esi, 4194424+f_push
+call emitstr
+mov eax, [rbp-300]
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+mov eax, [rbp-300]
+inc eax
+mov [rbp-300], eax
+jmp ex3cps
+ex3cpe:
+mov eax, [rbp-296]
+inc eax
+cmp eax, 6
+jb ex3cdep
+jmp.l fail              ; arguments one depth deeper would leave the register table
+ex3cdep:
+mov [rbp-292], eax
 call callargs
-ret
-
-ex3addr:
-; `&name`: the address of a variable, 64-bit because an address is
-mov eax, 1
-call bump
-call ident
-call findvar
-call varoff
-mov [rbp-140], eax
-mov esi, 4194424+f_lea1
-call emitstr
-mov eax, [rbp-128]
-call emitreg
-mov esi, 4194424+f_cev
-call emitstr
-mov eax, [rbp-140]
-call emitnum
-mov esi, 4194424+f_le2
-call emitstr
-ret
-
-ex3deref:
-; `*name`: load the pointer, then load through it
-mov eax, 1
-call bump
-call ident
-call findvar
-call varoff
-mov [rbp-140], eax
+mov eax, [rbp-296]
+mov [rbp-128], eax      ; exprd left the arguments' depth behind
+cmp eax, 0
+jz ex3cpop
 mov esi, 4194424+f_mov
 call emitstr
-mov eax, [rbp-128]
+mov eax, [rbp-296]
 call emitreg
-mov esi, 4194424+f_cev
-call emitstr
-mov eax, [rbp-140]
-call emitnum
-mov esi, 4194424+f_le2
-call emitstr
-mov esi, 4194424+f_mov
-call emitstr
-mov eax, [rbp-128]
-call emitreg
-mov esi, 4194424+f_dref1
-call emitstr
-mov eax, [rbp-128]
-call emitreg
-mov esi, 4194424+f_le2
-call emitstr
-ret
-
-stptr:
-; `*name = expr;` -- the value is computed FIRST and the pointer loaded after
-; it, so nothing is parked; the slot offset lives at -244 because expr owns -140
-mov eax, 1
-call bump
-call ident
-call findvar
-call varoff
-mov [rbp-244], eax
-mov esi, 4194424+f_eq
-call want
-call expr
-mov esi, 4194424+f_mov
-call emitstr
-mov eax, 1
-call emitreg
-mov esi, 4194424+f_cev
-call emitstr
-mov eax, [rbp-244]
-call emitnum
-mov esi, 4194424+f_le2
-call emitstr
-mov esi, 4194424+f_lst1
+mov esi, 4194424+f_sep
 call emitstr
 mov esi, 4194424+f_rax
 call emitstr
 mov esi, 4194424+f_nl
 call emitstr
-mov esi, 4194424+f_semi
-call want
-jmp.l bodloop
-
-
+ex3cpop:
+mov eax, [rbp-296]
+mov [rbp-300], eax
+ex3cpl:
+mov eax, [rbp-300]
+cmp eax, 0
+jz ex3cdone
+dec eax
+mov [rbp-300], eax
+mov esi, 4194424+f_pop
+call emitstr
+mov eax, [rbp-300]
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+jmp ex3cpl
+ex3cdone:
+ret
 ex3sub:
 ; `a[i]` -- the base goes into reg d and the index is computed at d+1, so the
 ; base survives: that is what the depth mechanism is for. d is saved in -288
@@ -859,6 +847,89 @@ call want
 mov eax, 0
 mov [rbp-236], eax
 ret
+
+ex3addr:
+; `&name`: the address of a variable, 64-bit because an address is
+mov eax, 1
+call bump
+call ident
+call findvar
+call varoff
+mov [rbp-140], eax
+mov esi, 4194424+f_lea1
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-140]
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+ret
+
+ex3deref:
+; `*name`: load the pointer, then load through it
+mov eax, 1
+call bump
+call ident
+call findvar
+call varoff
+mov [rbp-140], eax
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-140]
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_dref1
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_le2
+call emitstr
+ret
+
+stptr:
+; `*name = expr;` -- the value is computed FIRST and the pointer loaded after
+; it, so nothing is parked. The slot offset lives at -244 because expr owns
+; -140 (the shared term scratch) and `want`/`skipws` clobber rax.
+mov eax, 1
+call bump
+call ident
+call findvar
+call varoff
+mov [rbp-244], eax
+mov esi, 4194424+f_eq
+call want
+call expr
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, 1
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-244]
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov esi, 4194424+f_lst1
+call emitstr
+mov esi, 4194424+f_rax
+call emitstr
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_semi
+call want
+jmp.l bodloop
 
 ex3num:
 call numval
@@ -2210,4 +2281,10 @@ db "]"
 db 0
 f_isav:
 db "mov [rbp-284], "
+db 0
+f_push:
+db "push "
+db 0
+f_pop:
+db "pop "
 db 0

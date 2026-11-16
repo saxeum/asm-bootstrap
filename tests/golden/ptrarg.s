@@ -22,8 +22,8 @@ mov rcx, 64
 sub rsp, rcx
 mov rax, 41
 mov [rbp-8], rax
-lea rax, [rbp-8]
-mov rdi, rax
+lea rcx, [rbp-8]
+mov rdi, rcx
 call bump
 mov rax, [rbp-8]
 mov rdi, rax

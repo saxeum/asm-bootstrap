@@ -1338,3 +1338,17 @@ Next, in order:
    (`cc` loads a register instead, which is why its code is longer than it needs to be).
 4. `char` and byte strings, then `.data` for a string table — at which point a C version of `cc` is
    within reach.
+
+## Compiler stage 9: a call inside a larger expression
+
+`fact(5)` exits 120 and `sum(4)` exits 10, gated. Recursion is ordinary now, not tail-shaped: the
+callee's result comes back in `rax` and the live depth registers are pushed and popped around the
+call, because a call destroys `rax`, `rcx`, `rdx` and `rsi` (`docs/cc.md`).
+
+That closes the compiler work that began with "an argument must be one term". What remains toward a
+self-compiling `cc` is no longer about calls: `char` and byte strings, `.data` for a mutable table of
+names, `/` (blocked by the dialect having no `div r32`), and the seven-character name limit.
+
+The name limit is the one to watch: a compiler's symbol table holds identifiers longer than seven
+characters, and `cc` refuses them everywhere today — in its own source as much as in what it
+compiles. That is a change to `asm1` (labels and names), which means a bootstrap step.

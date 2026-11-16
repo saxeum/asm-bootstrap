@@ -16,10 +16,10 @@ mov rcx, 64
 sub rsp, rcx
 mov rax, 21
 mov [rbp-8], rax
-mov rax, [rbp-8]
-mov rcx, 2
-imul rax, rcx
-mov rdi, rax
+mov rcx, [rbp-8]
+mov rdx, 2
+imul rcx, rdx
+mov rdi, rcx
 call f
 mov rdi, rax
 mov eax, 60

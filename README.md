@@ -22,7 +22,7 @@ included; `docs/continue-here.md` is where a session starts.
 | self-hosted | `asm1` | 7 731 | `ac80d9f9094d7051` | `seed/asm1` from `src/asm1.s` |
 | seed | `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted previous stage |
 | decoder | `dis` | 1 343 | `2d2eb451d7c7a9a9` | `asm1` from `src/dis.s` |
-| compiler | `cc` | 7 179 | `fdef1b6638788994` | `asm1` from `src/cc.s` |
+| compiler | `cc` | 7 471 | `33727e32d6e6e8c9` | `asm1` from `src/cc.s` |
 
 Past the bootstrap. `asm1` is self-hosting, reaches its fixpoint, and is demonstrably better than
 what built it — 6 byte-level cases where `asm0a` answers wrongly and 30 syntax pairs it cannot parse.
@@ -89,6 +89,7 @@ anything that tries to run it directly.
 | 6 | `return` anywhere, arguments as `+`/`-` terms, recursion | `f(10,0)` with an accumulator exits 10 |
 | 7 | 64-bit values, then `&x`, `*p`, `*p = v` — addresses, with no type system yet | `*p = 33` after `int y = *p` exits 40; a callee writing through `&x` exits 42 |
 | 8 | `int a[N];`, `a[i]`, `a[i] = v` — the index may be any expression | `a[0] + a[i]` with `i=2` exits 42; `f(a[i])` exits 42 |
+| 9 | a call inside a larger expression — the live registers are pushed around it | `fact(5)` exits 120; `sum(4)` exits 10 |
 
 The subset, exactly: `int` declarations, assignment, `while`, `if`/`else`, `return`, six comparisons,
 `+ - *` with precedence, `&`/`*` on a name, function definitions with up to four arguments, calls, and
@@ -114,7 +115,7 @@ Three kinds of check, because each sees something the others cannot:
 - **oracles** — three hand-written dialect programs that do the same job, compared by *output*
   ("two sources, one behaviour"). The only gate that catches plausible-but-wrong codegen.
 
-### The one open defect, now explained
+### The defect that was explained
 
 `cc` used to refuse a nested `expr`, because nesting it corrupted the symbol-name buffer and the
 writer of those bytes could not be found. The writer is now known: **`cc` never reserved stack.** Its
@@ -126,11 +127,23 @@ in place the parse that had corrupted the buffer produces byte-identical output.
 So the guard is gone, and so is `argexpr`, the smaller parser written to avoid nesting: an argument is
 now a whole expression, which is why `f(x * 2)` works (`docs/cc.md`, `docs/WAVES.md`).
 
-What remains refused is narrower and deliberate: **a call may still appear only as a whole
-expression**, never inside a larger one — `n * f(n-1)` is refused, because a callee returns its value
-in `rax` and that would overwrite the left operand of an enclosing sum or product. That is the next
-step, not a mystery: the fix is `mov <reg d>, rax` after the call and evaluating its arguments one
-depth deeper.
+What is still refused is narrower still: a call inside an *argument list* (`f(g(1))`), because it
+would overwrite the argument registers — a different resource from the depth registers, and the one
+place where the fix is not a push.
+
+## What stands between here and a self-compiling `cc`
+
+Nothing about calls. `cc` has functions, locals, recursion, arrays with computed indices, pointers and
+a 64-bit value model. What it does not have is what a *compiler* needs to hold a symbol table:
+
+- **`char` and byte strings** — a name is bytes, and today a string exists only as a `write` literal.
+- **`.data`** — a mutable global table, and the last assembler feature with no user at all.
+- **`/`** — refused because the dialect has no `div r32` (`div bl` exists). An *assembler* gap.
+- **names longer than seven characters** — the limit is `asm1`'s, and `cc` refuses them everywhere,
+  its own source included. Raising it is a bootstrap step in `asm1`, not a compiler change.
+
+That last one is the awkward one, and the reason the ordering matters: "identifier" is longer than
+seven characters.
 
 ## The goal
 
@@ -257,8 +270,8 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1` |
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div` (8-bit form: `div bl`, quotient in `al`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `add`/`sub` with an immediate, `imul r,r,imm`, `div r32` (only the 8-bit form), `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 7 characters |
-| compiler | `cc`, 7 179 bytes, built by `asm1` from `src/cc.s` (2 213 lines): C subset → dialect **text** → `asm1` → executable. 14 text goldens, 3 output oracles, 29 refusals (`make test-cc`, `docs/cc.md`) |
-| `make check` | 42 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 17 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| compiler | `cc`, 7 471 bytes, built by `asm1` from `src/cc.s` (2 290 lines): C subset → dialect **text** → `asm1` → executable. 16 text goldens, 3 output oracles, 29 refusals (`make test-cc`, `docs/cc.md`) |
+| `make check` | 44 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 19 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.

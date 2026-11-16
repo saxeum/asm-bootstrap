@@ -401,6 +401,24 @@ test-cc: cc asm1
 	  if $$tmp/am; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 42 ]; then \
 	    printf '  cc    an argument with a product: f(x * 2) exits 42\n'; \
+	if $(CC) < tests/golden/fact.c > $$tmp/fc.s 2>/dev/null && cmp -s $$tmp/fc.s tests/golden/fact.s; then :; \
+	else echo "  fact.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/fact.s > $$tmp/fc 2>/dev/null; then \
+	  chmod +x $$tmp/fc; \
+	  if $$tmp/fc; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 120 ]; then \
+	    printf '  cc    non-tail recursion: fact(5) exits 120 -- the call is inside a product\n'; \
+	  else echo "  fact exited $$g1, wanted 120 -- the live register was not saved across the call"; fail=1; fi; \
+	else echo "  asm1 refuses fact.s"; fail=1; fi; \
+	if $(CC) < tests/golden/ntsum.c > $$tmp/ns.s 2>/dev/null && cmp -s $$tmp/ns.s tests/golden/ntsum.s; then :; \
+	else echo "  ntsum.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/ntsum.s > $$tmp/ns 2>/dev/null; then \
+	  chmod +x $$tmp/ns; \
+	  if $$tmp/ns; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 10 ]; then \
+	    printf '  cc    and inside a sum: sum(4) exits 10\n'; \
+	  else echo "  ntsum exited $$g1, wanted 10"; fail=1; fi; \
+	else echo "  asm1 refuses ntsum.s"; fail=1; fi; \
 	  else echo "  argmul exited $$g1, wanted 42"; fail=1; fi; \
 	else echo "  asm1 refuses argmul.s"; fail=1; fi; \
 	    else echo "  f(x) exited $$g1, wanted 42"; fail=1; fi; \

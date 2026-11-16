@@ -2445,3 +2445,22 @@ That is a known piece of work, not a mystery — which is the difference that ma
 
 `cc` 7 403 → 7 179 bytes: a hundred lines deleted, less than 250 bytes saved, which is a fair
 description of a workaround.
+
+## A call inside an expression: the push is the whole feature
+
+`fact(5) = 120` is three lines of C and one insight: a call destroys `rax`, and `rax` is where the
+enclosing expression's left operand lives. So the live registers are pushed before the call and
+popped after it — at depth 0 nothing is live, which is why every existing gate still emitted the same
+shape at that depth.
+
+Three defects on the way, all caught by reading the emitted text: a lost `inc` in the argument loop
+(five arguments became acceptable — a *refusal* regressed, invisible to any positive test), `exprd`
+leaving the depth behind (`a[0] + a[i]` emitted `add rdx, rsi`), and `stptr` reading `[rbp-140]` after
+`expr` had clobbered it (`mov rcx, [rbp-33]`).
+
+The pattern is worth naming, because it has now happened four times: **a fixed slot is only safe
+across a nested parse if nothing else writes it.** -140, -268, -128, and -244 were each shared by
+accident; the ones that survived did so because their user happened to run before the nested parse.
+A slot-allocation comment at the top of the frame state would have prevented all four.
+
+`cc` 7 179 → 7 471 bytes. Gates 17 → 19. Two new goldens (`fact`, `ntsum`), both exact values.
