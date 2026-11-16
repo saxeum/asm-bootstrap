@@ -1215,8 +1215,7 @@ defarr:
 mov ecx, eax
 mov edx, [rbp-304]
 imul ecx, edx
-mov edx, 7              ; `add r32, imm` does not exist in this dialect
-add ecx, edx
+add ecx, 7              ; the dialect has this now, so one instruction replaces two
 shr ecx, 3
 mov eax, ecx
 mov [rbp-256], eax

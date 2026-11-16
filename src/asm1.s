@@ -272,9 +272,7 @@ cmp dl, 104
 jz.l d_sh
 cmp dl, 97
 jz.l d_sa
-mov eax, 41
-mov [rbp+48], eax
-jmp.l prr
+jmp.l dsubreg
 d_sh:
 movzx edx, byte [rbx+2]
 cmp dl, 108
@@ -366,10 +364,59 @@ cmp dl, 32
 jz.l padd8
 daddreg:
 mov eax, 0
-mov [rbp+44], eax
+mov [rbp+44], eax       ; 01 /r: the register form
 mov eax, 1
 mov [rbp+48], eax
+mov eax, 0
+jmp immpeek
+dsubreg:
+mov eax, 41             ; 29 /r: the register form
+mov [rbp+48], eax
+mov eax, 40             ; 5*8: pc32 expects the /digit already shifted
+jmp immpeek
+
+immpeek:
+; eax is the /digit of the imm32 form. If the byte after the comma is a digit,
+; emit `81 /digit id` and finish the line; otherwise jump to prr, the register
+; form, which is unchanged. A leading `-` is not a digit, so `add eax, -1` still
+; refuses rather than assembling something else.
+;
+; The width comes from pc32/reg32, which refuses 8-bit registers, so `add al, 5`
+; keeps taking the padd8 path and `sub al, 5` keeps refusing.
+mov [rbp-76], eax
+lea rdx, [rbx]
+ipsk:
+movzx eax, byte [rdx]
+cmp al, 44
+jz ipcom
+cmp al, 0
+jz.l prr
+cmp al, 10
+jz.l prr
+lea rdx, [rdx+1]
+jmp ipsk
+ipcom:
+lea rdx, [rdx+1]
+ipsp:
+movzx eax, byte [rdx]
+cmp al, 32
+jnz iptok
+lea rdx, [rdx+1]
+jmp ipsp
+iptok:
+cmp al, 48
+jb.l prr
+cmp al, 58
+jb ipdig               ; no `jae` in this dialect: test the other way round
 jmp.l prr
+ipdig:
+lea rbx, [rbx+4]       ; pc32 expects rbx at the first operand
+mov eax, 129
+mov [rbp+44], eax
+mov eax, [rbp-76]
+mov [rbp+48], eax
+jmp.l pc32
+
 padd8:
 mov eax, 128
 mov [rbp+44], eax

@@ -259,20 +259,20 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | | |
 |---|---|
 | bootstrap | `asm0a`, 3 745 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD`, sha256 in `docs/SHAS` — frozen history, and **not** a correctness reference: it assembles `and` as `add` |
-| self-hosted | `asm1`, 7 731 bytes, sha256 `ac80d9f9094d7051…`, built by `seed/asm1` from `src/asm1.s` (2 150 lines, 31 236 bytes) |
-| seed | `seed/asm1`, 7 731 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
+| self-hosted | `asm1`, 7 838 bytes, sha256 `23f9b8cb02eb5476…`, built by `seed/asm1` from `src/asm1.s` (2 150 lines, 31 236 bytes) |
+| seed | `seed/asm1`, 7 838 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
 | builder | `asm1` is built by `seed/asm1`, never by itself. Since the source needs more than 128 labels, `asm0a` can no longer parse it: `make bootstrap-check` reports NOT APPLICABLE |
-| fixpoint | `asm1(asm1.s) == asm1`, 7 731 bytes, one sha256, idempotent |
+| fixpoint | `asm1(asm1.s) == asm1`, 7 838 bytes, one sha256, idempotent |
 | fixtures | 18 in `ref/`, all byte-identical to hand-emitted references and behaviourally correct |
 | rejections | 9 sources refused by both assemblers with no output, and 8 exact messages: line number *and* reason |
-| capability | 30 pairs where `asm1` accepts syntax `asm0a` cannot parse; both spellings must agree byte for byte |
-| coverage | 94 claimed forms, each required to appear in a test input (`make test-coverage`) — the gate that says which paths nothing has ever executed |
+| capability | 33 pairs where `asm1` accepts syntax `asm0a` cannot parse; both spellings must agree byte for byte |
+| coverage | 97 claimed forms, each required to appear in a test input (`make test-coverage`) — the gate that says which paths nothing has ever executed |
 | superior | six cases where `asm1` is right and `asm0a` is not (`and`-as-`add`, `[rbp]` disp 0, a negative disp, 64-bit vs 32-bit width, `r8`–`r15`, disp32), each against a hand-computed body; plus a 99 KB source, a chosen `entry` point and `r8d` arithmetic, which must RUN |
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1` |
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div` (8-bit form: `div bl`, quotient in `al`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
-| not in the language | `add`/`sub` with an immediate, `imul r,r,imm`, `div r32` (only the 8-bit form), `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 7 characters |
+| not in the language | `imul r,r,imm`, `div r32` (only the 8-bit form), `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 7 characters |
 | compiler | `cc`, 7 765 bytes, built by `asm1` from `src/cc.s` (2 369 lines): C subset → dialect **text** → `asm1` → executable. 18 text goldens, 3 output oracles, 29 refusals (`make test-cc`, `docs/cc.md`) |
-| `make check` | 46 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 21 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| `make check` | 46 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 33/33 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 21 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.

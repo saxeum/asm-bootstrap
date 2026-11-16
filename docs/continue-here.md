@@ -15,16 +15,16 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | | bytes | sha256 (16) | notes |
 |---|---|---|---|
 | `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
-| `asm1` | 7 731 | `ac80d9f9094d7051` | built by `seed/asm1` from `src/asm1.s` |
+| `asm1` | 7 838 | `23f9b8cb02eb5476` | built by `seed/asm1` from `src/asm1.s` |
 | `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted stage; identical to `asm1` |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
 | `src/asm1.s` | 31 236 | — | 2 150 lines, 199 labels (limit 256), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
 | `cc` | 7 765 | `ad243b31bd2ac10c` | built by `asm1` from `src/cc.s` (2 369 lines) — C to dialect TEXT |
 
-Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **30 capability
+Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **33 capability
 pairs** · **6 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
-**94 coverage forms** · **cc: 21 checks, 31 refusals** · 290 branch pins · 36 provenance records.
+**97 coverage forms** · **cc: 21 checks, 31 refusals** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 
@@ -34,7 +34,7 @@ make clean && make && make check
 
 `make check` must print, in order: **forbidden tools: none invoked** · **coverage 88/88 forms
 exercised** · fixpoint holds · bootstrap NOT APPLICABLE · 9/9 rejections · 8/8 exact messages ·
-30/30 capability pairs · 5/5 superiority cases (plus the 99 KB, `entry` and r8d cases) · 38/38 decoder
+33/33 capability pairs · 5/5 superiority cases (plus the 99 KB, `entry` and r8d cases) · 38/38 decoder
 cases · cc 6 gates · 36 provenance records · SHAS match · `asm1.sha` match · and a real **`branch pins: 290/290`**
 line naming both the subject's sha and the decoder's. If any line is missing or red, stop and fix
 that first.

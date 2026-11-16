@@ -1368,3 +1368,17 @@ What a self-compiling `cc` still lacks, in the order that makes sense:
    characters, which is what `identifier` is. Widening both is a bootstrap step in `asm1`.
 3. **`.data`** for a mutable table outside the frame, then string literals that live in memory rather
    than being emitted as `db` and written straight out.
+
+## Assembler: `add`/`sub r32, imm`
+
+Both exist now (`81 /0 id` and `81 /5 id`), with capability pairs whose bytes are hand-computed, and
+the coverage gate extended to 97 forms. `cc` immediately lost an instruction.
+
+Next on the assembler side, in order of what `cc` needs:
+
+1. **Label and name length.** `asm1` labels are ≤ 7 characters and 256 of them; `cc` is at 252. `cc`'s
+   own identifiers are ≤ 7 characters from an 8-byte name field. A C compiler's symbol table is full of
+   `identifier`, `keyword`, `emitstr`.
+2. `.data` — a second read-write `PT_LOAD`, `filesz`/`memsz` from label differences, and a string table
+   that lives in memory instead of being written straight out.
+3. `div r32` (`F7 /6`), so that `/` stops being a refusal.

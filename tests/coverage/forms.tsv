@@ -36,6 +36,9 @@ lea rax, [rsp+8]
 
 # --- add / sub / cmp -------------------------------------------------------
 add eax, ecx
+add eax, 5
+sub eax, 5
+add rax, 1
 add al, 1
 sub rax, rcx
 cmp eax, 1

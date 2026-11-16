@@ -2485,3 +2485,30 @@ Label budget: 252 of 256. Three unused fragments were deleted to make room, and 
 that the limit is now the binding constraint on `cc`'s growth, not imagination.
 
 `cc` 7 471 → 7 765 bytes. Gates 19 → 21, refusals 29 → 31.
+
+## `add r32, imm` — the gap that had cost three workarounds
+
+`add ecx, 7` now assembles, as `81 /0 id`; so does `sub ecx, 7` (`81 /5 id`) and their 64-bit forms.
+The machinery already existed — `pc32` emits `op r/m32, imm32` with the opcode in `[rbp+44]` and the
+`/digit` in `[rbp+48]`, and `and`/`or`/`xor`/`test` reach it. What was missing was the *decision*: `add`
+looked at the byte where a three-character register ends and took the register path when it was not a
+comma, so `add ecx, 7` walked into `prr` and refused the `7`.
+
+The fix is a lookahead that finds the comma and asks whether the next token is a digit (`immpeek`), used
+by both `add` and `sub`. A leading `-` is not a digit, so `add eax, -1` still refuses loudly.
+
+Two mechanical slips, and both are worth naming because they show the limits of editing a 2 000-line
+assembler by pattern:
+
+- `[rbp+48]` does **not** hold the `/digit` — it holds the digit *already shifted by 3*, because `and`
+  passes 32 for `/4`. `sub eax, 5` came out as `81 c5` (digit in the r/m field) until that was read.
+- A `sed` that added `lea rbx, [rbx+4]` before `jmp.l pc32` hit **three** sites, not one: `d_c32` and
+  `d_o` already had their own skip, so `cmp ecx, 2` broke — caught immediately by `src/dis.s` failing
+  to assemble, which is the coverage gate doing its job by accident.
+
+Evidence: three capability pairs with hand-computed `db` references (`add eax,5` → `81 c0 05 00 00 00`,
+`sub eax,5` → `81 e8 …`, `add rax,1` → `48 81 c0 01 00 00 00`), the coverage gate extended with the
+three forms (97 now, and it failed first on `add rax, 1`, which is exactly what it is for), and `cc`'s
+allocation loop lost an instruction: `mov edx, 7; add ecx, edx` became `add ecx, 7`.
+
+`asm1` 7 731 → 7 838 bytes, promoted, `docs/SHAS` re-pinned by hand, toolchain and provenance recorded.
