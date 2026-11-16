@@ -10,6 +10,8 @@ output for the same source is byte-identical to one of these.
 | `count10` | 188 B | `e61a23c9…94ec5bd9a` |
 | `fib`     | 334 B | `f61cea2c…2e10098` |
 | `jmp`     | 139 B | `f1efca3a…b0fd1de` |  wave 2b: a forward jump, exits 7 not 99
+| `loop`    | 140 B | `5ca623d6…` |  wave 2c: inc/dec/jnz, exits 10 (iteration count)
+| `jz`      | 146 B | `8cb07cc9…` |  wave 2c: dec/jz, exits 5 not 99
 
 Rules:
 

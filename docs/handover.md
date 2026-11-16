@@ -44,11 +44,11 @@ sufficient on its own.
 - **"asm0a produced it" as the only evidence for `asm0b`.** That is the shared-authorship hole
   from `docs/oracles.md`: the same hands wrote the encoder and chose the source.
 
-## Verdict today: BLOCKED
+## Verdict today: NOT YET (2c green, 2d outstanding)
 
 | # | Condition | State |
 |---|---|---|
-| 1 | No red oracles | **GREEN**: 1a, 1b, 2a, 2b-1 and 2b-2 all pass. Labels, symbol table, two-pass flip and `jmp rel8` with a verified ±127 range check. |
+| 1 | No red oracles | **GREEN**: 1a, 1b, 2a, 2b-1, 2b-2 and 2c all pass — labels, two-pass flip, `jmp`/`jz`/`jnz` with range checks, `inc`/`dec`, and five fixtures byte-identical plus behaviourally correct. |
 | 2 | Dialect closure | Unknown — `asm0b.s` does not exist yet. Foreseeable needs: `entry` directive (not implemented), more than 32 labels, names > 7 chars. |
 | 3 | Per-form verification | 4 forms verified end to end (`mov r32,imm`, `xor r32,r32`, `syscall`, `db`). 25 more are documented in `docs/encodings.md` but not exercised by any fixture. |
 | 4 | Loud failure | Partial. Unknown mnemonic and unknown register exit 1. But `mov eax,` with no operand assembles as `mov eax, 0` and exits 0, and the `83 /7` immediate range is unenforced. |
@@ -184,7 +184,7 @@ displacements:
 |---|---|---|
 | **2b-1** | label definitions, label table, pass 1 / pass 2 flip. **No jumps.** | `exit42` and `hello_num` still byte-identical; a program with labels but no jumps assembles identically to the same program without them |
 | ~~**2b-2**~~ | ~~`jmp rel8` with the ±127 check~~ | **DONE** — `src/jmp.s` byte-identical to `ref/jmp`, binary exits 7, +120 accepted, +132 refused |
-| **2c** | `jz/jnz/jb/ja`, `inc`/`dec r32`, `cmp r32,imm8`, hex literals | a loop fixture whose exit status is the iteration count |
+| ~~**2c**~~ | `inc`/`dec r32`, `jz`, `jnz` | **DONE** — `src/loop.s` → `ref/loop` (exits 10), `src/jz.s` → `ref/jz` (exits 5). `jb`/`ja`, `cmp r32,imm8` and hex literals deferred to 2d, where `asm0a.s` has actual users for them |
 | **2d** | the remaining forms `asm0a.s` will need: `movzx`, `div`, memory operands with SIB/disp8, `lea`, `sub r64`, `add r8,imm8`, `test`, `imul`, `entry` | `src/count10.s` → `ref/count10` (`e61a23c9…`), then `asm0a.s` self-hosts |
 
 And the process fix that matters more than the split: after emitting each block, **decode every

@@ -267,3 +267,50 @@ All 21 branch targets in the new blocks were decoded with `objdump` and compared
 intended label offsets before running anything: 21/21. Combined with 2b-1's 15/15, that is 36
 consecutive hand-laid branches verified correct at emission, against six defects in the earlier
 single-block attempt. The decode-before-test step is now the standard, not an improvisation.
+
+## Wave 2c — PASS: `inc`/`dec r32`, `jz`, `jnz`
+
+Artifact: `asm0a`, 1553 bytes, sha `a75e63c9f27b189b7e801d7c7597b777eca9d1ca5fd37ba031039c985fbcc9ea`, entry `0x400110`, filesz `0x611`.
+
+New: `jdisp` (dispatch on the *second* character of a `j…` mnemonic: `m`→jmp, `n`→jnz, `z`→jz),
+per-mnemonic blocks that load the opcode into `r11b` and skip the right number of characters,
+`regop` (shared `inc`/`dec` emitter: `FF` plus `modrm = 0xC0 | (sel<<3) | reg`), and `ddisp`
+(distinguishes `db` from `dec` — both start with `d`).
+
+Three existing sites retargeted, plus two in-place emits changed:
+
+| site | change |
+|---|---|
+| main dispatch `je do_db` | → `ddisp` |
+| `disp2` `je do_jmp` | → `jdisp` |
+| `disp2` `jmp fail` | → `disp3` (handles `i` → `inc`) |
+| `found` and `notfound` | `41 C6 07 EB` (emit `0xEB`) → `45 88 1F 90` (emit `r11b`, nop) |
+
+Making the old `do_jmp` path emit `r11b` is what lets one handler serve `jmp`, `jz` and `jnz`
+without duplicating the name parse, the table walk or the range check.
+
+### Gate
+
+Two hand-emitted references, both behaviourally discriminating:
+
+```
+snapshot  asm0a exit  byte-identical  behaviour
+loop      0           yes             exit 10   (iteration count; 0 would mean the loop never ran)
+jz        0           yes             exit 5    (99 would mean the conditional was ignored)
+exit42, hello_num, jmp — all byte-identical (regressions)
+```
+
+`ref/loop` and `ref/jz` were themselves run before use: 140 and 146 bytes, exiting 10 and 5.
+The first attempt to build them emitted 161 and 167 bytes and segfaulted — my helper
+double-emitted the ELF header. Caught because the references are executed, not just hashed.
+
+### Defects found this wave, both by decoding
+
+1. **`do_dec`'s `jmp regop` had rel `+5`** where `regop` immediately follows (rel must be 0).
+2. **Two dispatch patches written one byte early**: `0F 84 rel32` has a *two-byte* opcode, so
+   the displacement starts at opcode+2. Writing at opcode+1 clobbered the `84`, turning
+   `je ddisp` into `(bad)` — visible immediately because the decoded target was nonsense.
+
+Both were caught by the decode-and-compare step, not by re-reading arithmetic. That step is
+now applied to *patches* as well as new blocks: three patched sites plus 21 new branches were
+verified against intended targets before any test ran.
