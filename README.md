@@ -30,7 +30,7 @@ To prove the output is the *verified* object and not merely something that runs:
 
 | | |
 |---|---|
-| artifact | `asm0a`, 3662 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
+| artifact | `asm0a`, 3727 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
 | identity | sha256 in `docs/SHAS` |
 | fixtures | 16, all byte-identical to hand-emitted references and behaviourally correct |
 | branches | 269 sites pinned in `docs/branches.tsv`, all verified by decoding |

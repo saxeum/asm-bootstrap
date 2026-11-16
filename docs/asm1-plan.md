@@ -152,10 +152,10 @@ About 600–800 instructions. Build it in the order that keeps it runnable at ev
    identical to `sed 's/;.*//'` and 16/16 fixtures round-trip. See `docs/WAVES.md`. Blank lines are
    *kept*, not dropped: dropping them needs a "line has content" flag, and a flag cannot live in
    `rcx` across a syscall. Keeping them costs nothing — the parser ignores them.
-3. **emit one hard-coded instruction per matched mnemonic** — written (`src/asm1.s`, 251 lines) but
-   **blocked on `call`/`ret`**, which the dialect does not have. Two routes with their patch plans
-   are in `docs/WAVES.md`: add `call`/`ret` to `asm0a` (preferred, reuses `jmp.l`'s label
-   resolution), or buffer the output so no subroutine is needed.: recognise `syscall`, `mov r32,imm`,
+3. ~~**emit one hard-coded instruction per matched mnemonic**~~ — **done for a subset**: `asm1`
+   parses `syscall`, `mov r32,imm32`, `db`, emits a correct 120-byte ELF header after a counting
+   pass, and matches `asm0a` byte for byte on those forms (`src/asm1.s`, 1179 bytes). `call`/`ret`
+   and `add r32,r32` landed in `asm0a` to get here.: recognise `syscall`, `mov r32,imm`,
    `db` and emit them. Testable: assemble a 3-line source and compare with `asm0a`'s output.
 4. **labels + pass 2**: assemble something with a forward jump.
 5. **the rest of the mnemonic set**, one at a time, each verified against `asm0a` on the same

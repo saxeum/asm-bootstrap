@@ -1306,3 +1306,62 @@ Route B stays on the table if Route A's dispatch chain turns out to be tighter t
 
 Status: **not landed.** `src/asm1.s` is committed as written, with this note, so the next session
 starts from the real blocker instead of rediscovering it.
+
+## Wave 2d-15 — PASS: `call rel32` and `ret`; `asm1` emits a correct ELF
+
+Artifact: `asm0a`, 3727 bytes, sha `1dbec5242d596fb01402f9bd87f78475665d38c797f45621527bbbd170795ea1`. `src/asm1.s` assembles to 1179 bytes.
+
+### `call` / `ret`
+
+```
+call foo   -> E8, target resolved by the same routine jmp.l uses
+ret        -> C3
+```
+
+The patch plan in the previous entry needed one addition: the long-jump path hardcodes `E9` at
+**two** places, not one — `0xd42` (pass-1 placeholder) and `0xd8d` (pass-2 write). Both now emit
+`r11b`, and `jmp.l` sets `0x3e9` while `call` sets `0x3e8`, so the opcode comes from the same word
+that already selects long-vs-short and jmp-vs-jcc. `ret` hangs off the failure tail at `0x882`.
+
+Gate: `src/callret.s` -> `ref/callret` (153 bytes, rels computed by hand *before* running anything:
+`jmp.l main` = `11`, `call foo` = `-16`) byte-identical, exits 7. Corpus 18/18, 288 pins.
+
+### `asm1` step 3 — a working assembler for a subset
+
+```
+mov eax, 60 / mov edi, 7 / syscall   -> identical to asm0a (132 bytes), runs, exits 7
+db 65, 66, 10 / db 1,2,3,255         -> identical
+mov ecx, 12345                       -> identical
+trailing ';' comment                 -> identical
+add eax, ecx / jmp x / movzx [...]   -> exit 1, ZERO bytes emitted
+```
+
+That last line matters: pass 0 validates the whole source before the header is written, so an
+unparsed mnemonic produces no partial output.
+
+**This is not yet self-hosting.** `asm1` parses `syscall`, `mov r32,imm32` and `db` only, and its own
+source uses `movzx`, `add`, `cmp`, `lea`, `jmp`, `call`, `ret`, `xor`, `inc`, `dec`, labels and
+memory operands. Fixpoint needs those implemented in `asm1` itself — that is step 5.
+
+### Seven defects, all in `asm1.s`
+
+1. **`[rsp]` inside a called routine is the return address.** `call` pushes at `rsp` and decrements
+   it, so `emital`'s first byte write overwrote its own return address and the program segfaulted
+   after emitting one byte. Fixed by taking `lea rbp,[rsp]` once and hanging every scratch slot off
+   `rbp` (`[rbp+8]` emit scratch, `+16` flag, `+20` count, `+24` filesz, `+28` n, `+32` reg code,
+   `+36` number, `+40` loop counter, `+56` input buffer).
+2. **The pass flag was still 0 when the header was emitted**, so the header was counted, not written:
+   output was the 12-byte body alone.
+3. **The NUL-termination loop left `rbx` at the end of the buffer**, so pass 0 called `parse` on the
+   NUL and counted nothing: `filesz` came out as 120. Pass 2 was unaffected because it re-sets `rbx`.
+4. **`emital` clobbers `eax`.** `mov eax,0` followed by four `call emital` emitted `00 01 01 01` —
+   only the first zero byte was zero, the rest emitted the previous call's leftover flag. The tell
+   was a field that read `00 01 01 01` instead of `00 00 00 00`.
+5. **`memsz` was never emitted**, only `filesz`, so the loader would size the segment wrong.
+6. **`mov rbx, 4194426` is not a form** — the dialect's immediate move is `mov r32,imm32`, so the
+   address needs `mov ebx,...` and relies on zero-extension.
+7. **38 branches were out of `rel8` range** once the program passed ~1 KiB. Expected, and why the
+   `.l` suffix exists.
+
+Two of these are the same lesson in different clothes: *a register is not preserved across a call you
+wrote yourself* (4), and *the stack pointer is not a frame base* (1).
