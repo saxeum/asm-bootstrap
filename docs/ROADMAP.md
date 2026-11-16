@@ -1286,21 +1286,20 @@ the name buffer held `1` where it should have held `x` — not by reading.
 The fix is a smaller design rather than a workaround: **an argument is one term**, so `callargs`
 calls `ex3`. Gated: `f(x)` with `x = 41` exits 42.
 
-Next, in order: allow an expression as an argument (which the nesting bug blocks, so it has to be
-fixed properly), then recursion (`f(n - 1)`), then `if` inside a function with a local that survives
-the call.
+Next, in order: allow an expression as an argument (blocked then by a nesting bug that turned out to
+be a missing stack reservation — see `docs/cc.md`), then recursion (`f(n - 1)`), then `if` inside a
+function with a local that survives the call. All three landed.
 
 ## Compiler stage 6: recursion
 
-`return` anywhere a statement is, arguments as terms joined by `+`/`-`, and therefore a recursive
-function: `f(n, acc)` counting ten frames exits 10, gated. The argument parser is a small dedicated
-one (`argexpr`), not the general expression parser, because nesting the general one corrupts the
-symbol-name buffer — a bug whose symptom is understood and whose mechanism is not, recorded in
-`docs/WAVES.md`.
+`return` anywhere a statement is, and therefore a recursive function: `f(n, acc)` counting ten frames
+exits 10, gated. Arguments were a small dedicated parser then (`argexpr`) because nesting the general
+one corrupted the symbol-name buffer — a bug whose mechanism stayed unknown for three waves. It was
+that `cc` never reserved stack (`docs/cc.md`), and both the workaround and the guard that replaced it
+are deleted: an argument is a whole expression now, so `f(x * 2)` works and exits 42, gated.
 
-What that blocks, and what comes next: **a call inside a larger expression** (`n * f(n - 1)`), which
-needs the nesting bug fixed for real. After that: pointers and arrays, which need `.data` and disp32
-(disp32 exists; `.data` does not), and a `crt`-ish runtime.
+What that leaves blocked: **a call inside a larger expression** (`n * f(n - 1)`), which needs the
+result moved out of `rax` after the call. Pointers and arrays have since landed.
 
 ## Compiler stage 7: 64-bit values and addresses
 
@@ -1331,9 +1330,8 @@ of two waves ago was a return address landing on a flag. Fixed with `mov ecx, 32
 
 Next, in order:
 
-1. **Remove the `expr` nesting guard and delete `argexpr`**, using `expr` for arguments — the premise
-   of the guard is falsified, so keeping it is now a false constraint. Arguments can then be
-   expressions (`f(a * b)`), which today they cannot.
+1. ~~Remove the `expr` nesting guard and delete `argexpr`~~ — done: an argument is a whole
+   expression, `f(x * 2)` works, and both the workaround and the guard are gone.
 2. **A call inside a larger expression** (`n * f(n-1)`): the result comes back in `rax`, so a call at
    depth `d` needs `mov <reg d>, rax` after it, and its arguments must be evaluated at `d+1`.
 3. `div r32` is an *assembler* gap and `/` is refused because of it; `add`/`sub r32,imm` likewise

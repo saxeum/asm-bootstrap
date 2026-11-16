@@ -394,6 +394,15 @@ test-cc: cc asm1
 	    printf '  cc    an element as an argument: f(a[i]) exits 42\n'; \
 	  else echo "  arrayarg exited $$g1, wanted 42"; fail=1; fi; \
 	else echo "  asm1 refuses arrayarg.s"; fail=1; fi; \
+	if $(CC) < tests/golden/argmul.c > $$tmp/am.s 2>/dev/null && cmp -s $$tmp/am.s tests/golden/argmul.s; then :; \
+	else echo "  argmul.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/argmul.s > $$tmp/am 2>/dev/null; then \
+	  chmod +x $$tmp/am; \
+	  if $$tmp/am; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 42 ]; then \
+	    printf '  cc    an argument with a product: f(x * 2) exits 42\n'; \
+	  else echo "  argmul exited $$g1, wanted 42"; fail=1; fi; \
+	else echo "  asm1 refuses argmul.s"; fail=1; fi; \
 	    else echo "  f(x) exited $$g1, wanted 42"; fail=1; fi; \
 	  else echo "  asm1 refuses callvar.s"; fail=1; fi; \
 	else echo "  callvar.c does not compile to its golden"; fail=1; fi; \

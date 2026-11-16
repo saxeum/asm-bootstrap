@@ -20,11 +20,11 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
 | `src/asm1.s` | 31 236 | — | 2 150 lines, 199 labels (limit 256), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
-| `cc` | 7 403 | `e2393805e90c8abd` | built by `asm1` from `src/cc.s` (2 277 lines) — C to dialect TEXT |
+| `cc` | 7 179 | `fdef1b6638788994` | built by `asm1` from `src/cc.s` (2 213 lines) — C to dialect TEXT |
 
 Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **30 capability
 pairs** · **6 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
-**94 coverage forms** · **cc: 15 checks, 29 refusals** · 290 branch pins · 36 provenance records.
+**94 coverage forms** · **cc: 17 checks, 29 refusals** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 
@@ -197,63 +197,58 @@ Then **immediately**: `make` (check exit code and sha changed), fixtures 18/18, 
 | `tools/shape.awk` | how two source lines are decided to reach the same encoder path |
 | `docs/toolchain.tsv`, `docs/provenance.tsv`, `docs/SHAS`, `docs/branches.tsv` | the records |
 
-## Next task: arrays with a computed index
+## Next task: a call inside a larger expression
 
-Pointers landed (`&x`, `*p`, `*p = v`, 64-bit values, two exact gates). The next thing a self-hosting
-`cc` needs is `int a[N];` and `a[i]` where `i` is a variable — a symbol table is parallel arrays, and
-today a name is one of eight slots and there is no array at all.
+Arrays landed. Pointers, arrays and recursion all work; what does not is `n * f(n-1)`, and that is
+the last thing between this subset and ordinary non-tail recursion.
 
-### The design, worked out but not written
+### The design
 
-`a[i]` needs the *base* to survive while the *index* is computed, and the depth mechanism already
-provides exactly that: the register for depth `d` holds the base, depth `d + 1` computes the index.
-
-```
-lea <reg(d)>, [rbp-B]            ; the base
-mov eax, [rbp-128] / inc eax      ; one deeper
-call exprd                       ; the index into reg(d+1)
-add <d+1>, <d+1>  (three times)   ; stride 8
-add <d>, <d+1>
-mov <d>, [<d>]                    ; the value
-```
-
-That needs one new routine, and it is six lines:
+A callee returns its value in `rax`, which is also depth 0's register — so a call anywhere but at
+depth 0 destroys the enclosing term's left operand. Two changes fix it:
 
 ```
-exprd:
-; eax is the caller's depth; an expression at depth d leaves its value there
-mov [rbp-128], eax
-call ex1
+ex3call:
+; allow depth > 0 ...
+call callargs
+mov eax, [rbp-128]
+cmp eax, 0
+jz ex3cdone
+mov esi, 4194424+f_mov
+call emitstr
+call emitreg              ; mov <reg d>, rax
+mov esi, 4194424+f_mveax
+call emitstr              ; f_mveax is ", rax" + newline
+mov esi, 4194424+f_nl
+call emitstr
+ex3cdone:
 ret
 ```
 
-`expr` becomes `mov eax, 0; jmp exprd` and keeps its nesting guard. Nothing else changes: `ex1`/`ex2`
-already restore the depth around each operand, so nesting an expression inside an expression works
-whenever the caller chooses the depth.
+and the arguments must be evaluated one depth deeper than the call, so that they do not clobber
+`reg 0..d`. Today `callargs` hard-codes `mov eax, 0` before `call expr`; it needs an "argument depth"
+slot of its own (say `[rbp-292]`), set by `ex3call` to `d+1`, and `call expr` becomes
+`mov eax, [rbp-292]; call exprd`.
+
+Then `f(n-1) * n` works, and factorial is a gate: `f(5) = 120`.
 
 ### Three traps, each already paid for once
 
-1. **`want` and `skipws` clobber `rax`** — they write `eax`, which zeroes the upper half. A pointer
-   must not be held in `rax` across them; that is why `*p = v` computes the value first and loads the
-   pointer afterwards.
-2. **`[rbp-140]` is shared by every term.** A subscript's own offset must not live there across the
-   index parse. `-244` is `stptr`'s; use another fixed slot, not a shared one.
-3. **A nested subscript re-enters `ex1` from inside `ex3`** — the same structural nesting as the
-   unexplained name-buffer corruption. Refuse `a[b[j]]` with a flag until that bug is understood,
-   rather than shipping the shape that is known to corrupt state.
+1. **`want` and `skipws` clobber `rax`** (they write `eax`, which zeroes the upper half). Anything that
+   must survive them goes in a fixed slot, not a register.
+2. **`[rbp-140]` is shared by every term**, and `exprd` overwrites `[rbp-128]`. A caller that needs its
+   depth after a nested parse must save it — `ex3sub` does, in `-288`.
+3. **The nested-subscript refusal** (`[rbp-236]`) exists because nesting used to corrupt state. The
+   cause was the missing stack reservation, so that refusal is probably unnecessary now; a test that
+   compares `a[b[0]]` against a hand-written dialect program would settle it.
 
-### Symbol table work
+### And the reason any of this matters
 
-`defvar` advances the variable count by one. An array needs N consecutive slots, so it advances by N,
-and `varoff` (which computes `8*(index+1)`) gives the base unchanged. A per-variable "is array" flag
-is needed for one refusal: a bare array name (`x = a;`) must be refused rather than silently reading
-`a[0]`. Eight variables is the budget; arrays share it, and there is no bounds check.
+`cc` is meant to compile itself. A C version of `cc` needs: functions with locals that survive calls
+(have it), recursion (have it, tail-shaped), `while`/`if`/`return` (have it), arrays with computed
+indices (have it), `char` and byte strings (do not), `.data` for mutable tables (do not — and it is
+also the last assembler feature with no user), and `/` (refused because the dialect has no `div r32`;
+`div bl` exists).
 
-### Still open, and *not* the next task
-
-The nested-`expr` corruption stays guarded (`cc: internal: nested expression`): trigger and symptom in
-`docs/cc.md`, mechanism unknown, and a probe must be **appended as a block anchored on content** —
-never spliced by line number.
-
-The longer list — `div`, `char`, `.data`, string literals, a struct-free symbol table — is in
-`docs/ROADMAP.md`.
+Order in `docs/ROADMAP.md`. The shortest useful step is `char` + `.data`, because a symbol table of
+names is a byte array and a name longer than seven characters is refused everywhere today.

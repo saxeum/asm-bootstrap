@@ -18,12 +18,10 @@ ret
 L1e:
 mov rax, [rbp-8]
 mov rcx, 1
-
 sub rax, rcx
 mov rdi, rax
 mov rax, [rbp-16]
 mov rcx, 1
-
 add rax, rcx
 mov rsi, rax
 call f

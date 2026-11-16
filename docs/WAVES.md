@@ -2427,3 +2427,21 @@ Three bugs while building it, all the same class and all found by reading off th
 
 Six refusals added (a bare array name in two positions, a subscript of a non-array, a nested
 subscript, an array too big, a duplicate array name): 29 now. Two gates, both 42. `cc` 7 403 bytes.
+
+## Deleting the workaround
+
+With the cause known, the guard and `argexpr` came out in the same commit: `expr` is
+`mov eax, 0; jmp exprd`, an argument is a whole expression, and `f(x * 2)` — refused for three waves —
+works (gate: exits 42). The `cc: internal: nested expression` message, its fragment and its routine
+are gone.
+
+The 14 goldens were re-pinned, and the only one that differed was `recursion`, by two blank lines
+where `argexpr` used to emit a trailing newline. That is the entire visible trace of a routine that
+existed for three waves to avoid a bug that was a missing `sub rsp`.
+
+Still refused, and deliberately: a call inside a larger expression. `n * f(n-1)` needs the result
+moved out of `rax` to the enclosing term's register, and its arguments evaluated one depth deeper.
+That is a known piece of work, not a mystery — which is the difference that matters.
+
+`cc` 7 403 → 7 179 bytes: a hundred lines deleted, less than 250 bytes saved, which is a fair
+description of a workaround.

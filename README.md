@@ -22,7 +22,7 @@ included; `docs/continue-here.md` is where a session starts.
 | self-hosted | `asm1` | 7 731 | `ac80d9f9094d7051` | `seed/asm1` from `src/asm1.s` |
 | seed | `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted previous stage |
 | decoder | `dis` | 1 343 | `2d2eb451d7c7a9a9` | `asm1` from `src/dis.s` |
-| compiler | `cc` | 7 403 | `e2393805e90c8abd` | `asm1` from `src/cc.s` |
+| compiler | `cc` | 7 179 | `fdef1b6638788994` | `asm1` from `src/cc.s` |
 
 Past the bootstrap. `asm1` is self-hosting, reaches its fixpoint, and is demonstrably better than
 what built it — 6 byte-level cases where `asm0a` answers wrongly and 30 syntax pairs it cannot parse.
@@ -114,17 +114,23 @@ Three kinds of check, because each sees something the others cannot:
 - **oracles** — three hand-written dialect programs that do the same job, compared by *output*
   ("two sources, one behaviour"). The only gate that catches plausible-but-wrong codegen.
 
-### The one open defect
+### The one open defect, now explained
 
-A call may appear only as a whole expression, never inside a larger one. The recursive expression
-parser corrupts the symbol-name buffer when nested — the value `1` appears where a variable's name
-should be — and the writer of those four bytes has not been found. `[rbp−208]` and `[rbp−16064]` do
-not alias, measured both ways, and every write near the name buffer is a name store.
+`cc` used to refuse a nested `expr`, because nesting it corrupted the symbol-name buffer and the
+writer of those bytes could not be found. The writer is now known: **`cc` never reserved stack.** Its
+prologue was `lea rbp, [rsp]` and nothing else, so every `call` pushed a return address into the slots
+where `cc` keeps its state — and `[rbp-208]`, the "inside an argument list" flag, is exactly the
+`1` that appeared where a name should have been. `mov ecx, 320; sub rsp, rcx` fixed it, and with that
+in place the parse that had corrupted the buffer produces byte-identical output.
 
-So a nested `expr` is **refused**, not attempted: `cc: internal: nested expression`. A loud refusal
-beats a silent corruption, and it converts an unexplained mystery into a boundary. It is enforced
-against an unknown mechanism, which is the honest description of what it is. `docs/WAVES.md` records
-the two probes that tried to explain it and were themselves defective.
+So the guard is gone, and so is `argexpr`, the smaller parser written to avoid nesting: an argument is
+now a whole expression, which is why `f(x * 2)` works (`docs/cc.md`, `docs/WAVES.md`).
+
+What remains refused is narrower and deliberate: **a call may still appear only as a whole
+expression**, never inside a larger one — `n * f(n-1)` is refused, because a callee returns its value
+in `rax` and that would overwrite the left operand of an enclosing sum or product. That is the next
+step, not a mystery: the fix is `mov <reg d>, rax` after the call and evaluating its arguments one
+depth deeper.
 
 ## The goal
 
@@ -251,8 +257,8 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1` |
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div` (8-bit form: `div bl`, quotient in `al`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `add`/`sub` with an immediate, `imul r,r,imm`, `div r32` (only the 8-bit form), `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 7 characters |
-| compiler | `cc`, 7 403 bytes, built by `asm1` from `src/cc.s` (2 277 lines): C subset → dialect **text** → `asm1` → executable. 14 text goldens, 3 output oracles, 29 refusals (`make test-cc`, `docs/cc.md`) |
-| `make check` | 41 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 15 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| compiler | `cc`, 7 179 bytes, built by `asm1` from `src/cc.s` (2 213 lines): C subset → dialect **text** → `asm1` → executable. 14 text goldens, 3 output oracles, 29 refusals (`make test-cc`, `docs/cc.md`) |
+| `make check` | 42 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 17 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.

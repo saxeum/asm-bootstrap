@@ -52,7 +52,6 @@ mov eax, 0
 mov [rbp+96], eax
 mov [rbp-108], eax      ; no variables declared yet
 mov [rbp-208], eax      ; not inside an argument list
-mov [rbp-212], eax      ; not inside an expression
 mov [rbp+112], eax
 mov [rbp+116], eax
 
@@ -234,43 +233,6 @@ jmp eagl
 eagd:
 ret
 
-; argexpr: an argument expression -- terms joined by + and -, left to right.
-; Deliberately not the full expression parser: calling `expr` from inside an
-; expression broke the symbol-name buffer (docs/cc.md), so this walks terms at
-; the two registers eax/ecx without recursion. `*` is not accepted here.
-argexpr:
-mov eax, 0
-mov [rbp-128], eax
-call ex3                ; the first term, into eax
-argxl:
-call skipws
-call gcur
-cmp al, 43
-jz argxo
-cmp al, 45
-jnz argxd
-argxo:
-mov [rbp-132], eax      ; the operator
-mov eax, 1
-call bump
-mov eax, 1
-mov [rbp-128], eax      ; the right term goes into ecx
-call ex3
-mov eax, 0
-mov [rbp-128], eax
-mov eax, [rbp-132]
-cmp eax, 43
-jz argxa
-mov esi, 4194424+f_asub
-call emitstr
-jmp argxl
-argxa:
-mov esi, 4194424+f_aadd
-call emitstr
-jmp argxl
-argxd:
-ret
-
 ; callargs: the cursor is at '(' ; emits the arguments, then "call <name>".
 ; The name is saved across the arguments because an argument may itself be a
 ; call, and every ident reuses the same name buffer.
@@ -293,7 +255,7 @@ mov [rbp-208], eax
 cargloop:
 mov eax, 0
 mov [rbp-128], eax     ; an argument is one term, not an expression
-call argexpr           ; an argument: terms joined by + and -
+call expr              ; an argument is a whole expression
 mov esi, 4194424+f_mov
 call emitstr
 mov eax, [rbp-168]
@@ -605,25 +567,13 @@ ret
 ;   [rbp-128] current depth   [rbp-132] the operator being combined
 ;   [rbp-140] value/offset    [rbp-144..148] emitreg scratch
 expr:
-; An expression inside an expression is REFUSED, not attempted. Nesting the
-; parser corrupted the symbol-name buffer in a way that is still unexplained
-; (docs/cc.md): the value 1 appeared where a variable's name should have been,
-; and no amount of reading found the writer. A call argument therefore uses
-; argexpr (terms at eax/ecx, no recursion), and if anything ever nests expr
-; again this refuses with a line number instead of corrupting silently.
-mov eax, [rbp-212]
-cmp eax, 0
-jz exprok
-jmp.l failnest
-exprok:
-mov eax, 1
-mov [rbp-212], eax
+; A statement's expression starts at depth 0. Nesting is allowed: a call's
+; argument is a whole expression too, and the parse state that used to be
+; corrupted by nesting was a *state slot overwritten by a call's return
+; address*, because cc never reserved stack (docs/cc.md). The guard that
+; refused nesting, and `argexpr` that existed to avoid it, are both gone.
 mov eax, 0
-call exprd
-mov eax, 0
-mov [rbp-212], eax
-ret
-
+jmp.l exprd
 exprd:
 ; eax is the caller's depth: an expression at depth d leaves its value in reg d
 ; and leaves reg 0..d-1 alone. That is what a subscript needs -- the base stays
@@ -1984,16 +1934,6 @@ mov eax, 60
 mov edi, 1
 syscall
 
-failnest:
-mov eax, 1
-mov edi, 2
-mov esi, 4194424+f_nest
-mov edx, 32
-syscall
-mov eax, 60
-mov edi, 1
-syscall
-
 ; ---- fixed text. One db per item: a string on a db line ends that line, so a
 ; string and a number are never mixed. ----
 f_int:
@@ -2253,10 +2193,6 @@ db 0
 f_bad:
 db "cc: not in the subset"
 db 10
-f_nest:
-db "cc: internal: nested expression"
-db 10
-db 0
 f_lea1:
 db "lea "
 db 0

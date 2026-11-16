@@ -510,12 +510,10 @@ golden: `mov rdi, rax` → `mov rsi, rax` produces `calls exited 3/1, wanted 5/1
 - **No forward declarations**: a call to a function defined later still works, because the assembler
   resolves the label, but a call to one that does not exist fails at assembly time (`label`), not at
   compile time.
-- **An argument is terms joined by `+` and `-`**, not a general expression: `f(3)`, `f(x)`,
-  `f(x + 1)`, `f(n - 1)` work; `f(x * 2)` is refused. This began as a defect — a *variable* argument
-  failed inside the recursive expression parse, leaving the callee's name in the symbol buffer — and
-  the fix was a smaller parser (`argexpr`: terms at eax/ecx, no recursion) rather than a general one.
-  The nesting bug that caused it is recorded in `docs/WAVES.md` and is still unexplained beyond its
-  symptom.
+- **An argument is a whole expression.** `f(3)`, `f(x)`, `f(x + 1)`, `f(n - 1)` and `f(x * 2)` all
+  work, and so does `f(a[i])`. This was *not* always so: an argument used to be a pair of terms at
+  `eax`/`ecx` in a parser of its own (`argexpr`), because nesting the real one corrupted the symbol
+  buffer — which turned out to be the missing stack reservation below. `argexpr` is deleted.
 
 ## Stage 6: recursion
 
@@ -535,33 +533,15 @@ int main(void) { return f(10, 0); }        /* exits 10: ten frames, an accumulat
 Gate 13 is behavioural and exact: **10**. A frame that is not restored, or an argument that is not
 recomputed per call, gives a wrong number or a crash, never 10.
 
-### The nesting bug is refused, not solved
+### The nesting bug, solved
 
-An `expr` inside an `expr` now stops with `cc: internal: nested expression` (exit 1) instead of
-corrupting the symbol-name buffer. What is known, from a probe that journalled every identifier scan
-and every wanted token to stderr:
+`cc` used to refuse a nested `expr`, because nesting corrupted the symbol-name buffer and the writer
+could not be found. It is found: **`cc` never reserved stack** (see "the nesting bug was a missing
+`sub rsp`" below). The guard is gone, and so is `argexpr` — the smaller parser written to avoid
+nesting. An argument is a whole expression, so `f(x * 2)` works, which it did not before.
 
-- The journey for `int f(int n) { return n; } int main(void) { int x = 3; return f(x); }` was
-  `f`, `n` (the parameter), `n` (the body), then **nothing** — the next want, `;`, was never
-  reached, so the failure is inside the nested `expr`'s variable path, before `want`.
-- The name buffer held the four bytes `01 00 00 00` where `n` should have been, and `idfind`
-  returns −1 on a zero in the high half, so the refusal was reported as "not in the subset".
-- `[rbp−208]` and `[rbp−16064]` do **not** alias: a program that writes `1` at one and reads the
-  other sees `0` both ways round. So the assembler's displacement encoding is not the cause.
-- Nothing outside `ident` / `defvar` / `callargs` writes anywhere near `rbp−16064`, and each of
-  those writes only the bytes a stored name consists of.
-
-So the writer has not been found. The guard is the honest response: a constraint enforced loudly
-beats an unexplained corruption, and the day `n * f(n-1)` is attempted the compiler says
-`internal: nested expression` rather than emitting a wrong program or a plausible refusal.
-
-The real fix is presumably to keep the expression parser's state *per recursion level* instead of in
-fixed frame slots. `argexpr` shows the shape: two registers, no recursion, nothing shared.
-
-**Read the above as enforced, not explained.** The state of the bug is: the trigger (a call whose
-argument goes through the recursive expression parser), the symptom (the value `1` where a variable's
-name should be), and one closed line of suspicion (no aliasing between `[rbp-208]` and `[rbp-16064]`).
-Nothing else. Two probe runs claimed more and both were the probe's own defect — see `docs/WAVES.md`.
+What is still refused is narrower and deliberate: **a call only as a whole expression**. `n * f(n-1)`
+needs `mov <reg d>, rax` after the call, because a callee returns its value in `rax`.
 
 ## Stage 7: 64-bit values, and addresses
 
@@ -632,10 +612,10 @@ byte-identical except `recursion`, which differs by two blank lines. The "value 
 name should have been" was a state slot overwritten by a return address — `[rbp-208]`, the
 "inside an argument list" flag, is exactly `1`.
 
-The guard (`cc: internal: nested expression`) therefore enforces a constraint that no longer holds.
-It stays until the next step removes it together with `argexpr`, because removing a guard and
-changing the argument parser in the same breath as adding arrays would mean three changes with one
-gate between them.
+The guard (`cc: internal: nested expression`) enforced a constraint that no longer held, so it is
+gone, together with `argexpr` — the smaller parser written to avoid nesting. An argument is a whole
+expression now, which is what made `f(x * 2)` work. The 14 goldens were re-pinned; `recursion`
+differed only by two blank lines, which is what a deleted routine's trailing newline looks like.
 
 ## Stage 8: arrays
 
