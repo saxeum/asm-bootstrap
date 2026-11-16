@@ -557,3 +557,8 @@ beats an unexplained corruption, and the day `n * f(n-1)` is attempted the compi
 
 The real fix is presumably to keep the expression parser's state *per recursion level* instead of in
 fixed frame slots. `argexpr` shows the shape: two registers, no recursion, nothing shared.
+
+**Read the above as enforced, not explained.** The state of the bug is: the trigger (a call whose
+argument goes through the recursive expression parser), the symptom (the value `1` where a variable's
+name should be), and one closed line of suspicion (no aliasing between `[rbp-208]` and `[rbp-16064]`).
+Nothing else. Two probe runs claimed more and both were the probe's own defect — see `docs/WAVES.md`.

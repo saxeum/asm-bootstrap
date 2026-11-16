@@ -2344,3 +2344,21 @@ corrupted the buffer and mis-reported "not in the subset".
 
 `argexpr` (terms at eax/ecx, no recursion) stays. It is what the language offers for an argument, and
 it is also the shape the eventual fix will take.
+
+**Correction, same session.** The claim just made — "the failure is inside the nested `expr`'s variable
+path, before the next token is wanted" — is not supported. The probe was built by splicing lines into
+the source with `awk`, and one rule in that splice was written to delete a line it had just inserted
+and instead matched and deleted a different one; the journalled run therefore describes a build that
+was broken by the probe, not by the bug. The journal showed `f`, `n`, `n`, then a failure while
+compiling a function that contains no call at all, which cannot be the nesting bug: that is the tell,
+and it was visible at the time.
+
+So the honest state of the bug is **fully unexplained**: the trigger (a call whose argument is parsed
+by the recursive expression parser), the symptom (the value `1` where a variable's name should be),
+and the closed line of suspicion (no aliasing between `[rbp-208]` and `[rbp-16064]`) — nothing more.
+The guard stays, because a refusal is still better than the corruption, but it is enforced against an
+unknown mechanism, and `docs/cc.md` should be read that way.
+
+The next probe should be built by *appending a self-contained block* and anchoring on content, never
+by splicing lines by number — the rule this repo already had for `src/asm1.s` and which was not
+applied to `src/cc.s`.

@@ -20,7 +20,7 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
 | `src/asm1.s` | 31 236 | — | 2 150 lines, 199 labels (limit 256), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
-| `cc` | 5 949 | `b68d5a299dc7ea56` | built by `asm1` from `src/cc.s` (1 962 lines) — C to dialect TEXT |
+| `cc` | 5 949 | `b68d5a299dc7ea56` | built by `asm1` from `src/cc.s` (1 924 lines) — C to dialect TEXT |
 
 Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **30 capability
 pairs** · **5 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
@@ -196,3 +196,16 @@ Then **immediately**: `make` (check exit code and sha changed), fixtures 18/18, 
 | `tests/coverage/forms.tsv` | the claim of what is supported; every row must be exercised |
 | `tools/shape.awk` | how two source lines are decided to reach the same encoder path |
 | `docs/toolchain.tsv`, `docs/provenance.tsv`, `docs/SHAS`, `docs/branches.tsv` | the records |
+
+## Next task: the nesting bug, properly
+
+`cc` refuses a nested `expr` with `cc: internal: nested expression`. That is a guard against an
+unexplained corruption, not a fix: the trigger and symptom are recorded, the mechanism is not
+(`docs/cc.md`, and `docs/WAVES.md` for the two probes that were themselves broken).
+
+The next probe must be **appended as a self-contained block and anchored on content** — never spliced
+by line number. Suggested shape: a routine that dumps the name buffer (fixed 16 bytes, fixed-length
+write) at *three* points — after `ident` returns, at `findvar` entry, and inside `ex1` — so the first
+diverge is visible. If that does not find it, take the structural route: give the expression parser
+per-level state (a stack of depth/operator slots) instead of the fixed `[rbp-128]`/`[rbp-132]` pair,
+which is the shape `argexpr` already uses.
