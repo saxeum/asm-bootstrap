@@ -624,9 +624,12 @@ differed only by two blank lines, which is what a deleted routine's trailing new
 
 | source | emitted |
 |---|---|
-| `int a[4];` | four slots; `a` at `[rbp-8]`, `a[3]` at `[rbp-32]` |
-| `a[i]` | `lea rcx, [rbp-8]` / index at the next depth / `add rcx, rcx` ×3 / `add rax, rcx` / `mov rax, [rax]` |
-| `a[i] = v` | the value first, then `lea rcx, [rbp-8]` / `add rcx, <scaled index>` / `mov [rcx], rax` |
+| `int a[4];` | four slots; allocator 400→432, stored end 432, so `a` is `[rbp-432]` and `a[3]` is `[rbp-408]` |
+| `a[i]` | `lea rcx, [rbp-432]` / index at the next depth / `add rcx, rcx` ×3 / `add rax, rcx` / `mov rax, [rax]` |
+| `a[i] = v` | the value first, then `lea rcx, [rbp-432]` / `add rcx, <scaled index>` / `mov [rcx], rax` |
+
+The base is the array's **end** (`rbp-end`), so the index walks up into the reserved region and
+never past `rbp`; `tests/golden/arrlocal.c` pins that with a 900-byte array in a callee.
 
 The base sits in `reg d` while the index is computed at `d+1` — that is what the depth mechanism is
 for — which needed one new routine, `exprd`: an expression at a caller-given depth.
@@ -645,7 +648,7 @@ parser from inside a term — the shape that used to corrupt state. Now that the
 refusal is probably unnecessary; it stays until a test can show it is safe.
 
 Still absent, deliberately: no bounds check, no arrays as function arguments (a bare name is refused),
-no initialiser list, and the eight-slot budget is shared with scalars.
+and no initialiser list; arrays share the 32-slot symbol budget with scalars.
 
 Gates: 42 from `a[0] = 10; a[i] = 32; return a[0] + a[i];` with `i = 2` — a wrong stride, base or slot
 gives anything else — and 42 from `f(a[i])`, an element crossing a call.
@@ -726,8 +729,8 @@ reaches 1 750 frames.
 
 | source | emitted |
 |---|---|
-| `char a[4];` | one slot (4 bytes of it) |
-| `a[i]` | `lea rax, [rbp-8]` / the index / **no stride** / `add rax, rcx` / `movzx rax, byte [rax]` |
+| `char a[4];` | one slot: allocator 400→408, base `[rbp-408]`, `a[0]`..`a[3]` at `rbp-408`..`rbp-405` |
+| `a[i]` | `lea rax, [rbp-408]` / the index / **no stride** / `add rax, rcx` / `movzx rax, byte [rax]` |
 | `a[i] = v` | the value first, then the address / `mov [rcx], al` |
 
 The only new idea is that the *element size* is the kind: the flags table stores 8 for an int array
@@ -765,8 +768,8 @@ emits the same text as `src/cc.s` does.
 The proof is two targets, and they are different claims:
 
 ```
-make test-port    42/42 goldens byte-identical to cc, and the port-built putn prints 4321
-make test-d2      THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 129721 bytes
+make test-port    43/43 goldens byte-identical to cc, and the port-built putn prints 4321
+make test-d2      THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 129752 bytes
 ```
 
 `test-port` builds `cc1` (`cc < src/cc.c` then `asm1`) and compiles every committed `.c` golden and
@@ -794,12 +797,12 @@ there is no output buffer to overrun.
 
 ### The five things the port found in the compiler it is porting
 
-1. **Arrays are addressed upward from `rbp-off`.** A buffer of size `B` declared when the allocator is
-   at `off` occupies `[rbp-off, rbp-off+B)`; it is below `rbp` only when `B <= off`. A 31 KB buffer
-   declared first would run through the return address. The port declares `char pad[31500]` first and
-   never touches it, which moves `mem`'s base to `rbp-31924`; `mem`'s 31 500 bytes then end at
-   `rbp-424`. `tests/golden/strterm.s` shows the same base arithmetic with an 8 000-byte buffer whose
-   used indices happen to stay small.
+1. **Arrays used to be addressed upward from `rbp-off`.** A buffer of size `B` declared when the
+   allocator was at `off` occupied `[rbp-off, rbp-off+B)`; it stayed below `rbp` only when `B <= off`.
+   A 31 KB buffer declared first would run through the return address. This was fixed while preparing
+   `asm1.c`: the allocator now stores the array's **end**, so base = `rbp-end` and index `i` lands at
+   `rbp-end+i`, inside the reserved region. The port's `char mem[31500]` is enough on its own; the
+   `pad` array that used to move its base is gone. Gate: `tests/golden/arrlocal.c`.
 2. **A subscript in the value of an array store overwrites the left side's saved kind.** `st_sub`
    keeps `kind` in `[rbp-308]`; `ex3sub` uses the same slot for its own result. `nm[k] = m[...]`
    therefore emits `mov rcx, [rbp-408]` (load the first eight bytes of `nm` as an address) instead of
@@ -807,13 +810,12 @@ there is no output buffer to overrun.
 3. **A call in an argument list is refused** (`f(g(x))`), so staging through a local is not optional.
 4. **State-field overlap**: `AD` is a 16-bit field at offset 27, so writing it also writes offset 28.
    `EM` was at 28 in the first version, and the first call silently switched emission off. `EM` is 29.
-5. **The frame is 65 536 and arrays are cumulative across functions**, so `pad` + `mem` (63 000
-   bytes) must leave room for the helper functions' `b[8]` and `nm[16]`. The total is 63 024; the
-   limit is 64 000.
+5. **The frame is 65 536 and arrays are cumulative across functions**: `mem` (31 500) plus the
+   helper functions' `b[8]` and `nm[16]` total 31 554, well under the 64 000-byte array limit.
 
 ### What the port is not
 
-- Its input cap is **26 000 bytes** (`src/cc.c` is 24 307); a source that fills the buffer is refused,
+- Its input cap is **26 000 bytes** (`src/cc.c` is 24 297); a source that fills the buffer is refused,
   not truncated — a full buffer cannot be told from a truncated one.
 - A refusal is `exit(1)` with **no stderr text**; the subset's `write` is fd 1 only, and adding a
   fd-2 builtin would be a second mechanism for a message the dialect compiler still prints.

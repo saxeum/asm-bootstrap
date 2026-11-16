@@ -6,7 +6,7 @@ mov r10, 65536
 sub rsp, r10
 mov eax, 0
 mov edi, 0
-lea rsi, [rbp-400]
+lea rsi, [rbp-504]
 mov edx, 100
 syscall
 mov [rbp-16], rax
@@ -19,14 +19,14 @@ jmp.l L1e
 L1b:
 mov rax, [rbp-16]
 mov rdx, rax
-lea rsi, [rbp-400]
+lea rsi, [rbp-504]
 mov eax, 1
 mov edi, 1
 syscall
 mov [rbp-24], rax
 mov eax, 0
 mov edi, 0
-lea rsi, [rbp-400]
+lea rsi, [rbp-504]
 mov edx, 100
 syscall
 mov [rbp-16], rax

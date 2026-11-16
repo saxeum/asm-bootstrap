@@ -327,7 +327,7 @@ int defarr(int m, int cnt)
 		m[26100 + n * 16 + k] = c;
 		k = k + 1;
 	}
-	pwa(m, 26612 + n * 2, off);
+	pwa(m, 26612 + n * 2, off + bytes);
 	m[26676 + n] = es;
 	pb(m, 6, n + 1);
 	return n;
@@ -1632,7 +1632,6 @@ int parse(int m)
 
 int main(void)
 {
-	char pad[31500];
 	char mem[31500];
 	int m = &mem;
 	int n = read(mem, 26000);

@@ -53,7 +53,7 @@ add rcx, rcx
 add rcx, rcx
 mov [rbp-328], rcx
 mov rax, 4194424+m1
-lea rcx, [rbp-464]
+lea rcx, [rbp-480]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], rax
@@ -63,11 +63,11 @@ add rcx, rcx
 add rcx, rcx
 mov [rbp-328], rcx
 mov rax, 4194424+m2
-lea rcx, [rbp-464]
+lea rcx, [rbp-480]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], rax
-lea rax, [rbp-400]
+lea rax, [rbp-464]
 mov [rbp-24], rax
 mov rax, 0
 mov [rbp-32], rax
@@ -83,7 +83,7 @@ mov rcx, [rbp-24]
 mov [rbp-65436], rcx
 mov rcx, [rbp-32]
 mov [rbp-65428], rcx
-lea rcx, [rbp-464]
+lea rcx, [rbp-480]
 mov rdx, [rbp-40]
 add rdx, rdx
 add rdx, rdx
@@ -104,7 +104,7 @@ jmp.l L2
 L2e:
 mov rax, [rbp-32]
 mov rdx, rax
-lea rsi, [rbp-400]
+lea rsi, [rbp-464]
 mov eax, 1
 mov edi, 1
 syscall

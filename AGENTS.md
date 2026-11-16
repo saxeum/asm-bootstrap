@@ -8,10 +8,10 @@ Repo-specific rules for `saxeum/asm-bootstrap`. Universal rules live in the glob
 Past the bootstrap, and the compiler is self-hosting. `asm1` (8 053 bytes, built by `seed/asm1` from
 `src/asm1.s`) is self-hosting and **demonstrably better than the thing that built it**: 18/18
 hand-emitted fixtures, 36 capability pairs of syntax `asm0a` cannot parse, 8 superiority cases where
-`asm0a` fails or answers wrongly, and rejections that name their line. `cc` (10 106 bytes, built by
+`asm0a` fails or answers wrongly, and rejections that name their line. `cc` (10 100 bytes, built by
 `asm1` from `src/cc.s`) compiles a C subset to this dialect, and `src/cc.c` is the same compiler
 written in that subset: `make test-d2` shows `cc1.s == cc2.s`, and `make test-port` shows the port
-emits exactly what `cc` emits on all 42 goldens. The remaining bootstrap step is `asm2`, `asm1` in C.
+emits exactly what `cc` emits on all 43 goldens. The remaining bootstrap step is `asm2`, `asm1` in C.
 `docs/continue-here.md` is the current state. `asm0a` is frozen history — it can no longer build the
 assembler, and it has a known wrong-answer defect (`and` assembled as `add`) that `asm1` must never
 reproduce.

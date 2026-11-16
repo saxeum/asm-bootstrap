@@ -3534,4 +3534,20 @@ refusal passes, and `cc1` still compiles `src/cc.c` to identical text.
 text. `test-port` is the part that makes the claim evidence — the port's output is compared with the
 dialect compiler's on every golden, and the dialect compiler's output is the one the behaviour gates
 run. Neither says the dialect compiler is *correct*; that remains the job of `ref/`, the capability
-pairs, the oracles and the 42 behaviour gates.
+pairs, the oracles and the 45 behaviour gates.
+
+## Wave: arrays grow down, and the ground for `asm1.c`
+
+An array's stored offset was its **start**, so its base was `rbp-start` and its index walked upward;
+any array larger than its own start offset crossed `rbp` and wrote into its caller. The tests did not
+see it because their arrays were first (start 400) and used small indices; the port worked around it
+with an untouched `pad[31500]` declared before `mem[31500]`.
+
+The allocator now stores the array's **end**: base = `rbp-end`, index `i` at `rbp-end+i`, and the
+region is entirely below `rbp`. `char mem[31500]` alone is enough. `tests/golden/arrlocal.c` is the
+gate: a 900-byte array in a callee, read back, exits 72; the old layout overran the return address.
+
+Every golden with an array was re-pinned (the base moved from start to end), and the behaviour gates
+were re-run. `cc` is `adbafa6c82210c3b`, 10 100 bytes; the port is 41 132 bytes and its self-hosted
+text is 129 752 bytes. This is the memory groundwork for `src/asm1.c`: its input buffer no longer
+needs a same-sized pad, so a 100 KB source fits a ~110 KB frame instead of ~250 KB.

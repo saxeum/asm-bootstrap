@@ -1648,9 +1648,13 @@ ret
 ; `int a[N];` and `char a[N];` are allocated from a byte counter that starts
 ; above the scalar slots, so an array no longer competes with them: a function
 ; can have thirty-two scalars *and* a four-kilobyte buffer. The frame is
-; FRAME bytes (see f_pro), the counter starts at 264 -- the scalar area -- and
-; an array that does not fit is refused rather than overrunning the frame.
-;   [rbp-320] next free byte   [-13800 + 4i] an array's offset   [-14000 + i] its kind
+; FRAME bytes (see f_pro), the counter starts at 400 -- above the compiler's own
+; scratch slots -- and an array that does not fit is refused rather than
+; overrunning the frame.
+;   [rbp-320] next free byte   [-72000 + 4i] an array's offset   [-72200 + i] its kind
+; The stored offset is the array's END, so base = rbp-end and index i lands at
+; rbp-end+i, inside the region the counter reserved. Storing the start instead
+; made a large first array grow up through rbp into the caller.
 defarr:
 ; eax is a count of *elements*; the element size is in [rbp-304]. Bytes, then
 ; round up to eight so that every object starts on a slot boundary.
@@ -1677,8 +1681,7 @@ jb defabfit
 jmp.l fail              ; does not fit in the frame
 defabfit:
 mov [rbp-320], eax
-mov eax, [rbp-260]
-mov [rbp-272], eax
+mov [rbp-272], eax      ; the END: base rbp-end + index stays below rbp
 mov eax, [rbp-108]
 mov [rbp-268], eax
 mov edx, eax

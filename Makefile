@@ -696,6 +696,15 @@ test-cc: cc asm1
 	    printf '  cc    exit(3): the program stops with 3 and writes nothing\n'; \
 	  else echo "  exit stopped with $$g1 and wrote $$(wc -c < $$tmp/ex.out) bytes"; fail=1; fi; \
 	else echo "  asm1 refuses exit.s"; fail=1; fi; \
+	if $(CC) < tests/golden/arrlocal.c > $$tmp/al.s 2>/dev/null && cmp -s $$tmp/al.s tests/golden/arrlocal.s; then :; \
+	else echo "  arrlocal.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/arrlocal.s > $$tmp/al 2>/dev/null; then \
+	  chmod +x $$tmp/al; \
+	  $$tmp/al; g1=$$?; \
+	  if [ $$g1 -eq 72 ]; then \
+	    printf '  cc    a 900-byte array in a callee stays in its own frame, exits 72\n'; \
+	  else echo "  arrlocal exited $$g1, wanted 72 -- a local array overran its frame"; fail=1; fi; \
+	else echo "  asm1 refuses arrlocal.s"; fail=1; fi; \
 	refuse() { \
 	  n=$$((n+1)); \
 	  printf '%s' "$$1" > $$tmp/bad.c; \

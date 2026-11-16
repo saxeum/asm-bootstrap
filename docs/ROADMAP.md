@@ -2,10 +2,10 @@
 
 ## Where we are
 
-The compiler is self-hosting. `cc` (10 106 bytes, built by `asm1` from `src/cc.s`) compiles
+The compiler is self-hosting. `cc` (10 100 bytes, built by `asm1` from `src/cc.s`) compiles
 `src/cc.c` — the same compiler written in the subset — to `cc1.s`; `asm1` assembles it to `cc1`; and
 `cc1` compiles `src/cc.c` to the same text. `make test-d2` is that proof, and `make test-port`
-compares the port's output with `cc`'s on all 42 goldens (byte for byte). `asm1` (8 053 bytes) is
+compares the port's output with `cc`'s on all 43 goldens (byte for byte). `asm1` (8 053 bytes) is
 self-hosting, produces the 18 hand-emitted `ref/` binaries, and its branch pins are decoded by
 `src/dis.s`; `docs/provenance.tsv` records every artifact.
 

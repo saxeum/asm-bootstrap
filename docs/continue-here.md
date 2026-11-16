@@ -16,16 +16,16 @@ text**. That is `make test-d2`.
 | `asm1` | 8 053 | `71c5dbdba797ed40` | built by `seed/asm1` from `src/asm1.s` |
 | `seed/asm1` | 8 053 | `71c5dbdba797ed40` | promoted this session; identical to `asm1` |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` |
-| `cc` | 10 106 | `eeb0ef2faa27a254` | built by `asm1` from `src/cc.s` — the dialect compiler |
-| `cc1` | 41 125 | — | `src/cc.c` compiled by `cc` and assembled by `asm1` — the port |
-| `src/cc.s` | 57 001 | — | 3 029 lines, 215 labels, no duplicates |
-| `src/cc.c` | 24 307 | — | 1 661 lines, the port, written in the subset it compiles |
+| `cc` | 10 100 | `adbafa6c82210c3b` | built by `asm1` from `src/cc.s` — the dialect compiler |
+| `cc1` | 41 132 | — | `src/cc.c` compiled by `cc` and assembled by `asm1` — the port |
+| `src/cc.s` | 57 282 | — | 3 032 lines, 215 labels, no duplicates |
+| `src/cc.c` | 24 297 | — | 1 660 lines, the port, written in the subset it compiles |
 | `src/asm1.s` | 34 496 | — | 2 269 lines |
 | `src/dis.s` | 11 108 | — | 467 lines |
 
-42 golden `.c` sources · 9 reject sources · 36 capability pairs · 8 byte-level superiority cases
-(plus 3 behavioural) · 8 exact messages · 38 decoder cases · 100 coverage forms · 36 cc refusals ·
-290 branch pins · 36 provenance records.
+42 golden `.c` sources plus `helloworld.c` (43 programs) · 9 reject sources · 36 capability pairs ·
+8 byte-level superiority cases (plus 3 behavioural) · 8 exact messages · 38 decoder cases ·
+100 coverage forms · 36 cc refusals · 290 branch pins · 36 provenance records.
 
 ## Prove it before touching anything
 
@@ -34,11 +34,11 @@ make clean && make && make check
 ```
 
 `make check` must print, in order: **forbidden tools: none invoked** · **nothing outside the tree** ·
-header · **`cc source invariant: asm1 < src/cc.s == cc`** · `test-port` (42/42 goldens byte-identical
+header · **`cc source invariant: asm1 < src/cc.s == cc`** · `test-port` (43/43 goldens byte-identical
 to `cc`, port-built `putn` prints 4321) · **`d2: THE PORT COMPILES ITSELF`** · coverage · fixpoint ·
 bootstrap NOT APPLICABLE · 9/9 rejections · 8/8 exact messages · 36/36 capability pairs · superiority
-cases · 38/38 decoder cases · 44 cc gates including `exit(3)` · 36 provenance records · SHAS match ·
-`asm1.sha` match · and `branch pins: 290/290` naming both shas.
+cases · 38/38 decoder cases · 45 cc gates including `exit(3)` and the callee-local array · 36
+provenance records · SHAS match · `asm1.sha` match · and `branch pins: 290/290` naming both shas.
 
 The two numbers that matter for this milestone, run directly:
 
@@ -46,13 +46,13 @@ The two numbers that matter for this milestone, run directly:
 make test-d2
 ```
 
-ends with `d2: THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 129721 bytes`, and
+ends with `d2: THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 129752 bytes`, and
 
 ```
 make test-port
 ```
 
-ends with `port: 42/42 goldens byte-identical to cc, and the port-built putn prints 4321`.
+ends with `port: 43/43 goldens byte-identical to cc, and the port-built putn prints 4321`.
 
 Two traps that have each cost a session:
 
@@ -76,23 +76,28 @@ from inside a routine, and a compiler needs one for refusal without a partial pr
 same three instructions `main`'s `return` does. Gate: `tests/golden/exit.c` exits 3 and writes
 nothing.
 
-**`src/cc.c` is complete and byte-identical to `cc` on all 42 goldens**, not merely self-consistent.
+**`src/cc.c` is complete and byte-identical to `cc` on all 43 goldens**, not merely self-consistent.
 It keeps its whole world in one `char mem[31500]`, addressed through one `int` pointer, with 16-bit
 fields stored as two bytes. Two passes: the first validates with output suppressed, the second emits.
+
+**Arrays changed direction.** The allocator now stores an array's **end**, so base = `rbp-end` and
+index `i` lands at `rbp-end+i`. The old start-offset store put a large first array's high indices
+above `rbp`, through the return address; `tests/golden/arrlocal.c` (a 900-byte local array in a
+callee, exits 72) is the gate. This is what lets `asm1.c` hold its input without the `pad` trick.
 
 **A follow-up changed `src/cc.c` only.** `read` returns at most the 26 000-byte buffer, and a file of
 exactly that size cannot be told from one that was truncated; the old check accepted it. The port now
 refuses `n >= 26 000` as well as `n <= 0`. `src/cc.s` and `cc` did not move: `make test-cc-source`
 rebuilds `src/cc.s` and compares it with `cc`; and the .c-built compiler was used for the whole
-suite (`make test-cc CC=.work/cc1`), 44 gates and 36 refusals, all goldens byte-identical.
+suite (`make test-cc CC=.work/cc1`), 45 gates and 36 refusals, all goldens byte-identical.
 
 ## The port's constraints, which are the subset's
 
-- **Arrays are addressed upward from `rbp-off`**, and each declaration advances the allocator by its
-  size. A buffer is entirely below `rbp` only when its size is no larger than its offset. The port
-  therefore declares `char pad[31500]` first (never touched) and `char mem[31500]` second; `mem`'s
-  base is `rbp-31924` and its 31 500 bytes end at `rbp-424`. `src/cc.c` needs 24 307 of those bytes;
-  its input cap is 26 000, and a source that fills the buffer is refused rather than truncated.
+- **Arrays are stored by their END.** Each declaration advances the allocator by its size and stores
+  the new counter as the base offset, so base = `rbp-end` and index `i` lands at `rbp-end+i`, inside
+  the reserved region. The port's `char mem[31500]` therefore occupies `rbp-31924`..`rbp-424` on its
+  own; the `pad` array it used before this fix is gone. `src/cc.c` needs 24 297 of those bytes; its
+  input cap is 26 000, and a source that fills the buffer is refused rather than truncated.
 - **A nested subscript in the right side of an array store clobbers `[rbp-308]`**, the left array's
   saved kind (`st_sub` and `ex3sub` share the slot). The port reads through a temporary in every such
   store. The dialect compiler still has this defect; it is why the two `nm` copy loops in
@@ -127,7 +132,7 @@ suite (`make test-cc CC=.work/cc1`), 44 gates and 36 refusals, all goldens byte-
 | `docs/encodings.md` | chosen encodings, the `[rbp]` defect, the REX.W width rule |
 | `docs/oracles.md` | what `ref/` does and does not prove |
 | `seed/README.md` | the bootstrap chain |
-| `tests/golden/` | 42 `.c` sources and the exact text `cc` emits for each |
+| `tests/golden/` | 42 `.c` sources plus `helloworld.c`, and the exact text `cc` emits for each |
 | `tests/coverage/forms.tsv` | the claim of what is supported; every row must be exercised |
 | `docs/toolchain.tsv`, `docs/provenance.tsv`, `docs/SHAS`, `docs/asm1.sha` | the records |
 | `docs/violations/python-in-edit-and-diagnosis.md` | a violation made this session, recorded |

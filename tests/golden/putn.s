@@ -122,7 +122,7 @@ mov r10, 65536
 sub rsp, r10
 mov rcx, 4321
 mov [rbp-65436], rcx
-lea rcx, [rbp-400]
+lea rcx, [rbp-424]
 mov [rbp-65428], rcx
 mov rsi, [rbp-65428]
 mov rdi, [rbp-65436]
@@ -130,7 +130,7 @@ call putn
 mov [rbp-16], rax
 mov rax, [rbp-16]
 mov rdx, rax
-lea rsi, [rbp-400]
+lea rsi, [rbp-424]
 mov eax, 1
 mov edi, 1
 syscall
@@ -138,13 +138,13 @@ mov [rbp-24], rax
 mov rcx, 0
 mov [rbp-328], rcx
 mov rax, 10
-lea rcx, [rbp-400]
+lea rcx, [rbp-424]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 mov rax, 1
 mov rdx, rax
-lea rsi, [rbp-400]
+lea rsi, [rbp-424]
 mov eax, 1
 mov edi, 1
 syscall

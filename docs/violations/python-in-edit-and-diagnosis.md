@@ -58,3 +58,10 @@ by name, `awk`'s status is a documented tension, and this file does not claim th
 - No `python3`, no `perl`, no `awk`, no system compiler, no disassembler, no debugger — in the
   creation path or the diagnosis path. If a tool is wanted, it belongs in `tools/` and under
   `make test-tools` first.
+
+## Addendum
+
+While starting the `asm1.c` groundwork, a `python3` heredoc was invoked once more, containing only a
+comment and no statements. It read and wrote nothing, but it is an invocation of a forbidden tool in
+the editing path and is recorded here rather than omitted. The next command after it was an `edit`
+tool call; the rule above was already the rule and was not yet habit.

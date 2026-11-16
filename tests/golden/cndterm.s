@@ -12,7 +12,7 @@ add rcx, rcx
 add rcx, rcx
 mov [rbp-328], rcx
 mov rax, 3
-lea rcx, [rbp-400]
+lea rcx, [rbp-432]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], rax
@@ -22,7 +22,7 @@ add rcx, rcx
 add rcx, rcx
 mov [rbp-328], rcx
 mov rax, 2
-lea rcx, [rbp-400]
+lea rcx, [rbp-432]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], rax
@@ -32,7 +32,7 @@ add rcx, rcx
 add rcx, rcx
 mov [rbp-328], rcx
 mov rax, 1
-lea rcx, [rbp-400]
+lea rcx, [rbp-432]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], rax
@@ -42,14 +42,14 @@ add rcx, rcx
 add rcx, rcx
 mov [rbp-328], rcx
 mov rax, 0
-lea rcx, [rbp-400]
+lea rcx, [rbp-432]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], rax
 mov rax, 0
 mov [rbp-24], rax
 L1:
-lea rax, [rbp-400]
+lea rax, [rbp-432]
 mov rcx, [rbp-16]
 add rcx, rcx
 add rcx, rcx

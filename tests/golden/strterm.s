@@ -98,7 +98,7 @@ push rbp
 mov rbp, rsp
 mov r10, 65536
 sub rsp, r10
-lea rax, [rbp-400]
+lea rax, [rbp-8400]
 mov [rbp-16], rax
 mov rax, 0
 mov [rbp-24], rax
@@ -126,7 +126,7 @@ call line
 mov [rbp-24], rax
 mov rax, [rbp-24]
 mov rdx, rax
-lea rsi, [rbp-400]
+lea rsi, [rbp-8400]
 mov eax, 1
 mov edi, 1
 syscall

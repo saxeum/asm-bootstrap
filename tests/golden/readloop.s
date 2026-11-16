@@ -8,7 +8,7 @@ mov rax, 0
 mov [rbp-16], rax
 mov eax, 0
 mov edi, 0
-lea rsi, [rbp-400]
+lea rsi, [rbp-408]
 mov edx, 8
 syscall
 mov [rbp-24], rax
@@ -29,7 +29,7 @@ jb L2b
 jmp.l L2e
 L2b:
 mov rax, [rbp-16]
-lea rcx, [rbp-400]
+lea rcx, [rbp-408]
 mov rdx, [rbp-32]
 add rcx, rdx
 movzx rcx, byte [rcx]
@@ -43,7 +43,7 @@ jmp.l L2
 L2e:
 mov eax, 0
 mov edi, 0
-lea rsi, [rbp-400]
+lea rsi, [rbp-408]
 mov edx, 8
 syscall
 mov [rbp-24], rax

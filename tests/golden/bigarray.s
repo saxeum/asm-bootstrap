@@ -18,7 +18,7 @@ L1b:
 mov rcx, [rbp-16]
 mov [rbp-328], rcx
 mov rax, 65
-lea rcx, [rbp-400]
+lea rcx, [rbp-600]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
@@ -28,7 +28,7 @@ add rax, rcx
 mov [rbp-16], rax
 jmp.l L1
 L1e:
-lea rax, [rbp-400]
+lea rax, [rbp-600]
 mov rcx, 4
 add rax, rcx
 movzx rax, byte [rax]

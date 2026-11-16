@@ -40,8 +40,8 @@ The shape of the project is a chain: build a better assembler, use it to build a
 | self-hosted | `asm1` | 8 053 | `71c5dbdba797ed40` | `seed/asm1` from `src/asm1.s` |
 | seed | `seed/asm1` | 8 053 | `71c5dbdba797ed40` | the promoted previous stage |
 | decoder | `dis` | 1 343 | `2d2eb451d7c7a9a9` | `asm1` from `src/dis.s` |
-| compiler | `cc` | 10 106 | `eeb0ef2faa27a254` | `asm1` from `src/cc.s` |
-| **self-hosting port** | `cc1` | 41 125 | — | `cc` compiles `src/cc.c`, `asm1` assembles it |
+| compiler | `cc` | 10 100 | `adbafa6c82210c3b` | `asm1` from `src/cc.s` |
+| **self-hosting port** | `cc1` | 41 132 | — | `cc` compiles `src/cc.c`, `asm1` assembles it |
 
 Past the bootstrap. `asm1` is self-hosting, reaches its fixpoint, and is demonstrably better than
 what built it — 8 byte-level cases where `asm0a` answers wrongly and 36 syntax pairs it cannot parse.
@@ -55,7 +55,7 @@ value model. It emits text, not bytes, and every gate the assembler has applies 
 
 **And it compiles itself.** `src/cc.c` is the same compiler written in the subset it compiles. `cc`
 compiles it, `asm1` assembles it, and the resulting `cc1` compiles `src/cc.c` to identical text —
-`make test-d2` — while `make test-port` compares the port's output with `cc`'s on all 42 goldens, byte
+`make test-d2` — while `make test-port` compares the port's output with `cc`'s on all 43 goldens, byte
 for byte. What is next is `asm2`, the assembler rewritten in C, in `docs/ROADMAP.md`; the authoritative
 current state is `docs/continue-here.md`.
 
@@ -123,7 +123,7 @@ anything that tries to run it directly.
 | 10 | `char a[N];` — one byte per element, no stride | `a[0]=65, a[i]=66` exits 131; `char a[9]` beside an `int` exits 72 |
 | 11 | `(expr)` grouping, `write(buf, n)`, `read(buf, n)`, and a term in a condition | `putn(1234)` prints 1234; `cat` copies stdin byte for byte |
 | 12 | `/`, `%`, character literals, 15-character names, `exit(n)` | `q=100/7; r=100%7; q*10+r` exits 142; `exit(3)` stops with 3 |
-| 13 | **the port** — the compiler written in the subset it compiles | `make test-port` 42/42 byte-identical; `make test-d2` self-hosted |
+| 13 | **the port** — the compiler written in the subset it compiles | `make test-port` 43/43 byte-identical; `make test-d2` self-hosted |
 
 The subset, exactly: `int` scalars, `int a[N]` and `char a[N]` arrays, assignment (through `*p` and
 `a[i]`), `while`, `if`/`else`, `return`, six comparisons, `+ - * / %` with precedence, parentheses,
@@ -148,7 +148,7 @@ consequences of a choice, not of an omission.
 
 Three kinds of check, because each sees something the others cannot:
 
-- **text goldens** — 42 programs (41 in `tests/golden/`, plus `helloworld.c`) whose emitted dialect is
+- **text goldens** — 43 programs (42 in `tests/golden/`, plus `helloworld.c`) whose emitted dialect is
   pinned byte for byte. A regression pin, not an oracle: it cannot tell a plausible mistake from a
   correct answer, which is what the next two are for.
 - **behaviour** — each one is assembled and run; the exact exit code or stdout is asserted. This is
@@ -172,6 +172,14 @@ What is still refused is narrower still: a call inside an *argument list* (`f(g(
 would overwrite the argument registers — a different resource from the depth registers, and the one
 place where the fix is not a push.
 
+### Arrays grow down
+
+An array's base is `rbp - end`, not `rbp - start`: the allocator stores the end of the reserved
+region, so `a[i]` lands at `rbp-end+i` and a large first array cannot grow up through `rbp` into the
+caller. The old layout only worked while the first array was small and its indices stayed small; a
+900-byte array in a callee overwrote the return address. The gate is `tests/golden/arrlocal.c`: a
+900-byte local array in a callee, read back, exits 72.
+
 ## The compiler compiles itself
 
 `src/cc.c` is the compiler written in the subset it compiles: scanner, symbol table, arrays,
@@ -182,8 +190,8 @@ byte subscript, and it validates in one pass and emits in a second.
 The proof has two halves, and both are run by `make check`:
 
 ```
-make test-port    42/42 goldens byte-identical to cc, and the port-built putn prints 4321
-make test-d2      THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 129721 bytes
+make test-port    43/43 goldens byte-identical to cc, and the port-built putn prints 4321
+make test-d2      THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 129752 bytes
 ```
 
 `test-port` is the part that is not self-consistency: the port's output is compared with the dialect
@@ -316,8 +324,8 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1` |
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div r32`/`div r64` (quotient in `rax`/`eax`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `imul r,r,imm`, `div` needs a register of 32 or 64 bits, not 8, `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 15 characters |
-| compiler | `cc`, 10 106 bytes, built by `asm1` from `src/cc.s` (3 029 lines): C subset → dialect **text** → `asm1` → executable. 42 text goldens, 3 output oracles, 36 refusals (`make test-cc`, `docs/cc.md`). **The port compiles itself**: `src/cc.c` is the same compiler in its own subset; `make test-port` shows its output byte-identical to `cc`'s on all 42 goldens, and `make test-d2` shows `cc1.s == cc2.s` |
-| `make check` | forbidden tools, nothing-outside-the-tree, `asm1 < src/cc.s == cc` (the dialect source is invariant), the port's 42/42 goldens, `cc1.s == cc2.s`, header table, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, eight superiority cases plus three behavioural, 38/38 decoder cases, the compiler's 44 checks including `exit(3)`, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| compiler | `cc`, 10 100 bytes, built by `asm1` from `src/cc.s` (3 032 lines): C subset → dialect **text** → `asm1` → executable. 43 text goldens, 3 output oracles, 36 refusals (`make test-cc`, `docs/cc.md`). **The port compiles itself**: `src/cc.c` is the same compiler in its own subset; `make test-port` shows its output byte-identical to `cc`'s on all 43 goldens, and `make test-d2` shows `cc1.s == cc2.s` |
+| `make check` | forbidden tools, nothing-outside-the-tree, `asm1 < src/cc.s == cc` (the dialect source is invariant), the port's 43/43 goldens, `cc1.s == cc2.s`, header table, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, eight superiority cases plus three behavioural, 38/38 decoder cases, the compiler's 45 checks including `exit(3)` and the callee-local array, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.
