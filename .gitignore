@@ -1,11 +1,16 @@
+# top-level build outputs
 /asm1
 /asm1b
+/cc
+/dis
 /count10
 /count10b
-core*
-.refcache/
-/dis
-/cc
 /hello
 /hello.s
+
+# crash dumps
+core*
+
+# local scratch and the downloaded reference cache
 .work/
+.refcache/
