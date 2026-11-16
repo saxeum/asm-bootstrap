@@ -1218,3 +1218,24 @@ place by catching a code-generator bug in a generated file at assembly time.
 Next for the compiler: a second variable (a symbol table), then expressions with precedence, then
 `imul`/`div` in expressions. `.data` waits for a mutable global; functions wait for a calling
 convention, which is the largest remaining design decision.
+
+## Compiler stage 3: a symbol table
+
+Eight variables with names, slots at `[rbp-8*(i+1)]`, and `a = b + 3` works because both sides are
+looked up independently. `cc` 3 862 → 4 386 bytes. Gate 8 compares `twovars.c`'s output with a
+hand-written dialect program with two counters.
+
+Six defects, all mine, all caught by gates: uninitialised state (the third time in this project),
+`varoff` shifting the wrong register, the declaration emitting an index instead of an offset, a
+missing `want(";")` that then clobbered the value, a missing load in the assignment, and the loop
+label emitted *after* the condition's load so `while (x < 3)` never re-read `x`.
+
+And one hole in my own tooling worth recording: an `awk` that matched the first `call gcur` in
+`cc.s` inserted a jump into the **main flow** and deleted `call flush`, so `cc` emitted zero bytes
+while exiting 0 — "succeeding" on every input. The goldens caught it in one command. Anchor edits on
+content, never on the first match of a short pattern; four of the six defects above came from edits
+applied by pattern.
+
+Next: expressions with precedence (`x = 1 + 2 * 3`), then functions and a calling convention — which
+will also force the frame question (locals sit at `[rbp-8k]` with no `sub rsp` today, which is only
+safe because nothing calls anything).

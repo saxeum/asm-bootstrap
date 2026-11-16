@@ -314,6 +314,17 @@ test-cc: cc asm1
 	  printf '..........' > $$tmp/ten; \
 	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ] && cmp -s $$tmp/a $$tmp/ten && cmp -s $$tmp/a $$tmp/b; then \
 	    printf '  cc    a while loop: same output as the hand-written dialect program\n'; \
+	if $(CC) < tests/golden/twovars.c > $$tmp/tv.s 2>/dev/null && cmp -s $$tmp/tv.s tests/golden/twovars.s; then :; \
+	else echo "  twovars.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/twovars.s > $$tmp/tv 2>/dev/null && $(ASM1) < tests/oracle/twovars.s > $$tmp/to 2>/dev/null; then \
+	  chmod +x $$tmp/tv $$tmp/to; \
+	  if $$tmp/tv > $$tmp/d1; then g1=0; else g1=$$?; fi; \
+	  if $$tmp/to > $$tmp/d2; then g2=0; else g2=$$?; fi; \
+	  printf '...!' > $$tmp/want4; \
+	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ] && cmp -s $$tmp/d1 $$tmp/want4 && cmp -s $$tmp/d1 $$tmp/d2; then \
+	    printf '  cc    two variables: same output as the hand-written dialect program\n'; \
+	  else echo "  twovars: exits $$g1/$$g2, [$$(cat $$tmp/d1)] vs [$$(cat $$tmp/d2)]"; fail=1; fi; \
+	else echo "  the twovars case does not assemble"; fail=1; fi; \
 	if $(CC) < tests/golden/branch.c > $$tmp/br.s 2>/dev/null && cmp -s $$tmp/br.s tests/golden/branch.s; then :; \
 	else echo "  branch.c does not compile to its golden"; fail=1; fi; \
 	if $(ASM1) < tests/golden/branch.s > $$tmp/bc 2>/dev/null && $(ASM1) < tests/oracle/branch.s > $$tmp/bo 2>/dev/null; then \
@@ -349,6 +360,11 @@ test-cc: cc asm1
 	refuse 'int main(void) { int x = 0; if (x = 1) { } }'; \
 	refuse 'int main(void) { int x = 0; if (x) { } else if (x) { } }'; \
 	refuse 'int main(void) { int x = 255; if (x <= 255) { } }'; \
+	refuse 'int main(void) { y = 1; }'; \
+	refuse 'int main(void) { int x = 1; int x = 2; }'; \
+	refuse 'int main(void) { int x = 1; int y = x; }'; \
+	refuse 'int main(void) { int abcdefgh = 1; }'; \
+	refuse 'int main(void) { int a1 = 1; int a2 = 2; int a3 = 3; int a4 = 4; int a5 = 5; int a6 = 6; int a7 = 7; int a8 = 8; int a9 = 9; }'; \
 	if [ $$ok -ne $$n ]; then echo "  cc: $$ok/$$n refusals"; fail=1; fi; \
 	printf '  cc    %s/%s rejections outside the subset, with no output\n' $$ok $$n; \
 	exit $$fail

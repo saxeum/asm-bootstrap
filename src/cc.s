@@ -46,6 +46,7 @@ mov [rbp+24], eax
 mov [rbp+48], eax
 mov eax, 0
 mov [rbp+96], eax
+mov [rbp-108], eax      ; no variables declared yet
 mov [rbp+112], eax
 mov [rbp+116], eax
 
@@ -106,7 +107,7 @@ call emitstr
 call lits
 call skipws
 call gcur
-cmp al, 0
+cmp al, 0               ; nothing may follow the closing brace
 jnz.l fail
 call flush
 mov eax, 60
@@ -148,10 +149,7 @@ mov esi, 4194424+f_int
 call isword
 cmp eax, 0
 jnz.l stint
-call gcur
-cmp al, 120             ; 'x' begins an assignment
-jz.l stasg
-jmp.l fail
+jmp.l stasg
 bodend:
 mov eax, 1
 call bump
@@ -174,46 +172,56 @@ call want
 call wblock
 jmp.l bodloop
 stint:
-mov esi, 4194424+f_x
-call want
+call ident
+call defvar
+mov [rbp-116], eax
 mov esi, 4194424+f_eq
 call want
 call numval
-mov [rbp+116], eax
+mov [rbp-120], eax
 mov esi, 4194424+f_semi
 call want
-mov esi, 4194424+f_i1
+mov esi, 4194424+f_mi1
 call emitstr
-mov eax, [rbp+116]
+mov eax, [rbp-120]
 call emitnum
-mov esi, 4194424+f_i2
+mov esi, 4194424+f_mi2
+call emitstr
+mov eax, [rbp-116]
+call varoff
+call emitnum
+mov esi, 4194424+f_ls2
 call emitstr
 jmp.l bodloop
 stasg:
-mov esi, 4194424+f_x
-call want
+call ident
+call findvar
+mov [rbp-116], eax      ; the destination's slot index
 mov esi, 4194424+f_eq
 call want
-mov esi, 4194424+f_x
-call want
-mov esi, 4194424+f_a1
-call emitstr
+call ident
+call findvar
+call emit_le            ; mov eax, [rbp-<source>]
+mov esi, 4194424+f_cmov2
+call emitstr            ; mov ecx,
 call sign
-mov [rbp+116], eax
+mov [rbp-124], eax
 call numval
-call emitnum
-mov eax, [rbp+116]
+call emitnum            ; the value, BEFORE want() clobbers eax
+mov esi, 4194424+f_semi
+call want
+mov eax, [rbp-124]
 cmp eax, 43
 jz stplus
-mov esi, 4194424+f_s2
+mov esi, 4194424+f_asub
 call emitstr
 jmp stasg2
 stplus:
-mov esi, 4194424+f_a2
+mov esi, 4194424+f_aadd
 call emitstr
 stasg2:
-mov esi, 4194424+f_semi
-call want
+mov eax, [rbp-116]
+call emit_ls            ; mov [rbp-<destination>], eax
 jmp.l bodloop
 streto:
 mov eax, [rbp+112]
@@ -239,6 +247,159 @@ mov eax, [rbp+112]
 dec eax
 mov [rbp+112], eax
 ret
+; ---- the symbol table -----------------------------------------------------
+; Eight variables, eight bytes of name each, at rbp-16000. A variable's slot is
+; [rbp-8*(index+1)]. The name being scanned lives at rbp-16064.
+;   [rbp-100] length of the current name   [rbp-104] scan index
+;   [rbp-108] variable count               [rbp-112] scratch
+;   [rbp-116] [rbp-120] saved indices
+ident:
+; scan a name: letters, digits and '_', at most seven characters, not starting
+; with a digit. Leaves the padded name at rbp-16064 and its length in [rbp-100].
+mov eax, 0
+mov [rbp-16064], eax
+mov [rbp-16060], eax
+mov [rbp-100], eax
+call skipws
+idloop:
+call gcur
+cmp al, 95
+jz idok
+cmp al, 48
+jb iddone
+cmp al, 58
+jb iddig
+cmp al, 65
+jb iddone
+cmp al, 91
+jb idok
+cmp al, 97
+jb iddone
+cmp al, 123
+jb idok
+jmp iddone
+iddig:
+mov ecx, [rbp-100]
+cmp ecx, 0
+jz.l fail               ; an identifier cannot start with a digit
+idok:
+mov ecx, [rbp-100]
+cmp ecx, 7
+jb idstore
+jmp.l fail              ; longer than seven characters
+idstore:
+lea rdx, [rbp-16064]
+add rdx, rcx
+mov [rdx], al
+mov ecx, [rbp-100]
+inc ecx
+mov [rbp-100], ecx
+mov eax, 1
+call bump
+jmp idloop
+iddone:
+mov ecx, [rbp-100]
+cmp ecx, 0
+jz.l fail               ; no name at all
+ret
+
+idfind:
+mov eax, 0
+mov [rbp-104], eax
+idfl:
+mov eax, [rbp-104]
+mov ecx, [rbp-108]
+cmp eax, ecx
+jz idfnone
+mov edx, eax
+add eax, eax
+add eax, eax
+add eax, eax            ; 8i
+lea rcx, [rbp-16000]
+add rcx, rax
+mov eax, [rcx]
+mov edx, [rbp-16064]
+cmp eax, edx
+jnz idfn
+mov eax, [rcx+4]
+mov edx, [rbp-16060]
+cmp eax, edx
+jnz idfn
+mov eax, [rbp-104]
+ret
+idfn:
+mov eax, [rbp-104]
+inc eax
+mov [rbp-104], eax
+jmp idfl
+idfnone:
+mov eax, -1
+ret
+
+; findvar: index of the current name, or refuse -- an undeclared variable
+findvar:
+call idfind
+cmp eax, -1
+jz.l fail
+ret
+
+; defvar: declare the current name, refusing a repeat or a ninth variable
+defvar:
+call idfind
+cmp eax, -1
+jnz.l fail              ; already declared
+mov eax, [rbp-108]
+cmp eax, 8
+jb defok
+jmp.l fail              ; ninth variable
+defok:
+mov edx, eax
+add eax, eax
+add eax, eax
+add eax, eax            ; 8i
+lea rcx, [rbp-16000]
+add rcx, rax
+mov eax, [rbp-16064]
+mov [rcx], eax
+mov eax, [rbp-16060]
+mov [rcx+4], eax
+mov eax, [rbp-108]
+inc eax
+mov [rbp-108], eax
+dec eax                 ; the new variable's index
+ret
+
+; varoff: eax = index, result eax = the byte offset 8*(index+1)
+varoff:
+mov ecx, eax
+inc ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+mov eax, ecx
+ret
+; emit_le: "mov eax, [rbp-<8*(i+1)>]"     emit_ls: "mov [rbp-<..>], eax"
+emit_le:
+call varoff
+mov [rbp-112], eax
+mov esi, 4194424+f_le1
+call emitstr
+mov eax, [rbp-112]
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+ret
+emit_ls:
+call varoff
+mov [rbp-112], eax
+mov esi, 4194424+f_ls1
+call emitstr
+mov eax, [rbp-112]
+call emitnum
+mov esi, 4194424+f_ls2
+call emitstr
+ret
+
 ; ---- a condition: `x`, or `x <op> number` --------------------------------
 ; Only `jb`, `jz` and `jnz` exist, so the six relations are expressed three
 ; ways: unsigned `jb` with the operands in the right order (which covers < and,
@@ -247,8 +408,9 @@ ret
 ; [rbp+44] = jump kind (0 jb, 1 jz, 2 jnz, 3 jb with swapped operands)
 ; [rbp+124] = the bound, already adjusted
 cond:
-mov esi, 4194424+f_x
-call want
+call ident
+call findvar
+call emit_le
 mov eax, 2
 mov [rbp+44], eax
 mov eax, 0
@@ -346,8 +508,6 @@ ret
 ; condj: emit the test and a jump-if-TRUE to L<id><letter>, the letter being in
 ; [rbp+92] and the id in [rbp+96]
 condj:
-mov esi, 4194424+f_cmov
-call emitstr
 mov eax, [rbp+44]
 cmp eax, 3
 jz cj_swap
@@ -404,11 +564,8 @@ ret
 stwhile:
 mov esi, 4194424+f_lpar
 call want
-call cond
-mov esi, 4194424+f_rpar
-call want
-mov esi, 4194424+f_lbrc
-call want
+; the loop label comes BEFORE the condition's load, or the load lands outside
+; the loop and the variable is never re-read
 call newid
 mov esi, 4194424+f_L
 call emitstr
@@ -416,6 +573,11 @@ mov eax, [rbp+96]
 call emitnum
 mov esi, 4194424+f_dcol
 call emitstr
+call cond
+mov esi, 4194424+f_rpar
+call want
+mov esi, 4194424+f_lbrc
+call want
 mov eax, 98
 mov [rbp+92], eax
 call condj
@@ -1161,6 +1323,37 @@ db "if"
 db 0
 f_else:
 db "else"
+db 0
+f_mi1:
+db "mov eax, "
+db 0
+f_mi2:
+db 10
+db "mov [rbp-"
+db 0
+f_ls2:
+db "], eax"
+db 10
+db 0
+f_le1:
+db "mov eax, [rbp-"
+db 0
+f_le2:
+db "]"
+db 10
+db 0
+f_ls1:
+db "mov [rbp-"
+db 0
+f_aadd:
+db 10
+db "add eax, ecx"
+db 10
+db 0
+f_asub:
+db 10
+db "sub eax, ecx"
+db 10
 db 0
 f_w1:
 db "mov eax, 1"

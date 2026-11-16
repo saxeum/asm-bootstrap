@@ -2168,3 +2168,38 @@ assembly time, with a line number.
 Also noticed while writing the dialect source: `asm1` accepts leading **spaces** but not leading
 **tabs**, so a source indented with tabs is rejected. Recorded rather than fixed — nothing in the repo
 emits tabs, and the refusal names the line.
+
+## A symbol table, and six defects in getting there
+
+`cc` now has a symbol table: eight variables, eight-byte names, slots at `[rbp-8*(i+1)]`, with
+`ident`/`idfind`/`defvar`/`varoff`/`emit_le`/`emit_ls`. `a = b + 3` works, because a table makes the
+two sides independent. Gate 8 compares `twovars.c`'s output with `tests/oracle/twovars.s`, a
+hand-written dialect program with two counters (`...!`).
+
+`cc` 2902 → 4386 bytes. Six defects on the way, and every one was mine:
+
+1. **Uninitialised state, for the third time in this project.** `[rbp-108]` (the variable count) was
+   never zeroed, so `defvar`'s "fewer than eight" test read garbage. The same class as `dis`'s hex
+   accumulator and `cc`'s input size.
+2. **`varoff` incremented the wrong register**: `inc ecx` after copying `eax` to `ecx`, with the
+   shifts still on `eax` — every variable emitted as `[rbp-0]`.
+3. **The declaration emitted the index, not the offset** (`[rbp-0]` again, one layer up), because
+   `emitnum` was called with `eax` = index without `call varoff` first.
+4. **The assignment consumed no semicolon** — added `want(";")` after `numval`, which then clobbered
+   `eax` before `emitnum`, so `x = x + 1` emitted `mov ecx, 0`. The value has to be emitted before
+   `want` runs.
+5. **The assignment loaded nothing** before `mov ecx,`: the store was in place but the load was
+   missing, so `x = x + 1` read a stale register.
+6. **The loop label was emitted after the condition's load**, so `while (x < 3)` loaded `x` once,
+   outside the loop, and the loop never terminated. Found by the golden diff, not by running it.
+
+And one that was not a defect but a *hole in my own tooling*: an `awk` that inserted `jmp.l stasg`
+after the first `call gcur` in the file matched the **main flow** (the "nothing may follow `}`"
+check), deleted `call flush`, and made `cc` emit zero bytes while exiting 0. `cc` "succeeded" on
+every input. The goldens caught it immediately — a compiler that produces nothing is a compiler
+whose every gate fails, which is the cheapest kind of failure there is.
+
+The lesson is the one already in `AGENTS.md` and was ignored anyway: **anchor edits on content, never
+on the first match of a short pattern.** Four of the six defects above came from edits applied by
+pattern, and the two that did not came from not reading the emitted text before believing the exit
+code.

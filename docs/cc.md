@@ -387,3 +387,37 @@ Three defects, all mine, all caught by gates rather than reading:
    label with the `if`'s id: `line 36: duplicate`, caught by the **duplicate-label check added the
    previous session**. That is the check paying for itself within a day: without it the program would
    have assembled to something that jumped into its own else branch.
+
+## Stage 3: a symbol table, so there can be more than one variable
+
+Eight variables, each with an eight-byte name, at `rbp-16000`; a variable's slot is
+`[rbp-8*(index+1)]`. `ident` scans a name (letters, digits, `_`, at most seven characters, not
+starting with a digit); `idfind` looks it up; `defvar` refuses a repeat or a ninth; `emit_le` and
+`emit_ls` print `mov eax, [rbp-N]` / `mov [rbp-N], eax` with N computed, not hardcoded.
+
+```
+int a = 0;        mov eax, 0                 a = b + 3;      mov eax, [rbp-16]
+int b = 5;        mov [rbp-8], eax                           mov ecx, 3
+                  mov eax, 5                                 add eax, ecx
+                  mov [rbp-16], eax                          mov [rbp-8], eax
+```
+
+An assignment may name different variables on either side (`a = b + 3`), which fell out of having a
+table at all. `cc` 2 902 → 4 386 bytes.
+
+Gate 8 compiles `twovars.c` — two counters, one loop, an `if` on the second — and compares the
+binary's output with `tests/oracle/twovars.s`, a hand-written dialect program doing the same thing:
+
+```
+  cc    two variables: same output as the hand-written dialect program
+```
+
+and 18 inputs are refused, five of them new: an undeclared name, an assignment to an undeclared
+name, a repeated declaration, an eight-character name, and a ninth variable.
+
+### The frame: locals live at `[rbp-8k]` without a `sub rsp`
+
+There is no call in the language yet, so nothing pushes over the frame and `[rbp-8k]` is safe without
+reserving space. That stops being true the moment a function call exists — and then the frame size has
+to be known *before* the prologue is emitted, which means two passes over the input or a patched
+prologue. Recording it here because it is the first thing a calling convention will change.
