@@ -32,16 +32,16 @@ L1e:
 L2:
 mov rax, [rbp-32]
 mov rcx, 0
-cmp rcx, rax
-jb.l L2b
+cmp rax, rcx
+jg.l L2b
 jmp.l L2e
 L2b:
 mov rax, [rbp-32]
 mov rcx, 10
 mov r9, rcx
 mov rax, rax
-xor rdx, rdx
-div r9
+cqo
+idiv r9
 mov rax, rax
 mov [rbp-40], rax
 mov rcx, [rbp-24]
@@ -76,7 +76,7 @@ L3:
 mov rax, [rbp-48]
 mov rcx, [rbp-56]
 cmp rax, rcx
-jb.l L3b
+jl.l L3b
 jmp.l L3e
 L3b:
 mov rax, [rbp-16]

@@ -5,22 +5,17 @@ Repo-specific rules for `saxeum/asm-bootstrap`. Universal rules live in the glob
 
 ## Where this is
 
-Past the bootstrap, and the compiler is self-hosting. `asm1` (8 053 bytes, built by `seed/asm1` from
-`src/asm1.s`) is self-hosting and **demonstrably better than the thing that built it**: 18/18
-hand-emitted fixtures, 36 capability pairs of syntax `asm0a` cannot parse, 8 superiority cases where
-`asm0a` fails or answers wrongly, and rejections that name their line. `cc` (10 100 bytes, built by
-`asm1` from `src/cc.s`) compiles a C subset to this dialect, and `src/cc.c` is the same compiler
-written in that subset: `make test-d2` shows `cc1.s == cc2.s`, and `make test-port` shows the port
-emits exactly what `cc` emits on all 43 goldens. **The assembler is in C too**: `src/asm1.c` is
-compiled by `cc`, assembled by `asm1` into `asm2`, and `make test-asm2` requires it to reproduce
-`asm1` on the whole corpus and to assemble its own compiler text into itself (220 checks). `asm1`
-stays as the witness and the builder; it is not deleted.
-`docs/continue-here.md` is the current state. `asm0a` is frozen history — it can no longer build the
-assembler, and it has a known wrong-answer defect (`and` assembled as `add`) that `asm1` must never
-reproduce.
-
-Milestones: `milestone-fixpoint` (`X == X' == X''`) and `milestone-handover` (better than `asm0a`,
-and `asm0a` can no longer build it). `docs/ROADMAP.md` is where it goes next.
+Past the bootstrap, and both tools are C-built. `asm1` (54 416 bytes, built by `seed/cc1` +
+`seed/asm1` from `src/asm1.c`) is the C assembler and **demonstrably better than the thing that
+built it**: 18/18 hand-emitted fixtures, 36 capability pairs of syntax `asm0a` cannot parse, 9
+superiority cases (including signed jumps, `idiv` and `cqo`), rejections that name their line.
+`cc` (44 154 bytes, built by `asm1` from `src/cc.c`) is the C compiler, and it compiles itself
+(`make test-d2`). `make test-asm2` requires the C assembler to reproduce the whole corpus and its
+own compiler text (234 checks). Comparisons are signed; `/` and `%` are `cqo` + `idiv`. `src/asm1.s`
+and `src/cc.s` are frozen witnesses, pinned by `make test-frozen`; `seed/cc` is the dialect witness,
+`seed/asm1` and `seed/cc1` are the C seeds. `docs/continue-here.md` is the current state. `asm0a` is
+frozen history — it can no longer build the assembler, and it has a known wrong-answer defect (`and`
+assembled as `add`) that `asm1` must never reproduce.
 
 ## Invariants
 

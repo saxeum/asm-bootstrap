@@ -1,153 +1,93 @@
 # Continue here
 
-State after D3: the compiler compiles itself, and the assembler is written in C too. `src/asm1.c`
-is compiled by `cc`, assembled by `asm1` into `asm2`, and `asm2` reproduces `asm1` on the whole
-corpus and assembles the text of its own compiler into itself.
+State after the signed-semantics fix. The assembler and compiler are C-built; `asm1` is the C
+assembler, `cc` the C compiler, and both reach their own fixpoints. The assembly sources are frozen
+witnesses.
 
 ## The numbers
 
 | | bytes | sha256 (16) | notes |
 |---|---|---|---|
-| `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
-| `asm1` | 8 053 | `71c5dbdba797ed40` | built by `seed/asm1` from `src/asm1.s` |
-| `seed/asm1` | 8 053 | `71c5dbdba797ed40` | the witness and the builder |
-| `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` |
-| `cc` | 10 429 | `a81345ad5a67490d` | built by `asm1` from `src/cc.s` |
-| `seed/cc` | 10 429 | `a81345ad5a67490d` | the frozen C compiler seed; from `cc` |
-| `asm2` | 51 783 | `aa9e992e912f95b6` | `cc` + `asm1` from `src/asm1.c`; the D3 artifact |
-| `src/asm1.c` | 27 984 | — | 1 476 lines, the assembler in the subset |
-| `src/cc.c` | 25 066 | — | 1 694 lines, the compiler in the subset |
-| `src/cc.s` | 58 892 | — | 3 108 lines |
-| `src/asm1.s` | 34 496 | — | 2 269 lines |
-| `src/dis.s` | 11 108 | — | 467 lines |
+| `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen** |
+| `seed/cc` | 10 429 | `a81345ad5a67490d` | dialect compiler witness (`src/cc.s`) |
+| `asm1` | 54 416 | `ccb1607db88a2ee1` | C assembler, `seed/cc1` + `seed/asm1` from `src/asm1.c` |
+| `seed/asm1` | 54 416 | `ccb1607db88a2ee1` | promoted C assembler |
+| `cc` | 44 154 | `5e9ad682b3564711` | C compiler, `asm1` from `src/cc.c` |
+| `seed/cc1` | 44 154 | `5e9ad682b3564711` | promoted C compiler |
+| `dis` | 1 343 | `2d2eb451d7c7a9a9` | `asm1` from frozen `src/dis.s` |
+| `src/asm1.c` | 28 500-ish | — | the assembler in the subset |
+| `src/cc.c` | 25 300-ish | — | the compiler in the subset |
+| `src/asm1.s`, `src/cc.s`, `src/dis.s` | — | — | frozen, pinned by `docs/frozen.tsv` |
 
-`cc1.s` (the text `cc` emits for `src/cc.c`) is 137 953 bytes; `asm1.c.s` (the text for
-`src/asm1.c`) is 158 841 bytes. Frames are 260 000 bytes, arrays 255 000, `cc` buffers 200 000,
-labels 2 048, literals 999, numeric literals up to 16 777 215.
+161 frozen `.s` sources · 113 coverage forms · 234 asm2 checks · 36 cc refusals · 43 goldens ·
+9 rejections · 8 exact messages · 290 branch pins · 36 provenance records.
 
-43 compiler goldens (42 in `tests/golden/` plus `helloworld.c`) · 9 reject sources · 36 capability
-pairs · 8 byte-level superiority cases · 8 exact messages · 38 decoder cases · 100 coverage forms ·
-36 cc refusals · 290 branch pins · 36 provenance records · **220 asm2 checks**.
-
-## Prove it before touching anything
+## Prove it
 
 ```
 make clean && make && make check
 ```
 
-`make check` must print: forbidden tools · **`frozen: 160 assembly sources unchanged`** · nothing
-outside the tree · header · `cc source invariant` · `port: 43/43` · `d2: THE PORT COMPILES ITSELF` ·
-**`asm2: 220 checks, 0 failures -- corpus and self-assembly`** · coverage 100/100 · fixpoint ·
-bootstrap NOT APPLICABLE · 9/9 rejections · 8/8 messages · 36/36 capability · superiority · 38/38
-decoder · 45 cc gates · 36 provenance records · SHAS · `asm1.sha` · `branch pins: 290/290`.
+Must print: frozen 161 · frozen `src/cc.s` still equals `seed/cc` · port 43/43 · d2 self-host ·
+asm2 234 checks · coverage 113/113 · C assembler fixpoint (54 416) · signed superior · wc 4/4 ·
+calc 10/10 + 2/2 · sort 6/6 + 2/2 · provenance 36 · SHAS · 290/290 pins.
 
-The C bootstrap from the frozen seeds, on its own:
+The C-only chain:
 
 ```
 make from-c
-  from-c: asm2 51783 bytes sha aa9e992e912f95b6, cc1 43418 bytes sha 74e4dd9725169c08
-  from-c: sort built and run by cc1 + asm2 -- ordered, duplicates, refusals
-  from-c: calc built and run by cc1 + asm2 -- signed, parenthesised, refused
-  from-c: wc built and run by cc1 + asm2 -- C-only from here
-  from-c: cc2 == cc1 and asm2b == asm2 -- both .c artifacts reproduce
+  from-c: asm2 54416 ccb1607db88a2ee1, cc1 44154 5e9ad682b3564711
+  from-c: cc2 == cc1 and asm2b == asm2
 ```
 
-The D3 command on its own:
+The differential (gcc is the second opinion, never an artifact; run by hand, not from `check`):
 
 ```
-make test-asm2
+tools/differential.sh              -> 5/5 AGREE
+tools/differential.sh seed/cc ./asm1 -> 1/5 (the pre-signed witness DIFFERS on all four negative cases)
 ```
 
-builds `src/asm1.c` with `cc`, assembles it with `asm1`, and runs `tools/asm2-check.sh`: the 17
-hand-emitted references, the 80 capability/superior inputs, the 100 coverage forms, the 9 refusals,
-the 8 exact messages, `src/dis.s`, `src/cc.s`, `src/asm1.s`, the 99 032-byte source (and it runs,
-exit 42), and `asm2 < asm1.c.s == asm2`.
+## Signed semantics, and what moved
 
-The serious programs:
+`asm1` now has `jl/jle/jg/jge/js` (rel8 and `.l`), `cqo`, `idiv r32/r64`. `cc` emits `jl` for `<`,
+`jg` for `>`, and `cqo` + `idiv` for `/` and `%`; `<=`/`>=` are still normalised to `<`/`>` with an
+adjusted bound. The internal comparisons in `cc.c` are on non-negative counts and offsets, so signed
+emission is safe for them; a comment says so.
 
-```
-make test-program
-  wc: 4/4 inputs counted correctly -- lines, words, characters
-  calc: 8/8 results and 2/2 refusals, signed values included
-  sort: 6/6 inputs ordered and 2/2 refusals
-```
+Two byte-packing defects had to be fixed for a signed compiler: `pd`/`pda`/`pw`/`pwa` and `ex4`/`ex8`
+split values with `/ 256`, and signed division truncates toward zero, so a negative value wrote zeros
+instead of `0xff` in the high bytes. They now shift arithmetically (subtract one when negative and
+the remainder is non-zero). `calc.c` was then rewritten to use `v < 0` and signed `/`/`%`; its
+magnitude workaround is deleted.
 
-`tests/programs/calc.c` is a recursive-descent calculator: `+ - * / %`, parentheses, unary minus,
-precedence, signed values in a magnitude representation, and fixed `calc: error` refusals. Both it
-and `wc.c` are built and run by `cc1` + `asm2` inside `make from-c`. `tests/programs/sort.c` sorts
-lines from a 200000-byte read, with 4095-line and full-buffer refusals.
-
-`tests/programs/wc.c` is a 128-byte-chunk line/word/char counter. `make from-c` builds it with the
-C-built `cc1` + `asm2` and runs the same four inputs, so the whole build for the program is
-C-tools-only after the frozen seeds.
-
-## What changed in this session
-
-**The compiler grew to make the assembler possible.** Numeric literals now go to 16 777 215 (not
-65 535); `emitnum` prints eight digits; condition jumps are emitted as `.l` (a rel8 condition around
-a large block is now a real overflow); `werr(buf, n)` is a new builtin writing to fd 2, which is how
-both compilers name a line and a reason; the frame is 260 000 and arrays are 255 000, so
-`src/asm1.c` can hold a 200 000-byte source and a 2 048-label table. Every golden was re-pinned for
-the frame, the argument-parking base and the `.l` conditions, and the behaviour gates were re-run.
-
-**`src/asm1.c` is complete.** Three passes (labels, count with labels, emit), the 120-byte ELF
-header, labels to 2 048, input to 200 000, exact `line N: reason` messages (`range`, `label`,
-`duplicate`, `rejected`). It reproduces every reference and every corpus input byte for byte, and its
-own compiler text assembles to itself.
-
-**The compiler port caught two real defects in itself**: `gd`/`pd` (32-bit state accessors) were
-missing while the condition bound had been moved to a 32-bit slot; and the array allocator's 16-bit
-offset would not survive the larger limits. Both are fixed.
-
-**The C bootstrap is reproducible from the frozen seeds.** `seed/cc` (the frozen C compiler) and
-`seed/asm1` (the frozen assembler) build the C assembler first, then the C compiler, then each
-rebuilds the other (`make from-c`):
-
-```
-seed/cc < asm1.c -> asm1.c.s ; seed/asm1 -> asm2
-seed/cc < cc.c   -> cc1.s    ; asm2        -> cc1
-cc1     < cc.c   -> cc2.s    ; asm2        -> cc2      cc2 == cc1
-cc1     < asm1.c -> asm1b.s  ; asm2        -> asm2b    asm2b == asm2
-```
-
-`docs/frozen.tsv` pins all **160 assembly sources** under `src/` and `tests/`; `make test-frozen`
-fails on any change and `make freeze` is the only writer. The assembly implementations are frozen,
-not deleted.
-
-## The port's constraints, which are the subset's
-
-- Arrays store their **end**; base = `rbp-end`, index `i` at `rbp-end+i`.
-- A subscript in the right side of an array store clobbers `[rbp-308]`; read through a temporary.
-- A call inside an argument list is refused; stage through a local.
-- `exit(n)` and `werr(buf, n)` are the only ways out / to stderr.
-- The port's own input cap is 200 000; `src/cc.c` is 25 066.
+**The seeds changed.** `seed/asm1` is now the C assembler and `seed/cc1` the C compiler; `seed/cc` is
+the dialect witness. The canonical `asm1` is built from `src/asm1.c`, the canonical `cc` from
+`src/cc.c`. `src/asm1.s` and `src/cc.s` are frozen and pinned.
 
 ## What is left
 
-1. **Promote `asm2` / `cc1` or keep the assembly-built artifacts as the canonical ones.**
-   `seed/cc` and `seed/asm1` now exist and `make from-c` is green; the default `make` still builds
-   `asm1`/`cc` from the frozen assembly sources. Installing the C-built artifacts as `asm1`/`cc` is a
-   deliberate decision with `seed/` and `docs/toolchain.tsv` consequences — record it, do not assume
-   it. `asm1` must never be deleted; it is the witness the hand-emitted references were checked
-   against.
-2. **`.data`** — a second read-write `PT_LOAD`, and string literals in memory.
-3. **Assembler gaps**: `add r32, imm32`, `cmp`/`mov` with `[mem]`, signed condition codes,
-   `[base+index*scale]`.
-4. **The 2 048-label and 200 000-byte inputs are now shared limits**; if either grows again, both
-   `asm1.c` and the compiler's frame must move in the same wave.
+1. **`.data`** — a second read-write `PT_LOAD`, and string literals in memory. This is the next
+   assembler feature with no user.
+2. **Assembler gaps**: `add r32, imm32`, `cmp`/`mov` with `[mem]`, `[base+index*scale]`, `imul r,r,imm`.
+3. **`lisp.c`** (#7) — the next serious program, after `calc` (#5) and `sort` (#6).
+4. **Differential in CI** is deliberately manual; it is rung 4 in `docs/oracles.md`.
 
 ## Where things are
 
 | | |
 |---|---|
 | `AGENTS.md` | invariants with their checks |
-| `docs/cc.md` | the compiler's stages and gates; Stage 12 is `asm2` |
-| `docs/ROADMAP.md` | the ordered plan and its history |
+| `docs/cc.md` | compiler stages and gates; Stage 13 is signed semantics |
+| `docs/ROADMAP.md` | ordered plan and history |
 | `docs/WAVES.md` | the log, failures included |
-| `docs/encodings.md` | chosen encodings |
-| `docs/oracles.md` | what `ref/` does and does not prove |
-| `seed/README.md` | the bootstrap chain |
-| `tests/coverage/forms.tsv` | the claim of what is supported |
-| `tools/asm2-check.sh` | the D3 gate |
-| `docs/toolchain.tsv`, `docs/provenance.tsv`, `docs/SHAS`, `docs/asm1.sha` | the records |
-| `docs/violations/` | recorded violations, including this session's |
+| `docs/encodings.md` | opcode table, including signed jumps/idiv/cqo |
+| `docs/oracles.md` | what `ref/`, the oracles and the differential do not prove |
+| `tools/differential.sh` | gcc second opinion (the one named `test-tools` exemption) |
+| `tests/differential/` | the intersection programs |
+| `tests/programs/` | `wc.c`, `calc.c`, `sort.c` |
+| `docs/frozen.tsv`, `docs/SHAS`, `docs/provenance.tsv`, `docs/toolchain.tsv` | the records |
+
+## Violations
+
+`docs/violations/python-in-edit-and-diagnosis.md` records the python and awk invocations made while
+editing and diagnosing this work. They are recorded, not omitted.

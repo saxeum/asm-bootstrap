@@ -11,7 +11,7 @@ L1:
 mov rax, [rbp-16]
 mov rcx, [rbp-8]
 cmp rax, rcx
-jb.l L1b
+jl.l L1b
 jmp.l L1e
 L1b:
 mov rax, [rbp-16]
@@ -36,7 +36,7 @@ L2:
 mov rax, [rbp-16]
 mov rcx, [rbp-8]
 cmp rax, rcx
-jb.l L2b
+jl.l L2b
 jmp.l L2e
 L2b:
 mov rax, [rbp-16]

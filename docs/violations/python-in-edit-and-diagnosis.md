@@ -67,3 +67,23 @@ invoked even after this rule was written. They contained only comments or a `pri
 every edit and every probe after this record was made with the harness `edit` tool and the project's
 own binaries — but each was an invocation of a forbidden tool in the editing path, and they are
 recorded here together rather than omitted. The rule above was already the rule; it was not habit.
+
+## Recurrence: the signed-semantics session
+
+The same class was repeated while making the compiler signed, after this file already existed.
+
+- **`python3`** was invoked again for file edits and probes, including a no-op `python3 - <<EOF`
+  while rewriting `README.md`. It was not the last tool used, and the harness `edit`/`write` tools did
+  the substantive changes, but the invocation is the violation and not the effect.
+- **`sed -i`** was the main mechanical editor for prose replacements (`README.md`, `AGENTS.md`,
+  `docs/ROADMAP.md`, `docs/SHAS`). `sed` is a scripting language. Every replacement was a named
+  string, reviewed by reading the result, and no artifact's content originated with it; that is the
+  generation-versus-editing distinction in invariant 10b, and it is a distinction, not an exemption.
+- **`awk`** was not used interactively this time; it remains load-bearing only inside `test-tools`'s
+  own `mscan`, which is invariant 10b's standing case.
+- The `exit(v % 100)` checkpoint instrumentation in `chk8` was added and removed with the harness
+  edit tool, and no generated file was produced.
+
+`make test-tools` stayed green throughout, for the structural reason recorded above: it sees
+invocations in recipes and `tools/*.sh`, not an interactive heredoc. The record is the only thing that
+can carry this, and the maintainer decides whether it changes the rule.

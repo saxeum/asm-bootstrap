@@ -6,19 +6,19 @@
  *     term  := factor (('*'|'/'|'%') factor)*
  *     factor:= number | '-' factor | '(' expr ')'
  *
- * Values are signed, but the subset's comparisons are unsigned, so the sign is
- * carried by magnitude: every value is kept in -1000000..1000000, and a negative
- * value is the 64-bit two's complement of its magnitude. `v > 1000000` therefore
- * means "negative". Division and remainder are done on magnitudes and the sign is
- * applied after; no signed comparison is needed anywhere.
+ * Values are signed. The compiler emits jl/jg for < and >, and cqo + idiv for
+ * / and %, so / truncates toward zero and % keeps the dividend's sign, as in C.
+ * Magnitudes are bounded to 1000000 so overflow is a refusal, not a wrapped
+ * number.
  *
  *     1+2*3        -> 7
  *     (1+2)*3      -> 9
  *     -5+2         -> -3
  *     3-10         -> -7
  *     -3*-4        -> 12
+ *     (3-10)/2     -> -3
  *
- * Bad syntax, division by zero, and a magnitude above 1000000 exit 1 with
+ * Bad syntax, division by zero, and out-of-range arithmetic exit 1 with
  * "calc: error" on stderr. Input is read once, 4096 bytes; a full buffer is
  * refused rather than truncated.
  */
@@ -55,70 +55,15 @@ int die(void)
 	return z;
 }
 
-int isneg(int v)
+int chk(int v)
 {
-	if (v > 1000000) { return 1; }
-	return 0;
-}
-
-int absv(int v)
-{
-	if (isneg(v) != 0) { return 0 - v; }
+	int bad = 0;
+	if (v > 1000000) { bad = 1; }
+	if (v < 0) {
+		if (v + 1000000 < 0) { bad = 1; }
+	}
+	if (bad != 0) { die(); }
 	return v;
-}
-
-int addv(int a, int b)
-{
-	int sa = isneg(a);
-	int sb = isneg(b);
-	if (sa == sb) {
-		int z = absv(a) + absv(b);
-		if (z > 1000000) { die(); }
-		if (sa != 0) { return 0 - z; }
-		return z;
-	}
-	if (sa != 0) {
-		int ma = absv(a);
-		if (ma > b) { return 0 - (ma - b); }
-		return b - ma;
-	}
-	int mb = absv(b);
-	if (a > mb) { return a - mb; }
-	return 0 - (mb - a);
-}
-
-int subv(int a, int b)
-{
-	return addv(a, 0 - b);
-}
-
-int mulv(int a, int b)
-{
-	int sa = isneg(a);
-	int sb = isneg(b);
-	int z = absv(a) * absv(b);
-	if (z > 1000000) { die(); }
-	if (sa != sb) { return 0 - z; }
-	return z;
-}
-
-int divv(int a, int b)
-{
-	if (b == 0) { die(); }
-	int sa = isneg(a);
-	int sb = isneg(b);
-	int z = absv(a) / absv(b);
-	if (sa != sb) { return 0 - z; }
-	return z;
-}
-
-int modv(int a, int b)
-{
-	if (b == 0) { die(); }
-	int sa = isneg(a);
-	int z = absv(a) % absv(b);
-	if (sa != 0) { return 0 - z; }
-	return z;
 }
 
 int getc1(int m)
@@ -153,7 +98,6 @@ int skipws(int m)
 	return 0;
 }
 
-
 int factor(int m)
 {
 	skipws(m);
@@ -170,11 +114,10 @@ int factor(int m)
 	if (c == 45) {
 		bump(m);
 		v = factor(m);
-		return 0 - v;
+		return chk(0 - v);
 	}
 	if (c >= 48) {
 		if (c < 58) {
-			v = 0;
 			int go = 1;
 			while (go != 0) {
 				c = getc1(m);
@@ -210,9 +153,15 @@ int term(int m)
 		else {
 			bump(m);
 			int r = factor(m);
-			if (op == 1) { v = mulv(v, r); }
-			if (op == 2) { v = divv(v, r); }
-			if (op == 3) { v = modv(v, r); }
+			if (op == 1) { v = chk(v * r); }
+			if (op == 2) {
+				if (r == 0) { die(); }
+				v = chk(v / r);
+			}
+			if (op == 3) {
+				if (r == 0) { die(); }
+				v = chk(v % r);
+			}
 		}
 	}
 	return v;
@@ -232,8 +181,8 @@ int expr(int m)
 		else {
 			bump(m);
 			int r = term(m);
-			if (op == 1) { v = addv(v, r); }
-			if (op == 2) { v = subv(v, r); }
+			if (op == 1) { v = chk(v + r); }
+			if (op == 2) { v = chk(v - r); }
 		}
 	}
 	return v;
@@ -265,7 +214,7 @@ int emit(int v)
 	char out[32];
 	int p = &out;
 	int len = 0;
-	if (isneg(v) != 0) {
+	if (v < 0) {
 		out[0] = 45;
 		len = 1;
 		v = 0 - v;

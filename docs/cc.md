@@ -175,7 +175,7 @@ Each of these is a *thing a program needs*, and each has a gate that can fail:
 | **a calling convention** — args in registers or on the stack, return in `rax`, callee-save rules | `write(...)` becoming a real call; functions at all | a fixture that calls a function with arguments, checks the return value, and would print garbage if the register assignment were wrong |
 | **locals, and a frame pointer discipline** | `int x = 5;` | a fixture with two nested calls and a local that survives both |
 | **`if`/`while`** | anything interesting | a compiled `while` loop that counts to 10 and prints as `count10` does — the existing fixture becomes the oracle for the *compiler*, not just the assembler |
-| **signed condition codes `ja/jae/js/jg/jo`** | `<`, `>`, `<=`, `>=` on signed integers | handwritten golden text + a program that takes the right branch on negatives |
+| **signed condition codes** (done: `jl`/`jle`/`jg`/`jge`/`js`, `idiv`, `cqo`) | `<`, `>`, `<=`, `>=` and signed `/`/`%` on negatives | handwritten hex in `tests/superior/signed.hex` + `tests/differential/` against gcc; see Stage 13 |
 
 The first two are assembler work and are already on `docs/ROADMAP.md`'s compiler list. The third is a
 handful of handlers. The fourth is the point at which the C subset stops being a toy: a calling
@@ -842,7 +842,7 @@ references, 80 capability/superior inputs, 100 coverage forms, 9 refusals, 8 exa
 assemble the text of its own compiler into itself:
 
 ```
-  asm2: 220 checks, 0 failures -- corpus and self-assembly
+  asm2: 234 checks, 0 failures -- corpus and self-assembly
 ```
 
 Building it forced three compiler changes that are part of the record: numeric literals to
@@ -854,3 +854,40 @@ every earlier record were checked against, and `asm2` inherits the obligation, n
 
 The next decision is whether `make` should build the assembler from `src/asm1.c` and what `seed/`
 means after that; the next feature is `.data`.
+
+## Stage 13: signed comparisons and division
+
+The language now means what a C programmer expects for signed values: source `<` emits `jl`, `>`
+emits `jg`, `<=`/`>=` are normalised to `<`/`>` with an adjusted bound, and `/`/`%` emit `cqo` +
+`idiv` (truncating toward zero). The dialect compiler no longer silently gives a negative value
+unsigned semantics.
+
+The assembler gained `jl/jle/jg/jge/js` (rel8 and `.l`), `cqo` and `idiv r32/r64`, each with a
+hand-written hex expectation in `tests/superior/signed.hex` and a coverage row. `src/asm1.s` is
+frozen; the live source is `src/asm1.c`.
+
+Two signed-compiler defects surfaced while making the compiler build itself:
+
+- `pd`/`pda`/`pw`/`pwa` split values with `/ 256`; signed division truncates toward zero, so a
+  negative value wrote zero high bytes. They now shift arithmetically.
+- `ex4`/`ex8` had the same defect for rel32 and disp32, which showed up as `0x00` where the corpus
+  expected `0xff` in `callret.s` and `rel32.s`.
+
+The compiler's own internal comparisons are on non-negative counts and offsets, so signed emission is
+safe for them; that is stated at `condjump`. `calc.c` was rewritten to use `v < 0` and signed `/`
+and `%`, deleting the magnitude workaround, and its table now includes `(3-10)/2` and `(3-10)%3`.
+
+### The differential
+
+`tools/differential.sh` is the fourth oracle rung. It builds each `tests/differential/*.c` with both
+`cc`+`asm1` and `gcc -O0 -funsigned-char`, then compares stdout bytes and exit status. gcc builds
+only the second opinion; it never produces a repository artifact. It is a named exemption in
+`make test-tools` and is run by hand, not from `make check`.
+
+```
+tools/differential.sh                5/5 AGREE
+tools/differential.sh seed/cc ./asm1 1/5 (the pre-signed dialect witness DIFFERS on all four negative cases)
+```
+
+That failure against the old compiler is why the gate can be trusted: a green run is not a format
+check wearing a gate's clothes.

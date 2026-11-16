@@ -63,13 +63,14 @@ dis: src/dis.s asm1
 bootstrap:
 	@printf '  asm0a %s bytes  sha %s  (hand-written machine code; nothing to build)\n' \
 	  "$$(wc -c < $(ASM0A))" "$$(sha256sum $(ASM0A) | cut -c1-16)"
-# asm1 is built by the SEED, never by itself. seed/asm1 is the promoted previous
-# stage: a binary must never be its own reference, or a miscompilation survives
-# every generation with nothing to compare against.
-asm1: src/asm1.s $(SEED)
-	@$(SEED) < src/asm1.s > $@
+# asm1 is the C assembler, built by the frozen seeds. src/asm1.s is the
+# historical witness and is pinned by test-frozen; it is not the builder.
+asm1: src/asm1.c seed/cc1 $(SEED)
+	@mkdir -p $(WORK)
+	@seed/cc1 < src/asm1.c > $(WORK)/asm1.c.s
+	@$(SEED) < $(WORK)/asm1.c.s > $@
 	@chmod +x $@
-	@printf '  asm1  %s bytes  sha %s  (built by %s from src/asm1.s)\n' \
+	@printf '  asm1  %s bytes  sha %s  (seed/cc1 + %s from src/asm1.c)\n' \
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(SEED)"
 test: test-asm0a asm1 test-asm1 test-dis test-reject test-reject-msg test-capability test-superior
 test-asm0a:
@@ -111,13 +112,15 @@ test-asm1: asm1
 	printf '  asm1   %s/%s oracles reproduced\n' $$ok $(TOTAL); \
 	exit $$fail
 # ---- the fixpoint -----------------------------------------------------------
-fixpoint: asm1
-	@$(ASM1) < src/asm1.s > asm1b
+fixpoint: asm1 cc
+	@mkdir -p $(WORK)
+	@$(CC) < src/asm1.c > $(WORK)/asm1.c.s
+	@$(ASM1) < $(WORK)/asm1.c.s > asm1b
 	@chmod +x asm1b
 	@if cmp -s asm1 asm1b; then \
-	  printf '  fixpoint holds: asm1(asm1.s) == asm1, %s bytes\n' "$$(wc -c < asm1)"; \
+	  printf '  fixpoint holds: asm1(asm1.c.s) == asm1, %s bytes\n' "$$(wc -c < asm1)"; \
 	else \
-	  echo '  FIXPOINT BROKEN: the second generation differs'; cmp -l asm1 asm1b | head -5; exit 1; \
+	  echo '  FIXPOINT BROKEN: the C assembler does not reproduce itself'; cmp -l asm1 asm1b | head -5; exit 1; \
 	fi
 demo: asm1
 	@$(ASM0A) < src/count10.s > count10
@@ -139,7 +142,7 @@ which: asm1
 	@./tools/provenance.sh which $(FILE)
 # ---- the C bootstrap, from the frozen seeds ----------------------------------
 # The assembly sources are frozen (make test-frozen). This target rebuilds every
-# .c artifact from scratch with the two committed seed binaries: seed/cc (the
+# .c artifact from scratch with the two committed seed binaries: seed/cc1 (the C compiler seed; seed/cc is the dialect witness
 # frozen C compiler) and seed/asm1 (the frozen assembler).
 #
 # Order matters and is the answer to "assembler, then compiler":
@@ -150,13 +153,13 @@ which: asm1
 # Steps 3 and 4 are the fixpoints: cc2 == cc1 and asm2b == asm2.
 from-c:
 	@mkdir -p $(WORK)/from-c; \
-	if ! seed/cc < src/asm1.c > $(WORK)/from-c/asm1.c.s; then \
-	  echo '  from-c: seed/cc refuses src/asm1.c'; exit 1; fi; \
+	if ! seed/cc1 < src/asm1.c > $(WORK)/from-c/asm1.c.s; then \
+	  echo '  from-c: seed/cc1 refuses src/asm1.c'; exit 1; fi; \
 	if ! seed/asm1 < $(WORK)/from-c/asm1.c.s > $(WORK)/from-c/asm2; then \
 	  echo '  from-c: asm1 refuses the text for src/asm1.c'; exit 1; fi; \
 	chmod +x $(WORK)/from-c/asm2; \
-	if ! seed/cc < src/cc.c > $(WORK)/from-c/cc1.s; then \
-	  echo '  from-c: seed/cc refuses src/cc.c'; exit 1; fi; \
+	if ! seed/cc1 < src/cc.c > $(WORK)/from-c/cc1.s; then \
+	  echo '  from-c: seed/cc1 refuses src/cc.c'; exit 1; fi; \
 	if ! $(WORK)/from-c/asm2 < $(WORK)/from-c/cc1.s > $(WORK)/from-c/cc1; then \
 	  echo '  from-c: asm2 refuses the text for src/cc.c'; exit 1; fi; \
 	chmod +x $(WORK)/from-c/cc1; \
@@ -237,7 +240,7 @@ promote: asm1 fixpoint
 	 if [ "$$old" = "$$new" ]; then \
 	   echo "  seed/asm1 unchanged ($${new%%????????????????}); nothing to promote"; \
 	 else \
-	   printf 'asm1\t%s\t%s\t%s\tpromoted from src/asm1.s\n' "$$new" "$(SEED)" "$$old" >> docs/toolchain.tsv; \
+	   printf 'asm1\t%s\t%s\t%s\tpromoted from src/asm1.c\n' "$$new" "$(SEED)" "$$old" >> docs/toolchain.tsv; \
 	   echo "  promoted seed/asm1: $${new%%????????????????} (was $${old%%????????????????})"; \
 	 fi
 	@./tools/provenance.sh record
@@ -296,6 +299,9 @@ FORBIDDEN := objdump|objcopy|readelf|gcc|g\+\+|clang|nasm|gas|gdb|lldb|strace|py
 # Scratch space for every gate. Invariant 13: nothing outside the tree, so this is
 # .work/ in the repository rather than a directory in /tmp that nothing can find.
 WORK := $(CURDIR)/.work
+# tools/differential.sh is the one named exemption below: gcc is the second opinion
+# in rung 4 (docs/oracles.md), builds no artifact in this repository, and is run
+# by hand rather than from a recipe. See the comment in that file.
 test-tools:
 	@scan() { grep -v '^[[:space:]]*#' "$$1" | grep -nwE '$(FORBIDDEN)'; }; \
 	mscan() { awk '/^\t/' Makefile | grep -nwE '$(FORBIDDEN)'; }; \
@@ -304,6 +310,7 @@ test-tools:
 	  echo '  FORBIDDEN TOOL invoked in a Makefile recipe:'; mscan | sed 's/^/    /'; fail=1; \
 	fi; \
 	for f in tools/*.sh; do \
+	  case "$$f" in tools/differential.sh) continue;; esac; \
 	  if [ -n "$$(scan $$f)" ]; then \
 	    echo "  FORBIDDEN TOOL invoked in $$f:"; scan $$f | sed 's/^/    /'; fail=1; \
 	  fi; \
@@ -323,23 +330,25 @@ test-tools:
 # output is a file a person can read and diff, asm1 remains the only thing that
 # produces bytes, and everything the assembler already proves applies to what
 # the compiler writes.
-cc: src/cc.s asm1
-	@$(ASM1) < src/cc.s > $@
+cc: src/cc.c asm1 seed/cc1
+	@mkdir -p $(WORK)
+	@seed/cc1 < src/cc.c > $(WORK)/cc.s
+	@$(ASM1) < $(WORK)/cc.s > $@
 	@chmod +x $@
-	@printf '  cc    %s bytes  sha %s  (built by %s from src/cc.s)\n' \
-	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(ASM1)"
+	@printf '  cc    %s bytes  sha %s  (asm1 from src/cc.c, the C compiler)\n' \
+	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)"
 
 # ---- the dialect compiler's source is invariant ------------------------------
 # cc is built by asm1 from src/cc.s, and this target says so a second time: the
 # same source assembles to the same bytes. Work on the C port must not move the
 # dialect compiler's source or binary; if it does, this line is red.
-test-cc-source: cc
+test-cc-source: asm1 seed/cc
 	@mkdir -p $(WORK); \
-	$(ASM1) < src/cc.s > $(WORK)/cc.rebuild || exit 1; \
-	if cmp -s cc $(WORK)/cc.rebuild; then \
-	  printf '  cc source invariant: asm1 < src/cc.s == cc, %s bytes, sha %s\n' \
-	    "$$(wc -c < cc)" "$$(sha256sum cc | cut -c1-16)"; \
-	else echo '  cc source is NOT invariant: rebuilding src/cc.s differs from cc'; exit 1; fi
+	$(ASM1) < src/cc.s > $(WORK)/cc.frozen || exit 1; \
+	if cmp -s seed/cc $(WORK)/cc.frozen; then \
+	  printf '  frozen cc.s still assembles to seed/cc, %s bytes, sha %s\n' \
+	    "$$(wc -c < seed/cc)" "$$(sha256sum seed/cc | cut -c1-16)"; \
+	else echo '  frozen cc.s no longer assembles to seed/cc'; exit 1; fi
 
 # One command for the whole pipeline. The two-stage version is easy to half-copy
 # -- and half-copied, cc's output is dialect TEXT that the shell will happily

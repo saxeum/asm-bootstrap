@@ -47,8 +47,15 @@ int gw(int m, int o)
 
 int pw(int m, int o, int v)
 {
-	m[204700 + o] = v % 256;
-	m[204700 + o + 1] = v / 256;
+	int t = v;
+	int neg = 0;
+	if (t < 0) { neg = 1; }
+	int r = t % 256;
+	m[204700 + o] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[204700 + o + 1] = r;
 	return 0;
 }
 
@@ -59,10 +66,23 @@ int gd(int m, int o)
 
 int pd(int m, int o, int v)
 {
-	m[204700 + o] = v % 256;
-	m[204700 + o + 1] = v / 256 % 256;
-	m[204700 + o + 2] = v / 256 / 256 % 256;
-	m[204700 + o + 3] = v / 256 / 256 / 256 % 256;
+	int t = v;
+	int neg = 0;
+	if (t < 0) { neg = 1; }
+	int r = t % 256;
+	m[204700 + o] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[204700 + o + 1] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[204700 + o + 2] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[204700 + o + 3] = r;
 	return 0;
 }
 
@@ -74,8 +94,15 @@ int gwa(int m, int o)
 
 int pwa(int m, int o, int v)
 {
-	m[o] = v % 256;
-	m[o + 1] = v / 256;
+	int t = v;
+	int neg = 0;
+	if (t < 0) { neg = 1; }
+	int r = t % 256;
+	m[o] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[o + 1] = r;
 	return 0;
 }
 
@@ -86,10 +113,23 @@ int gda(int m, int o)
 
 int pda(int m, int o, int v)
 {
-	m[o] = v % 256;
-	m[o + 1] = v / 256 % 256;
-	m[o + 2] = v / 256 / 256 % 256;
-	m[o + 3] = v / 256 / 256 / 256 % 256;
+	int t = v;
+	int neg = 0;
+	if (t < 0) { neg = 1; }
+	int r = t % 256;
+	m[o] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[o + 1] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[o + 2] = r;
+	t = t / 256;
+	if (neg != 0) { if (r != 0) { t = t - 1; } }
+	r = t % 256;
+	m[o + 3] = r;
 	return 0;
 }
 
@@ -651,9 +691,9 @@ int ex2(int m, int d)
 				ems(m, "mov rax, ");
 				emreg(m, d);
 				nl(m);
-				ems(m, "xor rdx, rdx");
+				ems(m, "cqo");
 				nl(m);
-				ems(m, "div r9");
+				ems(m, "idiv r9");
 				nl(m);
 				ems(m, "mov ");
 				emreg(m, d);
@@ -1115,11 +1155,17 @@ int expr(int m)
 /* ---- conditions ---- */
 int condjump(int m, int k)
 {
+	/* Source comparisons are signed: lt/le -> jl, gt/ge -> jg. The compiler's
+	 * own comparisons (counts, offsets, bounds) are all non-negative, so the
+	 * same signed jump is correct for them too. */
 	nl(m);
 	if (k == 1) { ems(m, "jz.l "); }
 	else {
 		if (k == 2) { ems(m, "jnz.l "); }
-		else { ems(m, "jb.l "); }
+		else {
+			if (k == 3) { ems(m, "jg.l "); }
+			else { ems(m, "jl.l "); }
+		}
 	}
 	return 0;
 }
@@ -1259,7 +1305,7 @@ int condj(int m, int id, int lt)
 			ems(m, "mov rcx, ");
 			emn(m, b);
 			nl(m);
-			ems(m, "cmp rcx, rax");
+			ems(m, "cmp rax, rcx");
 			condjump(m, 3);
 		}
 		else {
@@ -1269,8 +1315,7 @@ int condj(int m, int id, int lt)
 		}
 	}
 	else {
-		if (k == 3) { ems(m, "cmp rcx, rax"); }
-		else { ems(m, "cmp rax, rcx"); }
+		ems(m, "cmp rax, rcx");
 		condjump(m, k);
 	}
 	ems(m, "L");

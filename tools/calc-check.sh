@@ -12,8 +12,8 @@ mkdir -p "$w"
 chmod +x "$w/calc"
 fail=0
 
-printf '1+2*3\n(1+2)*3\n-5+2\n3-10\n-3*-4\n100/7\n100%%7\n0-5\n' > "$w/calc.in"
-printf '7\n9\n-3\n-7\n12\n14\n2\n-5\n' > "$w/calc.want"
+printf '1+2*3\n(1+2)*3\n-5+2\n3-10\n-3*-4\n100/7\n100%%7\n0-5\n(3-10)/2\n(3-10)%%3\n' > "$w/calc.in"
+printf '7\n9\n-3\n-7\n12\n14\n2\n-5\n-3\n-1\n' > "$w/calc.want"
 "$w/calc" < "$w/calc.in" > "$w/calc.got"
 if ! cmp -s "$w/calc.got" "$w/calc.want"; then
 	echo "  calc: arithmetic wrote [$(cat "$w/calc.got" | tr '\n' ' ')]"
@@ -36,5 +36,5 @@ if [ $rc -eq 0 ] || [ -s "$w/calc.bad2.out" ] || [ "$(cat "$w/calc.bad2.err")" !
 	fail=1
 fi
 
-[ $fail -eq 0 ] && printf '  calc: 8/8 results and 2/2 refusals, signed values included\n'
+[ $fail -eq 0 ] && printf '  calc: 10/10 results and 2/2 refusals, signed values included\n'
 exit $fail

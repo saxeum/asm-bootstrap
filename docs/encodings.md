@@ -67,6 +67,10 @@ extension, never inferred from entry order.
 | `imul r64, r/m64, imm8` (wave 3) | — | `6B` | — | not yet implemented |
 | `jmp rel8` | `EB cb` | `EB` | — | `JMP Jbs` |
 | `jz`/`jnz`/`jb` rel8 | `74`/`75`/`72 cb` | — | — | `JZ`/`JNZ`/`JB Jbs` |
+| `jl`/`jle`/`jg`/`jge`/`js` rel8 | `7C`/`7E`/`7F`/`7D`/`78 cb` | — | — | `JL`/`JLE`/`JG`/`JGE`/`JS Jbs` |
+| `idiv r32` | `F7 /7` | `F7` | 7 | `IDIV Evqp` |
+| `idiv r64` | `REX.W F7 /7` | `F7` | 7 | `IDIV Evqp` |
+| `cqo` | `48 99` | `99` with `REX.W` | — | `CQO` |
 | `jmp rel32` (`.l`) | `E9 cd` | `E9` | — | `JMP Jvds` |
 | `jcc rel32` (`.l`) | `0F 8x cd` | `8x` under `0F` | — | `Jcc Jvds` |
 | `syscall` | `0F 05` | `05` (0F) | — | `SYSCALL` (mode=e) |
