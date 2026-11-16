@@ -163,12 +163,18 @@ and put it in `docs/oracles.md` as a step for the next session. Docs are deliber
 they have to be able to say that a tool was used and is now forbidden. That sentence is the record;
 an invocation is the defect.
 
-Two things this does **not** establish, and neither may be claimed as verified:
+Three things this does **not** establish, and none may be claimed as verified:
 
-1. **A shared bug could hide.** Our decoder checking our encoder is weaker than an independent one.
+1. **The pin table is not ours either.** `docs/branches.tsv` was recorded in earlier waves *from
+   `objdump` output* — 290 sites, transcribed by hand. So when the gate is green, what it shows is
+   that our decoder decodes those 290 sites exactly as objdump did, which is a genuine independent
+   check *of the decoder* and no check at all of the encoder. The table is hand-recorded evidence,
+   and the gate's going-forward job is drift: change a byte of `asm0a` or of the encoder and the
+   pins go red. It cannot tell you whether objdump was right, and it never could.
+2. **A shared bug could hide.** Our decoder checking our encoder is weaker than an independent one.
    The mitigations already exist and are not new: hand-emitted `ref/` binaries, hand-written decode
    cases, and the capability pairs that pin encodings against hand-computed dumps.
-2. **The instruction-mix table in `docs/ROADMAP.md` is still provisional**, and for a narrower
+3. **The instruction-mix table in `docs/ROADMAP.md` is still provisional**, and for a narrower
    reason than before. The decoder handles branch forms only, so it confirms the branch half of that
    inventory (290 sites, `make check`) and says nothing about `mov`, `add`, `inc`. Re-deriving the
    whole mix needs a decoder for every form `asm0a` uses, which is a different and much larger tool.

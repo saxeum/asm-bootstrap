@@ -6,10 +6,12 @@
 # us. src/dis.s is that check now, assembled by asm1, and every line below is
 # compared with cmp rather than with a status.
 #
-# The pins are hand-recorded evidence (290 sites, recorded before dis.s existed)
-# and this gate is the first time they have been checked by something in the
-# project. It validates the recording, not the encoder: a site that dis agrees
-# with is a site whose bytes and recorded target agree.
+# The pins are hand-recorded evidence -- 290 sites, transcribed from objdump output
+# during the waves when that was allowed, which is the one thread to objdump left
+# in this repo and can never be removed. What it means: a green gate says our
+# decoder decodes these 290 sites the way objdump did, so it is an independent
+# check of the DECODER and no check at all of either encoder. Its going-forward
+# job is drift: change a byte of the subject and the pins go red.
 #
 # Three ways this gate refuses to be quietly green:
 #   1. no decoder, no subject, or a table shorter than the 290 recorded pins;
