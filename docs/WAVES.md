@@ -1121,3 +1121,53 @@ And the payload — `src/scan.s`, which finds the end of the first input line by
    test never matched and it fell through to the register path, which failed on `byte`.
 3. **The `'b'` test was too loose** — it also matched `bl`, breaking `movzx eax, bl`. Fixed by
    testing `'y'` at offset 1, which only `byte` has.
+
+## asm1.s step 2 — PASS: line awareness (comment stripping)
+
+`src/asm1.s`, 272 bytes when assembled by `asm0a`. Copies stdin to stdout with `;` comments
+removed; spaces, blank lines and newlines pass through untouched.
+
+### Gate
+
+```
+comment stripping:   21/21 sources in src/ produce output identical to sed 's/;.*//'
+round trip:          16/16 fixtures — strip, reassemble, bytes identical to the original
+                     (src/cat.s: 189 bytes before and after)
+edge cases:          input with no trailing newline passes through unsplit;
+                     "a;b\nc" -> "a\nc"
+```
+
+The 21-source comparison is a differential test against a tool that is not part of the build: if
+asm1 and `sed` disagree on any line, one of them is wrong, and neither is the oracle for the other.
+
+### Four defects
+
+1. **`syscall` clobbers `rcx`** — it holds the return address. The first version kept a "this line
+   emitted something" flag in `ecx`, so the flag was destroyed by the first write and *every*
+   newline was dropped: `"mov eax, 1   ; set the exit code\n"` came out as `moveax,1`. Nothing may
+   live in `rcx`, `r11`, `rax`, `rdx`, `rdi` or `rsi` across a syscall.
+2. **The skip loop ate the spaces** — treating "skip leading spaces" literally, when the job was
+   only to strip comments. Preserving every byte and cutting at `;`→newline removed the whole
+   class of problem, and the flag that defect 1 killed became unnecessary.
+3. **`jmp line` out of `rel8` range.** `line:` is at the top and the `toend` block is ~170 bytes
+   below it. `asm0a` failed loudly, as designed; the fix is `jmp.l`.
+4. **Latent encoder defect, found while choosing the pointer register: `[rbp]` is malformed.**
+   `memop2`/`emit_mem` decide `mod=01` from "displacement is non-zero", which is right for every
+   base except `rbp`, where `mod=00, rm=101` means RIP-relative, not `[rbp]`. Observed:
+
+   ```
+   movzx eax, byte [rbp]     -> 0f b6 05          (3 bytes: mod=00/rm=101, NO disp32)
+   movzx eax, byte [rbp+1]   -> 0f b6 45 01       (correct)
+   ```
+
+   Worked around by putting the pointer in `rbx` (no such case), and recorded in
+   `docs/encodings.md` as a known defect with the fix named. `memop2` is 14 bytes with its `ret`
+   immediately followed by live code, so it cannot grow; the fix needs call-site retargeting to a
+   wrapper, which is its own wave.
+
+### Technique worth keeping
+
+When `asm0a` exits 1 it does not say which line. Truncating the source at every prefix and
+appending stubs for any labels not yet defined localises the offending line in one loop — the
+stubs also collapse long jumps, which separates "bad form" from "out of range". That is what
+identified defect 3.

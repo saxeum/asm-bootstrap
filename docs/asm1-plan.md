@@ -148,7 +148,10 @@ mnemonic alone.
 About 600–800 instructions. Build it in the order that keeps it runnable at every step:
 
 1. **cat** — done (`src/cat.s`).
-2. **cat with line awareness**: skip `;` comments and blank lines. Testable by round-trip.
+2. ~~**cat with line awareness**~~ — **done**: `src/asm1.s` strips `;` comments, 21/21 sources
+   identical to `sed 's/;.*//'` and 16/16 fixtures round-trip. See `docs/WAVES.md`. Blank lines are
+   *kept*, not dropped: dropping them needs a "line has content" flag, and a flag cannot live in
+   `rcx` across a syscall. Keeping them costs nothing — the parser ignores them.
 3. **emit one hard-coded instruction per matched mnemonic**: recognise `syscall`, `mov r32,imm`,
    `db` and emit them. Testable: assemble a 3-line source and compare with `asm0a`'s output.
 4. **labels + pass 2**: assemble something with a forward jump.

@@ -154,3 +154,24 @@ Honest scorecard so far: the check has confirmed 29 forms that were already righ
 *caught* nothing except my own query bug (LOADALL vs SYSCALL). Its value today is confirmation;
 its value later is that the table will roughly triple, and the `/digit` and width-rule errors it
 prevents are exactly the ones that produce plausible wrong bytes.
+
+## Known defect: `[rbp]` (and `[r13]`)
+
+`emit_mem` sets `mod = 01` when the displacement is non-zero and `mod = 00` otherwise. That rule is
+correct for every base register except `rbp`/`r13`, where `mod = 00, rm = 101` does not mean
+`[rbp]` — it means **RIP-relative with a disp32**. Observed today:
+
+```
+movzx eax, byte [rbp]     -> 0f b6 05          WRONG: 3 bytes, no disp32 emitted at all
+movzx eax, byte [rbp+1]   -> 0f b6 45 01       correct
+```
+
+`[rbp]` must encode as `mod = 01, rm = 101, disp8 = 00`. The defect has been latent because no
+fixture has ever used `rbp` as a base; `movzx r32,byte [mem]` made it reachable.
+
+**Status: not fixed.** `memop2` is 14 bytes (`0x9fc`–`0xa09`) with its single `ret` at `0xa09`
+immediately followed by live code at `0xa0a`, so there is no room to append the check in place.
+The fix is a wrapper — `call 0x9fc`; if `r11d == 5` and `rdx == 0` then `mov edx, 0x100` (which
+makes the existing non-zero test take the `mod = 01` path and emits `dl = 0`) — with every
+`call memop2` site retargeted to it. Until then: **do not use `rbp` as a base with a zero
+displacement.**
