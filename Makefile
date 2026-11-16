@@ -343,6 +343,15 @@ test-cc: cc asm1
 	  if $$tmp/cs; then g2=0; else g2=$$?; fi; \
 	  if [ $$g1 -eq 5 ] && [ $$g2 -eq 1 ]; then \
 	    printf '  cc    a call: add(2,3) exits 5 and sub2(3,2) exits 1 (argument order)\n'; \
+	if $(CC) < tests/golden/callvar.c > $$tmp/cv.s 2>/dev/null && cmp -s $$tmp/cv.s tests/golden/callvar.s; then \
+	  if $(ASM1) < tests/golden/callvar.s > $$tmp/cv 2>/dev/null; then \
+	    chmod +x $$tmp/cv; \
+	    if $$tmp/cv; then g1=0; else g1=$$?; fi; \
+	    if [ $$g1 -eq 42 ]; then \
+	      printf '  cc    a variable argument: f(x) with x=41 exits 42\n'; \
+	    else echo "  f(x) exited $$g1, wanted 42"; fail=1; fi; \
+	  else echo "  asm1 refuses callvar.s"; fail=1; fi; \
+	else echo "  callvar.c does not compile to its golden"; fail=1; fi; \
 	  else echo "  calls exited $$g1/$$g2, wanted 5/1 -- the convention is wrong"; fail=1; fi; \
 	else echo "  the call cases do not assemble"; fail=1; fi; \
 	  else echo "  exprs exited $$g1, wanted 18 (precedence is wrong)"; fail=1; fi; \
@@ -383,7 +392,6 @@ test-cc: cc asm1
 	refuse 'int main(void) { int x = 1; int x = 2; }'; \
 	refuse 'int main(void) { int abcdefgh = 1; }'; \
 	refuse 'int main(void) { int x = 4 / 2; }'; \
-	refuse 'int f(int a) { return a; } int main(void) { int x = 3; return f(x); }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(1, 2, 3, 4, 5); }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(f()); }'; \
 	refuse 'int main(void) { int a1 = 1; int a2 = 2; int a3 = 3; int a4 = 4; int a5 = 5; int a6 = 6; int a7 = 7; int a8 = 8; int a9 = 9; }'; \

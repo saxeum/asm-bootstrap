@@ -249,7 +249,9 @@ jz cardskip
 mov eax, 1
 mov [rbp-208], eax
 cargloop:
-call expr              ; an argument is an expression that must be a constant today: a variable argument fails inside the recursive parse (docs/cc.md)
+mov eax, 0
+mov [rbp-128], eax     ; an argument is one term, not an expression
+call ex3
 mov esi, 4194424+f_mov
 call emitstr
 mov eax, [rbp-168]

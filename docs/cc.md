@@ -503,14 +503,16 @@ golden: `mov rdi, rax` → `mov rsi, rax` produces `calls exited 3/1, wanted 5/1
 
 ### What this stage does *not* have
 
-- **Only constant arguments.** `f(3, 2)` works; `f(x)` does not, and it is refused. The failure is
-  inside the recursive expression parse — a variable argument is parsed by the same `expr` that is
-  already running for the enclosing `return`, and that nesting fails; the constant path does not go
-  through it. Recorded as an open defect with its evidence, not as a design choice.
 - **No call inside a larger expression**, and no call inside an argument list: both are refused,
   because they would clobber argument registers or temporaries. The refusals are in the suite.
-- **No recursion** — not because the frame would fail (it would work) but because a recursive call
-  needs an argument that is a variable.
+- **No recursion yet** — the frame would allow it; what is missing is an argument that is an expression
+  (`f(n - 1)`), which is the next step.
 - **No forward declarations**: a call to a function defined later still works, because the assembler
   resolves the label, but a call to one that does not exist fails at assembly time (`label`), not at
   compile time.
+- **An argument is one term, not an expression.** `f(3)` and `f(x)` work; `f(x - 1)` does not, and it is
+  refused. This started as a defect — a *variable* argument failed inside the recursive expression
+  parse, with the callee's name still in the name buffer at the lookup — and the fix was also the
+  better design: `callargs` calls `ex3` (one term) rather than `expr` (the whole parser). Recursion
+  needs `f(n - 1)`, so allowing an arbitrary expression as an argument is the next step, and the
+  recursion bug it exposes has to be fixed rather than avoided.

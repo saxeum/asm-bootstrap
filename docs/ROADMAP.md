@@ -1275,3 +1275,17 @@ expression parse. `f(3)` works; `f(x)` is refused. Recursion, and any real progr
 
 `cc` 4 877 → 5 734 bytes. Coverage of the assembler is unchanged: the emitted code uses only forms
 that already had fixtures, which is the payoff of emitting text.
+
+### Fixed: the variable-argument defect
+
+`f(x)` worked as `f(3)` did not, and the cause was `callargs` calling the *whole* `expr` parser
+recursively while already inside an expression: the nested `ex1`/`ex2` frames shared the stack the
+enclosing parse was using, and the symbol name buffer did not survive it. Found by probing state —
+the name buffer held `1` where it should have held `x` — not by reading.
+
+The fix is a smaller design rather than a workaround: **an argument is one term**, so `callargs`
+calls `ex3`. Gated: `f(x)` with `x = 41` exits 42.
+
+Next, in order: allow an expression as an argument (which the nesting bug blocks, so it has to be
+fixed properly), then recursion (`f(n - 1)`), then `if` inside a function with a local that survives
+the call.

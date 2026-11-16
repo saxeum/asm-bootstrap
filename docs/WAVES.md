@@ -2271,3 +2271,26 @@ constant argument (`f(3)`) works. Probes localise it to `call expr` inside `call
 before it runs, nothing after it does, and the same `expr` called from a statement handles the same
 variable correctly. It is refused today (the refusal is in the suite) and it is the first thing to
 fix, because recursion and any real program need it.
+
+### The variable-argument defect, found and fixed
+
+The open defect from the previous wave — `f(x)` refused while `f(3)` worked — was localised with
+probes to `findvar`, and the reading at that point was decisive: the symbol name buffer held `1`,
+not `x`. Working backwards, the callee's *name* was still there when the argument's lookup ran, i.e.
+something had overwritten the buffer between `ident` scanning the argument and `findvar` looking it
+up.
+
+The cause is the nesting: `callargs` called the *whole* `expr` parser recursively, and `expr` begins
+by resetting the depth slot and running `ex1`/`ex2`, whose `push`/`pop` frames sit on the same stack
+that the enclosing expression is using. The fix is not a workaround but a smaller design: **an
+argument is one term, not an expression**, so `callargs` calls `ex3` directly. `f(x)` now works
+(`x=41` → exit 42), gated.
+
+What that leaves is a narrower and honest limitation: `f(x - 1)` is refused. Recursion needs it, so
+the next step is to allow an expression as an argument — and to fix the nesting bug rather than
+avoid it.
+
+Two things this session taught, both already in `AGENTS.md` and both worth the repetition: a defect
+that survives reading is found by *probing state*, not by re-reading code (the buffer byte was 1, and
+that one number pointed straight at the cause); and the fix to "I called the wrong routine" is
+usually "call less", not "call it differently".
