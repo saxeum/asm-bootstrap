@@ -1,0 +1,409 @@
+/* src/cc.c -- the compiler, written in the subset it compiles.
+ *
+ * Slice 4a: front end for one function. Scanner, symbol table, expressions with
+ * precedence, `int x = N;`, `x = expr;`, `return expr;`. Judged against the
+ * dialect compiler, not against itself:
+ *
+ *     ./cc < x.c | cmp - <(./.work/cc4a < x.c)
+ *
+ * The subset's rules that shape this file (docs/cc.md), each learned by being
+ * refused: no globals (state is an int array in main, passed as a pointer); no
+ * nested subscripts (`o[s[2]]` is refused, so the index is hoisted); a
+ * comparison bound must be a literal or a variable (`k >= s[1]` is refused, so
+ * the field is hoisted); at most four parameters; a string literal is bytes, so a
+ * newline is emitc 10; no prototypes, since a function is a label.
+ */
+
+/* state: 0 pos, 1 len, 2 out, 3 nvars, 4 id, 5 depth, 6..9 scratch,
+   10..14 the buffer and table pointers */
+
+int emitc(int s, int c)
+{
+	int o = s[13];
+	int k = s[2];
+	o[k] = c;
+	s[2] = k + 1;
+	return s[2];
+}
+
+int emitstr(int s, int t)
+{
+	int i = 0;
+	while (t[i] != 0) {
+		emitc(s, t[i]);
+		i = i + 1;
+	}
+	return s[2];
+}
+
+int emitnum(int s, int n)
+{
+	int place = 10000;
+	int started = 0;
+	int d = 0;
+	while (place > 0) {
+		d = (n / place) - ((n / place) / 10) * 10;
+		if (d > 0) { started = 1; }
+		if (started == 1) { emitc(s, '0' + d); }
+		place = place / 10;
+	}
+	if (started == 0) { emitc(s, '0'); }
+	return s[2];
+}
+
+/* text, then a newline */
+int lin(int s, int t)
+{
+	emitstr(s, t);
+	emitc(s, 10);
+	return s[2];
+}
+
+int gch(int s)
+{
+	int i = s[10];
+	int k = s[0];
+	int lim = s[1];
+	if (k >= lim) { return 0; }
+	return i[k];
+}
+
+int skipws(int s)
+{
+	int c = 0;
+	int go = 1;
+	while (go == 1) {
+		c = gch(s);
+		if (c == 32) { s[0] = s[0] + 1; }
+		if (c == 32) { s[0] = s[0] + 1; } else { go = 0; }
+		if (c == 9) { s[0] = s[0] + 1; go = 1; }
+		if (c == 10) { s[0] = s[0] + 1; go = 1; }
+}
+
+int alpha(int c)
+{
+	if (c >= 97) { if (c <= 122) { return 1; } }
+	if (c >= 65) { if (c <= 90) { return 1; } }
+	if (c == 95) { return 1; }
+	return 0;
+}
+
+int alnum(int c)
+{
+	if (alpha(c) == 1) { return 1; }
+	if (c >= 48) { if (c <= 57) { return 1; } }
+	return 0;
+}
+
+/* the name at the cursor into nm; returns its length, 0 if there is none */
+int ident(int s)
+{
+	int nm = s[14];
+	int n = 0;
+	int c = 0;
+	int go = 1;
+	skipws(s);
+	while (go == 1) {
+		c = gch(s);
+		if (alnum(c) == 1) { nm[n] = c; n = n + 1; s[0] = s[0] + 1; } else { go = 0; }
+		if (n > 14) { go = 0; }
+	}
+	nm[n] = 0;
+	return n;
+}
+
+int numv(int s)
+{
+	int n = 0;
+	int c = 0;
+	int go = 1;
+	skipws(s);
+	while (go == 1) {
+		c = gch(s);
+		if (c >= 48) {
+			if (c <= 57) { n = n * 10 + (c - 48); s[0] = s[0] + 1; } else { go = 0; }
+		}
+		else { go = 0; }
+	}
+	return n;
+}
+
+/* word match against a literal: 1 if the cursor holds exactly that word */
+int word(int s, int t)
+{
+	int k = s[0];
+	int n = 0;
+	int c = 0;
+	skipws(s);
+	while (t[n] != 0) {
+		c = gch(s);
+		if (c != t[n]) { return 0; }
+		s[0] = s[0] + 1;
+		n = n + 1;
+	}
+	c = gch(s);
+	if (alnum(c) == 1) { return 0; }
+	return 1;
+}
+
+/* the symbol table: name i at nmp + 16*i, its offset at sy[2*i] */
+int find(int s)
+{
+	int nmp = s[11];
+	int sy = s[12];
+	int nm = s[14];
+	int i = 0;
+	int k = 0;
+	int same = 0;
+	int nv = s[3];
+	while (i < nv) {
+		same = 1;
+		k = 0;
+		while (k < 16) {
+			if (nmp[i * 16 + k] != nm[k]) { same = 0; }
+			k = k + 1;
+		}
+		if (same == 1) { return i; }
+		i = i + 1;
+	}
+	return -1;
+}
+
+int defvar(int s)
+{
+	int nmp = s[11];
+	int sy = s[12];
+	int nm = s[14];
+	int i = s[3];
+	int k = 0;
+	while (k < 16) {
+		nmp[i * 16 + k] = nm[k];
+		k = k + 1;
+	}
+	sy[i * 2] = 8 * (i + 1);
+	s[3] = i + 1;
+	return i;
+}
+
+int emitreg(int s, int d)
+{
+	if (d == 0) { emitstr(s, "rax"); }
+	if (d == 1) { emitstr(s, "rcx"); }
+	if (d == 2) { emitstr(s, "rdx"); }
+	if (d == 3) { emitstr(s, "rsi"); }
+	if (d == 4) { emitstr(s, "rdi"); }
+	if (d == 5) { emitstr(s, "r8"); }
+	return s[2];
+}
+
+/* mov <reg d>, <number or variable> */
+int term(int s)
+{
+	int sy = s[12];
+	int d = s[5];
+	int c = 0;
+	int v = 0;
+	int ix = 0;
+	int off = 0;
+	skipws(s);
+	c = gch(s);
+	emitstr(s, "mov ");
+	emitreg(s, d);
+	emitstr(s, ", ");
+	if (c == 40) {
+		s[0] = s[0] + 1;
+		s[5] = d + 1;
+		expr(s);
+		if (gch(s) == 41) { s[0] = s[0] + 1; }
+		s[5] = d;
+		emitreg(s, d + 1);
+		emitc(s, 10);
+		return d;
+	}
+	if (c >= 48) {
+		v = numv(s);
+		emitnum(s, v);
+		emitc(s, 10);
+		return d;
+	}
+	ident(s);
+	ix = find(s);
+	if (ix < 0) { s[6] = 1; }
+	off = sy[ix * 2];
+	emitstr(s, "[rbp-");
+	emitnum(s, off);
+	emitstr(s, "]");
+	emitc(s, 10);
+	return d;
+}
+
+int term2(int s)
+{
+	int d = s[5];
+	int c = 0;
+	term(s);
+	skipws(s);
+	c = gch(s);
+	while (c == 42) {
+		s[0] = s[0] + 1;
+		s[5] = d + 1;
+		term(s);
+		s[5] = d;
+		emitstr(s, "imul ");
+		emitreg(s, d);
+		emitstr(s, ", ");
+		emitreg(s, d + 1);
+		emitc(s, 10);
+		skipws(s);
+		c = gch(s);
+	}
+	return d;
+}
+
+int expr(int s)
+{
+	int d = s[5];
+	int c = 0;
+	term2(s);
+	skipws(s);
+	c = gch(s);
+	while (c == 43) {
+		s[0] = s[0] + 1;
+		s[5] = d + 1;
+		term2(s);
+		s[5] = d;
+		emitstr(s, "add ");
+		emitreg(s, d);
+		emitstr(s, ", ");
+		emitreg(s, d + 1);
+		emitc(s, 10);
+		skipws(s);
+		c = gch(s);
+	}
+	while (c == 45) {
+		s[0] = s[0] + 1;
+		s[5] = d + 1;
+		term2(s);
+		s[5] = d;
+		emitstr(s, "sub ");
+		emitreg(s, d);
+		emitstr(s, ", ");
+		emitreg(s, d + 1);
+		emitc(s, 10);
+		skipws(s);
+		c = gch(s);
+	}
+	return d;
+}
+
+/* store rax into variable ix */
+int store(int s, int ix)
+{
+	int sy = s[12];
+	int off = sy[ix * 2];
+	emitstr(s, "mov [rbp-");
+	emitnum(s, off);
+	emitstr(s, "], rax");
+	emitc(s, 10);
+	return 0;
+}
+
+int stmt(int s)
+{
+	int ix = 0;
+	int c = 0;
+	skipws(s);
+	if (word(s, "int") == 1) {
+		ident(s);
+		ix = defvar(s);
+		skipws(s);
+		if (gch(s) == 61) { s[0] = s[0] + 1; }
+		s[5] = 0;
+		expr(s);
+		store(s, ix);
+		skipws(s);
+		if (gch(s) == 59) { s[0] = s[0] + 1; }
+		return 0;
+	}
+	if (word(s, "return") == 1) {
+		s[5] = 0;
+		expr(s);
+		emitstr(s, "mov rdi, rax");
+		emitc(s, 10);
+		emitstr(s, "mov eax, 60");
+		emitc(s, 10);
+		emitstr(s, "syscall");
+		emitc(s, 10);
+		skipws(s);
+		if (gch(s) == 59) { s[0] = s[0] + 1; }
+		return 0;
+	}
+	ident(s);
+	ix = find(s);
+	skipws(s);
+	if (gch(s) == 61) { s[0] = s[0] + 1; }
+	s[5] = 0;
+	expr(s);
+	store(s, ix);
+	skipws(s);
+	if (gch(s) == 59) { s[0] = s[0] + 1; }
+	return 0;
+}
+
+int body(int s)
+{
+	int c = 0;
+	int go = 1;
+	while (go == 1) {
+		skipws(s);
+		c = gch(s);
+		if (c == 125) { s[0] = s[0] + 1; return 0; }
+		if (c == 0) { return 0; }
+		stmt(s);
+	}
+	return 0;
+}
+
+int main(void)
+{
+	char in[19000];
+	char out[19000];
+	char nm[16];
+	char nmp[128];
+	int sy[16];
+	int s[16];
+	int got = 0;
+	got = read(in, 19000);
+	s[0] = 0;
+	s[1] = got;
+	s[2] = 0;
+	s[3] = 0;
+	s[4] = 0;
+	s[5] = 0;
+	s[10] = in;
+	s[11] = nmp;
+	s[12] = sy;
+	s[13] = out;
+	s[14] = nm;
+	emitstr(s, "; generated by cc: dialect source, not a program. Assemble it with asm1");
+	emitc(s, 10);
+	word(s, "int");
+	ident(s);
+	emitstr(s, "main:");
+	emitc(s, 10);
+	lin(s, "push rbp");
+	lin(s, "mov rbp, rsp");
+	lin(s, "mov r10, 16500");
+	lin(s, "sub rsp, r10");
+	skipws(s);
+	if (gch(s) == 40) { s[0] = s[0] + 1; }
+	skipws(s);
+	if (gch(s) != 41) { while (gch(s) != 41) { s[0] = s[0] + 1; } }
+	if (gch(s) == 41) { s[0] = s[0] + 1; }
+	skipws(s);
+	if (gch(s) == 123) { s[0] = s[0] + 1; }
+	body(s);
+	lin(s, "entry main");
+	got = write(out, s[2]);
+	return 0;
+}

@@ -1816,3 +1816,13 @@ the target is the only measure that matters.
 The infrastructure around it is now in place: `cc` can compile a 4.7 KB source into 10.9 KB of text
 (buffers and limits raised, refusal instead of overrun), the argument path is correct at every depth
 (spill), and the port's own slice 3 remains byte- and behaviour-exact.
+
+## Next: finish slice 4a, and the else-chain question
+
+`docs/selfhost-slice4a-attempt.c.txt` is a front end that has passed the scanner and is stopped at a
+three-level `else { if ... }` chain (cursor 1796). The tool for it exists now: build
+`docs/tools-diagnostic-cc.s.txt` with `asm1` and it prints the input offset of any refusal, so the next
+failure is a position rather than a guess.
+
+In order: answer the else-chain question; then the remaining front end (while, if/else in the real file,
+calls, arrays); then D2.
