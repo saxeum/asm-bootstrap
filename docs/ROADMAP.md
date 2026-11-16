@@ -1197,3 +1197,24 @@ the debt recorded in `docs/continue-here.md` had to be paid — the unreachable 
 `chkok: ret`, and `trm`'s `termok`/`termnum`. `asm1` 7 669 → 7 598 (deletions) → 7 731 (check and the
 fourth reason word). The fixpoint then failed at `line 1882: duplicate` on my own source, which is the
 new check working on itself within minutes.
+
+## Compiler stage 2: comparisons, `if`, `else`
+
+`x < N`, `>`, `<=`, `>=`, `==`, `!=` and `if (cond) { … } else { … }`, with **no assembler change**:
+`jb`, `jz` and `jnz` cover all six relations on unsigned values, which is exact for the 0..255 the
+subset allows. `>` swaps the operands; `<=`/`>=` shift the bound (`N+1`, `N-1`) and refuse when the
+shifted bound leaves 0..255. `cc` 2 902 → 3 862 bytes.
+
+Gate 7 compares the compiled `branch.c`'s output with a hand-written dialect program doing the same
+thing — the second construct validated by a *second implementation* rather than by bytes alone. Both
+gates were broken on purpose and both failed as intended.
+
+Three defects, all caught by gates: a fragment name that had been renamed, two meanings in one frame
+slot (the emitted jump read `jb L1 ` with a space), and **nested blocks sharing one id counter** — an
+`if` inside a `while` emitted `L2e` twice, which the duplicate-label check added the previous session
+caught as `line 36: duplicate`. That check was added to make `cat` a safe link step; it earned its
+place by catching a code-generator bug in a generated file at assembly time.
+
+Next for the compiler: a second variable (a symbol table), then expressions with precedence, then
+`imul`/`div` in expressions. `.data` waits for a mutable global; functions wait for a calling
+convention, which is the largest remaining design decision.

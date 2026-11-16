@@ -323,3 +323,67 @@ What would force it: `.data` as a *separate* segment with its own alignment, or 
 that assembling its source in one pass becomes the bottleneck. Neither is close. The honest position
 is the one already in `docs/ROADMAP.md` — **no linker, one translation unit per program** — with
 `cat` as the escape hatch and the duplicate check as its guard.
+
+## Stage 2: comparisons, `if`, `else`
+
+```
+cond := 'x' | 'x' ('<'|'>'|'<='|'>='|'=='|'!=') num
+stmt := 'if' '(' cond ')' block ('else' block)?
+      | 'while' '(' cond ')' block
+```
+
+No new assembler instruction was needed. The dialect has only `jb`, `jz` and `jnz`, and those three
+cover all six relations on **unsigned** values — which is exact for the 0..255 the subset allows:
+
+| source | emitted | why |
+|---|---|---|
+| `x < N` | `cmp eax, N` / `jb` | carry = "eax below N" |
+| `x > N` | `mov ecx, N` / `cmp ecx, eax` / `jb` | the operands swap: "N below x" |
+| `x == N` | `cmp eax, N` / `jz` | |
+| `x != N` | `cmp eax, N` / `jnz` | |
+| `x <= N` | `cmp eax, N+1` / `jb` | normalised; refused when N is 255 |
+| `x >= N` | `mov ecx, N-1` / `cmp ecx, eax` / `jb` | refused when N is 0 |
+
+The normalisation is why `x <= 255` and `x >= 0` are **refusals**: both would need a bound outside
+0..255. Printing that refusal in the test suite is cheaper than pretending the comparison exists.
+
+Because only "jump if true" is available, each construct is emitted as a jump over its own body:
+
+```
+while (x < 5) { B }          if (x == 2) { A } else { B }
+L1:                          mov eax, [rbp-8]
+mov eax, [rbp-8]             cmp eax, 2
+cmp eax, 5                   jz L2t
+jb L1b                       jmp.l L2e
+jmp.l L1e                    L2t:
+L1b:                         A
+B                            jmp.l L2x
+jmp.l L1                     L2e:
+L1e:                         B
+                             L2x:
+```
+
+Nine block ids, one digit each; a tenth is refused.
+
+### The gates
+
+| # | gate |
+|---|---|
+| 7 | `branch.c` (a `while (x < 5)` containing `if (x == 2) … else …`) matches its golden **and** prints the same five characters as `tests/oracle/branch.s`, a hand-written dialect program |
+| 8 | thirteen inputs outside the subset are refused with no output — including `else if`, `if (x = 1)` and `x <= 255` |
+
+Both were broken on purpose: corrupting the golden's bound fails gate 7 with a diff, and moving the
+oracle's dash from `x == 2` to `x == 3` fails it with `[..-..] vs [...-.]`.
+
+### What went wrong, and what it says
+
+Three defects, all mine, all caught by gates rather than reading:
+
+1. **A fragment name that no longer existed** (`f_lp4`, renamed when the loop fragments were replaced)
+   — the assembler said `line 417: label`.
+2. **The condition's jump instruction and the label share a slot** — `emitnum` clobbers the letter,
+   so the emitted jump was `jb L1 ` with a space instead of `jb L1b`.
+3. **Nested blocks shared one id counter**, so an `if` inside a `while` emitted the `while`'s exit
+   label with the `if`'s id: `line 36: duplicate`, caught by the **duplicate-label check added the
+   previous session**. That is the check paying for itself within a day: without it the program would
+   have assembled to something that jumped into its own else branch.

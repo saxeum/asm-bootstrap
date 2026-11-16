@@ -139,6 +139,11 @@ mov esi, 4194424+f_ret
 call isword
 cmp eax, 0
 jnz.l streto
+mov esi, 4194424+f_if
+call isword
+cmp eax, 0
+jnz.l stif
+
 mov esi, 4194424+f_int
 call isword
 cmp eax, 0
@@ -234,43 +239,283 @@ mov eax, [rbp+112]
 dec eax
 mov [rbp+112], eax
 ret
-stwhile:
-mov esi, 4194424+f_lpar
-call want
+; ---- a condition: `x`, or `x <op> number` --------------------------------
+; Only `jb`, `jz` and `jnz` exist, so the six relations are expressed three
+; ways: unsigned `jb` with the operands in the right order (which covers < and,
+; by swapping, >), `jz`/`jnz` for equality, and `<=`/`>=` normalised to < / >
+; with the bound adjusted. Exact for the 0..255 the subset allows.
+; [rbp+44] = jump kind (0 jb, 1 jz, 2 jnz, 3 jb with swapped operands)
+; [rbp+124] = the bound, already adjusted
+cond:
 mov esi, 4194424+f_x
 call want
-mov esi, 4194424+f_rpar
-call want
-mov esi, 4194424+f_lbrc
-call want
+mov eax, 2
+mov [rbp+44], eax
+mov eax, 0
+mov [rbp+124], eax
+call skipws
+call gcur
+cmp al, 60
+jz.l cnd_lt
+cmp al, 62
+jz.l cnd_gt
+cmp al, 61
+jz.l cnd_eq
+cmp al, 33
+jz.l cnd_ne
+ret
+cnd_lt:
+mov eax, 1
+call bump
+call skipws
+call gcur
+cmp al, 61
+jnz cnd_lt2
+mov eax, 1
+call bump
+call numval
+cmp eax, 255
+jb cnd_le
+jmp.l fail              ; `x <= 255` would need a bound of 256
+cnd_le:
+inc eax
+mov [rbp+124], eax
+mov eax, 0
+mov [rbp+44], eax
+ret
+cnd_lt2:
+call numval
+mov [rbp+124], eax
+mov eax, 0
+mov [rbp+44], eax
+ret
+cnd_gt:
+mov eax, 1
+call bump
+call skipws
+call gcur
+cmp al, 61
+jnz cnd_gt2
+mov eax, 1
+call bump
+call numval
+cmp eax, 0
+jnz cnd_ge
+jmp.l fail              ; `x >= 0` would need a bound of -1
+cnd_ge:
+dec eax
+mov [rbp+124], eax
+mov eax, 3
+mov [rbp+44], eax
+ret
+cnd_gt2:
+call numval
+mov [rbp+124], eax
+mov eax, 3
+mov [rbp+44], eax
+ret
+cnd_eq:
+mov eax, 1
+call bump
+call skipws
+call gcur
+cmp al, 61
+jnz.l fail
+mov eax, 1
+call bump
+call numval
+mov [rbp+124], eax
+mov eax, 1
+mov [rbp+44], eax
+ret
+cnd_ne:
+mov eax, 1
+call bump
+call skipws
+call gcur
+cmp al, 61
+jnz.l fail
+mov eax, 1
+call bump
+call numval
+mov [rbp+124], eax
+mov eax, 2
+mov [rbp+44], eax
+ret
+
+; condj: emit the test and a jump-if-TRUE to L<id><letter>, the letter being in
+; [rbp+92] and the id in [rbp+96]
+condj:
+mov esi, 4194424+f_cmov
+call emitstr
+mov eax, [rbp+44]
+cmp eax, 3
+jz cj_swap
+mov esi, 4194424+f_ccmp
+call emitstr
+mov eax, [rbp+124]
+call emitnum
+mov eax, [rbp+44]
+cmp eax, 1
+jz cj_z
+cmp eax, 2
+jz cj_nz
+mov esi, 4194424+f_cjb
+call emitstr
+jmp cj_fin
+cj_z:
+mov esi, 4194424+f_cjz
+call emitstr
+jmp cj_fin
+cj_nz:
+mov esi, 4194424+f_cjnz
+call emitstr
+jmp cj_fin
+cj_swap:
+mov esi, 4194424+f_cmov2
+call emitstr
+mov eax, [rbp+124]
+call emitnum
+mov esi, 4194424+f_ccmp2
+call emitstr
+cj_fin:
+mov esi, 4194424+f_L
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov eax, [rbp+92]
+call emitc
+mov esi, 4194424+f_nl
+call emitstr
+ret
+
+; newid: the next block id, refused beyond nine (one digit per label)
+newid:
 mov eax, [rbp+96]
 inc eax
 mov [rbp+96], eax
 mov ecx, 10
 cmp eax, ecx
-jb stwok
-jmp.l fail              ; ten nested or sequential loops: one digit is enough
-stwok:
+jb newidok
+jmp.l fail
+newidok:
+ret
+
+stwhile:
+mov esi, 4194424+f_lpar
+call want
+call cond
+mov esi, 4194424+f_rpar
+call want
+mov esi, 4194424+f_lbrc
+call want
+call newid
 mov esi, 4194424+f_L
 call emitstr
 mov eax, [rbp+96]
 call emitnum
-mov esi, 4194424+f_l1
+mov esi, 4194424+f_dcol
+call emitstr
+mov eax, 98
+mov [rbp+92], eax
+call condj
+mov esi, 4194424+f_jl
 call emitstr
 mov eax, [rbp+96]
 call emitnum
-mov esi, 4194424+f_l2
+mov esi, 4194424+f_nle
 call emitstr
+mov esi, 4194424+f_L
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_dlb
+call emitstr
+mov eax, [rbp+96]
+push rax
 call body
-mov esi, 4194424+f_l3
+pop rax
+mov [rbp+96], rax
+mov esi, 4194424+f_jl
 call emitstr
 mov eax, [rbp+96]
 call emitnum
-mov esi, 4194424+f_l4
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_L
 call emitstr
 mov eax, [rbp+96]
 call emitnum
-mov esi, 4194424+f_l5
+mov esi, 4194424+f_dle
+call emitstr
+jmp.l bodloop
+
+stif:
+mov esi, 4194424+f_lpar
+call want
+call cond
+mov esi, 4194424+f_rpar
+call want
+mov esi, 4194424+f_lbrc
+call want
+call newid
+mov eax, 116
+mov [rbp+92], eax
+call condj
+mov esi, 4194424+f_jl
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_nle
+call emitstr
+mov esi, 4194424+f_L
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_dlt
+call emitstr
+mov eax, [rbp+96]
+push rax
+call body
+pop rax
+mov [rbp+96], rax
+call skipws
+mov esi, 4194424+f_else
+call isword
+cmp eax, 0
+jz stif_nel
+mov esi, 4194424+f_jl
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_nlx
+call emitstr
+mov esi, 4194424+f_L
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_dle
+call emitstr
+mov esi, 4194424+f_lbrc
+call want
+mov eax, [rbp+96]
+push rax
+call body
+pop rax
+mov [rbp+96], rax
+mov esi, 4194424+f_L
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_dlx
+call emitstr
+jmp.l bodloop
+stif_nel:
+mov esi, 4194424+f_L
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_dle
 call emitstr
 jmp.l bodloop
 
@@ -462,7 +707,7 @@ emitnum:
 ; always emitted. `started` is what makes 100 print as 100 and not as 10.
 mov [rbp+64], eax
 mov eax, 0
-mov [rbp+92], eax
+mov [rbp+68], eax
 mov eax, [rbp+64]
 cmp eax, 100
 jb en_ten
@@ -477,7 +722,7 @@ mov ecx, 48
 add eax, ecx
 call emitc
 mov eax, 1
-mov [rbp+92], eax
+mov [rbp+68], eax
 en_ten:
 mov eax, [rbp+64]
 cmp eax, 10
@@ -494,7 +739,7 @@ add eax, ecx
 call emitc
 jmp en_one
 en_maybe:
-mov eax, [rbp+92]
+mov eax, [rbp+68]
 cmp eax, 0
 jz en_one
 mov eax, 48
@@ -845,29 +1090,77 @@ db 10
 db "mov [rbp-8], eax"
 db 10
 db 0
-f_l1:
+f_jl:
+db "jmp.l L"
+db 0
+f_dcol:
 db ":"
 db 10
-db "mov eax, [rbp-8]"
-db 10
-db "cmp eax, 0"
-db 10
-db "jz.l L"
 db 0
-f_l2:
+f_nl:
+db 10
+db 0
+f_nlb:
+db "b"
+db 10
+db 0
+f_nle:
 db "e"
 db 10
 db 0
-f_l3:
-db "jmp.l L"
-db 0
-f_l4:
+f_nlx:
+db "x"
 db 10
-db "L"
 db 0
-f_l5:
+f_dlb:
+db "b:"
+db 10
+db 0
+f_dle:
 db "e:"
 db 10
+db 0
+f_dlt:
+db "t:"
+db 10
+db 0
+f_dlx:
+db "x:"
+db 10
+db 0
+f_cmov:
+db "mov eax, [rbp-8]"
+db 10
+db 0
+f_ccmp:
+db "cmp eax, "
+db 0
+f_cmov2:
+db "mov ecx, "
+db 0
+f_ccmp2:
+db 10
+db "cmp ecx, eax"
+db 10
+db "jb "
+db 0
+f_cjb:
+db 10
+db "jb "
+db 0
+f_cjz:
+db 10
+db "jz "
+db 0
+f_cjnz:
+db 10
+db "jnz "
+db 0
+f_if:
+db "if"
+db 0
+f_else:
+db "else"
 db 0
 f_w1:
 db "mov eax, 1"

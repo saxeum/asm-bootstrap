@@ -7,7 +7,9 @@ mov [rbp-8], eax
 L1:
 mov eax, [rbp-8]
 cmp eax, 0
-jz.l L1e
+jnz L1b
+jmp.l L1e
+L1b:
 mov eax, 1
 mov edi, 1
 mov esi, 4194424+m1

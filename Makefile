@@ -314,6 +314,17 @@ test-cc: cc asm1
 	  printf '..........' > $$tmp/ten; \
 	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ] && cmp -s $$tmp/a $$tmp/ten && cmp -s $$tmp/a $$tmp/b; then \
 	    printf '  cc    a while loop: same output as the hand-written dialect program\n'; \
+	if $(CC) < tests/golden/branch.c > $$tmp/br.s 2>/dev/null && cmp -s $$tmp/br.s tests/golden/branch.s; then :; \
+	else echo "  branch.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/branch.s > $$tmp/bc 2>/dev/null && $(ASM1) < tests/oracle/branch.s > $$tmp/bo 2>/dev/null; then \
+	  chmod +x $$tmp/bc $$tmp/bo; \
+	  if $$tmp/bc > $$tmp/c1; then g1=0; else g1=$$?; fi; \
+	  if $$tmp/bo > $$tmp/c2; then g2=0; else g2=$$?; fi; \
+	  printf '..-..' > $$tmp/want3; \
+	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ] && cmp -s $$tmp/c1 $$tmp/want3 && cmp -s $$tmp/c1 $$tmp/c2; then \
+	    printf '  cc    if/else and a comparison: same output as the hand-written dialect program\n'; \
+	  else echo "  branch case: exits $$g1/$$g2, [$$(cat $$tmp/c1)] vs [$$(cat $$tmp/c2)]"; fail=1; fi; \
+	else echo "  the branch case does not assemble"; fail=1; fi; \
 	  else \
 	    echo "  loop case: exits $$g1/$$g2, [$$(cat $$tmp/a)] vs [$$(cat $$tmp/b)]"; fail=1; fi; \
 	else \
@@ -335,6 +346,9 @@ test-cc: cc asm1
 	refuse '/* unterminated'; \
 	refuse 'int main(void) { x = 1; }'; \
 	refuse 'int main(void) { while (y) { } }'; \
+	refuse 'int main(void) { int x = 0; if (x = 1) { } }'; \
+	refuse 'int main(void) { int x = 0; if (x) { } else if (x) { } }'; \
+	refuse 'int main(void) { int x = 255; if (x <= 255) { } }'; \
 	if [ $$ok -ne $$n ]; then echo "  cc: $$ok/$$n refusals"; fail=1; fi; \
 	printf '  cc    %s/%s rejections outside the subset, with no output\n' $$ok $$n; \
 	exit $$fail

@@ -2135,3 +2135,36 @@ own source within minutes of being added.
 
 `cat a.s b.s | asm1` is now verified: `main` in one file calls a routine in the other and exits 7, and
 a genuine `main`/`main` collision is a refusal, not a coin toss.
+
+## Comparisons and `if`/`else`: no new instruction, and the duplicate check earns its keep
+
+Stage 2 of the compiler: `x < N`, `>`, `<=`, `>=`, `==`, `!=`, and `if (cond) { … } else { … }`.
+No assembler change at all — `jb`, `jz` and `jnz` cover all six relations on unsigned values (exact for
+0..255), using operand order for `>` and a bound shift for `<=`/`>=` (`N+1`, `N-1`). The two bounds
+that would fall outside 0..255 are refusals, and `cc` is 2902 → 3862 bytes.
+
+Gate 7 is the one that matters: `branch.c` compiles to a golden, and the binary's output is compared
+with a hand-written dialect program that does the same thing. Both were broken on purpose to prove
+they can fail.
+
+Three defects, all caught by gates:
+
+1. **A fragment name that had been renamed** — `f_lp4` no longer existed, and the assembler said
+   `line 417: label`. A one-line name mismatch, and the error pointed at the call site.
+2. **One slot, two meanings**: `emitnum`'s "started" flag and the condition's label letter both landed
+   in the same byte, so the emitted jump read `jb L1 ` with a space where the `b` should be. The
+   program then hung — an undefined label became a jump to the loop head, which is exactly what an
+   infinite loop looks like when nothing is printed.
+3. **Nested blocks shared one id counter.** An `if` inside a `while` bumped the counter, so the
+   `while` emitted its *exit* label with the `if`'s id: `L2e` defined twice. The **duplicate-label
+   check added in the previous session** caught it at assembly time (`line 36: duplicate`). Without
+   that check the generated program would have assembled and jumped into its own else branch — a
+   wrong answer with no error anywhere.
+
+The third one is the point of the previous wave: a check added for one reason (making `cat` a safe
+link step) paid for itself the next day by catching a *code generator* bug, in a generated file, at
+assembly time, with a line number.
+
+Also noticed while writing the dialect source: `asm1` accepts leading **spaces** but not leading
+**tabs**, so a source indented with tabs is rejected. Recorded rather than fixed — nothing in the repo
+emits tabs, and the refusal names the line.
