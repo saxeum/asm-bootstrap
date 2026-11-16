@@ -628,3 +628,35 @@ One defect, and it is the same one as ever: the `not` branch compared the mnemon
 character against `o` — but `not` is `n,o,t`, so the third character is `t`. And the first attempt to
 fix it hit the wrong line, which was visible only because the rebuilt binary's sha was *unchanged*.
 Checking the sha as well as the exit status is what caught it.
+
+### Item 6: indexed addressing `[base+index]`
+
+```
+mov eax, [rbx+rcx]     -> 8b 44 0b 00
+mov eax, [rbx+rcx+8]   -> 8b 44 0b 08
+mov eax, [rsp+rax]     -> 8b 44 04 00
+```
+
+`asm1` 6 205 → **6 561 bytes**. `memop` now recognises a register after `+` as an index (stored as
+`code+1` in `[rbp+124]`, so 0 means "none"), and `emitmem` emits a SIB with `scale=0` when one is
+present. Scale and `r8`–`r15` bases are still absent.
+
+**This is the first change of the session that is machinery rather than a handler, and the method
+mattered more than the code.** Two blocks were rewritten *whole* — `emitmem` and `memop`, each
+anchored from its label to the next label — plus one appended dispatch. Nothing was edited by line
+number. It worked on the second attempt, and the first attempt failed for a reason worth recording:
+a *stray label* (`memnum`) landed before `memneg`, so every `+disp` operand fell into the minus test
+and was rejected. A whole-block rewrite made that visible in one read; the positional edit that
+created it did not.
+
+Three encoding details that a hand-computed dump forces you to get right, and all three bit:
+
+1. with a SIB, the modrm `rm` field must be **4**, not the base register — the base moves into the
+   SIB byte;
+2. for correctness the mod field must be **01** whenever an index is present, so a disp8 (possibly 0)
+   is always emitted — legal, if one byte longer than necessary;
+3. `[rbp+rdi]` is `8b 44 3d 00`: `reg=0, rm=4`, SIB `index=7, base=5`. My first expectation wrote
+   `8b 7c 3d 00`, which would be `reg=7` — asm1 was right and the test was wrong.
+
+Remaining in item 6: `r8`–`r15` (REX.B/R/X across every emit site — the last machinery change) and
+scale factors `*2`/`*4`/`*8`.

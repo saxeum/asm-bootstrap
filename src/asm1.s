@@ -806,11 +806,26 @@ call reg32
 mov [rbp+56], edx
 mov eax, 0
 mov [rbp+60], eax
+mov [rbp+124], eax
 movzx eax, byte [rbx]
 cmp al, 93
 jz.l memend
 cmp al, 43
 jnz.l memneg
+lea rbx, [rbx+1]
+movzx eax, byte [rbx]
+cmp al, 101
+jz.l memidx
+cmp al, 114
+jz.l memidx
+jmp.l memnum
+memidx:
+call reg32
+inc edx
+mov [rbp+124], edx
+movzx eax, byte [rbx]
+cmp al, 43
+jnz.l memend
 lea rbx, [rbx+1]
 jmp.l memnum
 memneg:
@@ -827,19 +842,103 @@ cmp al, 93
 jnz.l fail
 lea rbx, [rbx+1]
 ret
-ret
 emitmem:
 mov eax, [rbp+64]
 add eax, eax
 add eax, eax
 add eax, eax
+mov edx, [rbp+124]
+cmp edx, 0
+jnz.l emrm4
 mov edx, [rbp+56]
+cmp edx, 4
+jnz.l emrm
+emrm4:
+mov edx, 4
+emrm:
 add eax, edx
 mov edx, [rbp+60]
 cmp edx, 0
-jz.l emmod1
+jnz.l emm1
+mov edx, [rbp+124]
+cmp edx, 0
+jz.l emm2
+emm1:
 mov edx, 64
 add eax, edx
+emm2:
+call emital
+mov edx, [rbp+56]
+cmp edx, 4
+jz.l emsib
+mov edx, [rbp+124]
+cmp edx, 0
+jz.l emnd
+emsib:
+mov eax, [rbp+124]
+cmp eax, 0
+jz.l emsib0
+dec eax
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+56]
+add eax, edx
+call emital
+jmp.l emnd
+emsib0:
+mov eax, 36
+call emital
+emnd:
+mov eax, [rbp+60]
+cmp eax, 0
+jnz.l emdsp
+mov eax, [rbp+124]
+cmp eax, 0
+jz.l em_done
+mov eax, 0
+emdsp:
+call emital
+em_done:
+ret
+emm1:
+mov edx, 64
+add eax, edx
+emm2:
+call emital
+mov edx, [rbp+56]
+cmp edx, 4
+jz.l emsib
+mov edx, [rbp+124]
+cmp edx, 0
+jz.l emnd
+emsib:
+mov eax, [rbp+124]
+cmp eax, 0
+jz.l emsib0
+dec eax
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+56]
+add eax, edx
+call emital
+jmp.l emnd
+emsib0:
+mov eax, 36
+call emital
+emnd:
+mov eax, [rbp+60]
+cmp eax, 0
+jnz.l emdsp
+mov eax, [rbp+124]
+cmp eax, 0
+jz.l em_done
+mov eax, 0
+emdsp:
+call emital
+em_done:
+ret
 emmod1:
 call emital
 mov eax, [rbp+56]
