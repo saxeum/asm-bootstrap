@@ -594,3 +594,39 @@ into `0F 83 0F 85` and broke *every* fixture, including ones that had passed for
 Recovered by restoring the 2d-6 backup and re-patching against a decode of the real site rather
 than a remembered layout. Both lessons from 2d-6 were then applied: decode first, and re-decode
 after.
+
+## Wave 2d-8 — PASS: `mov [mem],r32` (32-bit store), completing load/store
+
+Artifact: `asm0a`, 2919 bytes, sha `97fc5149a9a65beec67bd28ac0fad2da0ab5984caa1b50556d06420507e1872d`, entry `0x400110`, filesz `0xb67`.
+
+`movsrc` resolves the *source* register in a store and emits the opcode that follows from its
+class: `88` for a 2-character name (`al`..`bh`), `89` for a 3-character one (`eax`..`edi`). It
+does this by testing `[rbx+2]` for `,` / space / newline — the same trick that distinguishes
+`mov` from `mov r8` — and then tails into `lookup8` or calls `lookup`, so no extra register is
+needed for the class. The static `mov byte[r15],0x88` in `do_movmem` became NOPs.
+
+### Gate
+
+```
+store  byte-identical to ref/store (138 B), exits 7
+exit42 42 | hello_num "Hello, World!" | jmp 7 | loop 10 | jz 5 | r8 7 | inc8 3 | cmp8 12 |
+stack "H" | count10 1..10 | dbnum "Hi" | load 7 | store 7 — all byte-identical
+```
+
+`src/store.s` stores `ebx` into its own stack frame and loads it straight back into `edi`, so
+store and load verify each other: a wrong opcode in either prints nothing or exits with the
+wrong status.
+
+### Two more of the same two mistakes
+
+1. **Displacements inside `movsrc` were computed in file space with segment-space targets** — off
+   by 0x78 each, so `call lookup` and `jmp lookup8` both missed.
+2. **The call from `do_movmem` targeted file 0xBB2**, past the end of the file, because I added
+   0x78 to an offset that was already a file offset. That one is invisible in the source of the
+   mistake and extremely loud in effect: every form that reaches `do_movmem` — including the
+   `r8` store that had worked for four waves — segfaulted.
+
+Both are the *same* underlying confusion, now responsible for six defects: **file offset and
+segment offset differ by 0x78, and only a decode tells you which one you have.** The counter-
+measure that would have caught both immediately is the one already adopted: decode the patched
+site, and compute every displacement in one space, from a decode.
