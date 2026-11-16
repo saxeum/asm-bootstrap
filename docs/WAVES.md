@@ -1586,3 +1586,47 @@ already used for count10 (`fail` exits with a stage byte) will not help, because
 process dies rather than exiting. The workable approach is to cut `src/asm1.s` down to
 the smallest prefix that still crashes, which is a *prefix* of the input rather than of
 the assembler.
+
+## FIXPOINT: asm1 assembles itself, byte for byte
+
+    ./asm0a < src/asm1.s > X     # 4295 bytes
+    ./X     < src/asm1.s > X2    # 4295 bytes
+    cmp X X2                     # identical
+    ./X2    < src/asm1.s > X3    # identical again (idempotent)
+
+    sha256 X = X2 = X3 = 250e02c95d3adbb3e1b6a0a118678a1bef02e71e16f82bccd240e868929bb6f1
+
+`X2` is a working assembler, not merely a coincidentally equal blob: it builds all 18 fixtures
+byte-identically to their hand-emitted references, and the binaries it produces run
+(`count10` prints 1..10 and exits 0).
+
+### The crash, and what it actually was
+
+`asm1 < src/asm1.s` segfaulted on inputs above roughly 8 KB. Bisecting the *input* narrowed it to
+a 457-line prefix, but no single line reproduced it, so it was state, not syntax. gdb gave the
+answer in one shot:
+
+    rip 0x400133   movb $0x0,(%rbx)      <- the NUL terminator store
+    rbp 0x7fffffffdf80                     <- the initial stack pointer
+    rbx 0x8000ffffdfea                     <- not a valid address
+    rsi 0x7fffffffdff8                     <- buffer base = rbp+120
+
+The source buffer sat at `rbp+120`, i.e. **above** `rsp`. The initial process stack is mapped at
+the very top of the user address space, ending at `0x800000000000`. `0x800000000000 - 0x7fffffffdff8`
+is only **8200 bytes**, so any input larger than that advanced the pointer past the canonical
+address limit and the first write beyond it died. count10 (188 bytes) and every fixture were far
+too small to reach it; `asm1.s` at 21 KB is not.
+
+That is why "the fixpoint does not hold" looked like a parsing bug and was not: pass 0 was writing
+the NUL terminator past the end of the address space.
+
+**Fix:** the buffer moved below `rbp` (`rbp-26000`, computed with `sub r64,r64` since a
+displacement that large cannot be written), where the stack grows downward and has megabytes of
+room. The label table moved to `rbp-2048` so the two ranges do not overlap. Both addresses are
+computed, so neither is subject to the disp8 limit.
+
+### The thing to remember
+
+The stack pointer at process start is a few hundred bytes below the top of the address space.
+Any buffer placed *above* `rsp` has only that much room, no matter how large the mapping looks.
+Everything the program allocates for itself belongs *below* `rsp`, on the side that grows.

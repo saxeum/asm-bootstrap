@@ -27,7 +27,9 @@ start:
 lea rbp, [rsp]
 mov eax, 0              ; SYS_read
 mov edi, 0
-lea rsi, [rbp+120]
+lea rsi, [rbp+1]        ; the buffer lives BELOW rbp: above rsp is the top of
+mov ecx, 26001          ; the address space, and a big input runs off the end
+sub rsi, rcx
 mov edx, 24000           ; src/asm1.s is ~20 KB
 syscall
 mov [rbp+28], eax       ; n
@@ -35,7 +37,9 @@ mov eax, 0
 mov [rbp+16], eax       ; pass = 0 (count)
 mov [rbp+20], eax       ; count = 0
 mov [rbp+80], eax       ; label count = 0  (never rely on stack garbage)
-lea rbx, [rbp+120]
+lea rbx, [rbp+1]
+mov ecx, 26001
+sub rbx, rcx
 mov ecx, [rbp+28]
 term:
 cmp ecx, 0
@@ -45,7 +49,9 @@ dec ecx
 jmp term
 termd:
 mov byte [rbx], 0
-lea rbx, [rbp+120]       ; pass 0 starts at the beginning, not at the NUL
+lea rbx, [rbp+1]
+mov ecx, 26001
+sub rbx, rcx
 call parse
 
 mov eax, [rbp+20]       ; filesz = 120 + count
@@ -115,7 +121,9 @@ mov eax, 1              ; pass 1: emit
 mov [rbp+16], eax
 mov eax, 0
 mov [rbp+20], eax       ; the header is not part of the body offset
-lea rbx, [rbp+120]
+lea rbx, [rbp+1]
+mov ecx, 26001
+sub rbx, rcx
 call parse
 mov eax, 60
 xor edi, edi
@@ -837,7 +845,7 @@ jb.l lok
 jmp.l fail
 lok:
 lea rcx, [rbp+1]        ; rbp-120 without negative displacements, and without
-mov esi, 4097            ; table base = rbp-4096, computed so no disp8 limit
+mov esi, 2049            ; table base = rbp-2048, clear of the buffer
 sub rcx, rsi            ; docs/encodings.md: mod=00/rm=101 is RIP-relative)
 mov edx, [rbp+80]
 lget:
@@ -896,7 +904,7 @@ call emital
 jmp.l pline
 pbr1:
 lea rcx, [rbp+1]        ; rbp-120 without negative displacements, and without
-mov esi, 4097            ; table base = rbp-4096, computed so no disp8 limit
+mov esi, 2049            ; table base = rbp-2048, clear of the buffer
 sub rcx, rsi            ; docs/encodings.md: mod=00/rm=101 is RIP-relative)
 mov edx, [rbp+80]
 lfind:
@@ -977,7 +985,7 @@ mov edi, 1
 syscall
 lku:                    ; look up the name in [rbp+72] -> rcx = entry, else fail
 lea rcx, [rbp+1]
-mov esi, 4097            ; table base = rbp-4096, computed so no disp8 limit
+mov esi, 2049            ; table base = rbp-2048, clear of the buffer
 sub rcx, rsi
 mov edx, [rbp+80]
 lkul:
