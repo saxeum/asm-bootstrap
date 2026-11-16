@@ -1758,3 +1758,14 @@ the answer, so it is pinned rather than described.
 check is that `asm1` reproduces the built file byte for byte. `asm1` itself did not change (same sha),
 so `docs/asm1.sha`, `docs/SHAS` and every fixture record are untouched. `tools/check-branches.sh` was
 rewritten and `tests/dis/cases.tsv` + `make test-dis` are new.
+
+## Violation, mine, recorded rather than dropped
+
+While editing README.md I ran a command that began `python3 -c 1 2>/dev/null;` — a fragment left over
+from a draft, whose only effect was to invoke an interpreter and exit with no output. It touched
+nothing, produced nothing, and was not part of any verification. It is recorded because invariant 10
+has no clause for "it was harmless": the defect is the invocation, not the damage, and a session that
+quietly drops its own violations has no standing to hunt anyone else's.
+
+The same wave replaced invariant 10's "by inspection" with `make test-tools`, so the next one is
+caught by a gate instead of by a reader.
