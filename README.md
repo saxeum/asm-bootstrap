@@ -173,13 +173,13 @@ Each prints `identical`, and `milestone-fixpoint` produces 4295 bytes with sha25
 | | |
 |---|---|
 | bootstrap | `asm0a`, 3745 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD`, sha256 in `docs/SHAS` |
-| self-hosted | `asm1`, 5945 bytes, sha256 `41162e89b07f0599…`, built by `seed/asm1` from `src/asm1.s` (1263 lines, 17004 bytes) |
-| seed | `seed/asm1`, 5945 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
+| self-hosted | `asm1`, 6132 bytes, sha256 `3ef397e55518326d…`, built by `seed/asm1` from `src/asm1.s` (1263 lines, 17004 bytes) |
+| seed | `seed/asm1`, 6132 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
 | builder | `asm1` is built by `seed/asm1`, never by itself. Since the source needs more than 128 labels, `asm0a` can no longer parse it: `make bootstrap-check` reports NOT APPLICABLE |
-| fixpoint | `asm1(asm1.s) == asm1`, 5945 bytes, one sha256, idempotent |
+| fixpoint | `asm1(asm1.s) == asm1`, 6132 bytes, one sha256, idempotent |
 | fixtures | 18, all byte-identical to hand-emitted references and behaviourally correct |
 | rejections | 11 sources that must be refused by both assemblers, with no output (`tests/reject/`) |
-| capability | 20 pairs where asm1 accepts syntax asm0a cannot parse; both spellings must agree byte for byte |
+| capability | 23 pairs where asm1 accepts syntax asm0a cannot parse; both spellings must agree byte for byte |
 | superior | asm1 assembles a 99 KB source asm0a cannot, and a chosen `entry` point -- both must RUN |
 | branches | 290 sites pinned in `docs/branches.tsv`, verified by decoding |
 | source language | `mov` in 8/32/64-bit widths, `movzx` from registers and memory, `lea`, `add`/`sub`/`cmp`/`xor`/`inc`/`dec`/`div`, `call`/`ret`, `jmp`/`jz`/`jnz`/`jb` with `rel8` and `.l` `rel32`, `syscall`, `db` with strings and escapes, labels, two passes, decimal immediates |

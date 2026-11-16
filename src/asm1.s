@@ -356,6 +356,11 @@ jmp.l pc32
 d_i:
 cmp al, 105
 jnz.l d_x
+movzx edx, byte [rbx+1]
+cmp dl, 109
+jz.l pimul
+cmp dl, 110
+jnz.l d_x
 movzx edx, byte [rbx+4]
 cmp dl, 101
 jz.l d_i32
@@ -1292,9 +1297,26 @@ mov [rbp+48], eax
 mov eax, 9
 mov [rbp+52], eax
 jmp.l pc32
+d_p:
+cmp al, 112
+jnz.l fail
+movzx edx, byte [rbx+1]
+cmp dl, 117
+jz.l psh_push
+cmp dl, 111
+jnz.l fail
+mov eax, 88
+lea rbx, [rbx+4]
+mov [rbp+44], eax
+jmp.l ppsh
+psh_push:
+lea rbx, [rbx+5]
+mov eax, 80
+mov [rbp+44], eax
+jmp.l ppsh
 d_t:
 cmp al, 116
-jnz.l fail
+jnz.l d_p
 lea rbx, [rbx+5]
 mov eax, 247
 mov [rbp+44], eax
@@ -1607,5 +1629,33 @@ call emital
 mov eax, [rbp+40]
 call emital
 mov eax, [rbp+36]
+call emital
+jmp.l pline
+ppsh:
+call reg32
+mov eax, [rbp+44]
+add eax, edx
+call emital
+jmp.l pline
+pimul:
+lea rbx, [rbx+5]
+call reg32
+mov [rbp+32], edx
+lea rbx, [rbx+1]
+call skipsp
+call reg32
+mov [rbp+36], edx
+mov eax, 15
+call emital
+mov eax, 175
+call emital
+mov eax, [rbp+32]
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+36]
+add eax, edx
+mov edx, 192
+add eax, edx
 call emital
 jmp.l pline

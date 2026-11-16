@@ -557,3 +557,27 @@ path.**
 Item 6 still open: `push`/`pop`, `imul`, `r8`–`r15` with REX, and indexed addressing
 `[base+index*scale]`. The last two need the register and memory-operand machinery extended rather
 than just another handler.
+
+### Phase 2, item 6 continued: `push`/`pop` and `imul`
+
+```
+push rax -> 50     pop rax  -> 58     imul eax, ecx -> 0f af c1
+push rdi -> 57     pop rbp  -> 5d
+```
+
+`asm1` 5 945 → **6 132 bytes**. `push`/`pop` are `50+rd` / `58+rd`; `imul r32,r32` is `0F AF /r`
+with the destination in `reg`. Capability pairs: 23.
+
+**One defect, and it is the most instructive of the lot:** `push ` is five characters and `pop ` is
+four, but both shared a handler that advanced the cursor by four. So `push rax` parsed `h ax`, failed
+in `reg32`, and was *rejected* — while `pop` worked, which made it look like a push bug rather than a
+shared-handler bug. The advance moved into each path, and the same split had already been made for
+`pc32` two entries earlier.
+
+Also found: `d_p` and `psh_push` each defined *twice* because I both generated the dispatch inline and
+appended a file containing it. Duplicate labels assemble and the first definition wins, so the file
+"worked" while carrying dead code — the third time this session. Removed.
+
+Item 6 remaining: `r8`–`r15` with REX, and indexed addressing `[base+index*scale]`. Both need the
+register and memory machinery extended rather than another handler, and both are worth a session that
+starts with the whole budget.
