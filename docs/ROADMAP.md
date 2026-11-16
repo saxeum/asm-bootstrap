@@ -2,14 +2,24 @@
 
 ## Where we are
 
-`asm0a` (3 745 bytes, hand-written machine code) assembles `src/asm1.s` into `asm1` (4 295 bytes),
-and `asm1` assembles itself to the same bytes — `X' == X`, idempotent. `asm1` builds all 18
-fixtures byte-identically to their hand-emitted references, every artifact is attributable to an
-assembler sha via `docs/provenance.tsv`, and `make check` verifies pinned shas, branch decodes and
-provenance.
+The compiler is self-hosting. `cc` (10 106 bytes, built by `asm1` from `src/cc.s`) compiles
+`src/cc.c` — the same compiler written in the subset — to `cc1.s`; `asm1` assembles it to `cc1`; and
+`cc1` compiles `src/cc.c` to the same text. `make test-d2` is that proof, and `make test-port`
+compares the port's output with `cc`'s on all 42 goldens (byte for byte). `asm1` (8 053 bytes) is
+self-hosting, produces the 18 hand-emitted `ref/` binaries, and its branch pins are decoded by
+`src/dis.s`; `docs/provenance.tsv` records every artifact.
 
-That is a *bootstrap*. What it is not yet is a *language*, and there is one thing it gets wrong in a
-way that matters more than any missing feature.
+`docs/continue-here.md` is the authoritative current state and the next task. **This file is the
+ordered plan and its history**: sections below were true when written and some of their limits were
+raised later. The remaining bootstrap step is `asm2` — `asm1` rewritten in C and accepted only when
+it assembles everything `asm1` does, byte for byte.
+
+## History
+
+The sections below are kept as the log of how the project got here. Where a limit is quoted (labels,
+frame, buffers), the current numbers are in `docs/continue-here.md`; the important ones are 2 048
+labels, a 65 536-byte frame, 64 000 bytes of arrays, 200 000-byte `cc` buffers, and 15-character
+names.
 
 ## Stage 0 — rejection parity (blocking; do this first)
 

@@ -2,7 +2,7 @@
 putn:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -118,14 +118,14 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov rcx, 4321
-mov [rbp-16400], rcx
+mov [rbp-65436], rcx
 lea rcx, [rbp-400]
-mov [rbp-16392], rcx
-mov rsi, [rbp-16392]
-mov rdi, [rbp-16400]
+mov [rbp-65428], rcx
+mov rsi, [rbp-65428]
+mov rdi, [rbp-65436]
 call putn
 mov [rbp-16], rax
 mov rax, [rbp-16]

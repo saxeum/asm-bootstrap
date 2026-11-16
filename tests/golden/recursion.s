@@ -2,7 +2,7 @@
 f:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -19,13 +19,13 @@ L1e:
 mov rcx, [rbp-8]
 mov rdx, 1
 sub rcx, rdx
-mov [rbp-16400], rcx
+mov [rbp-65436], rcx
 mov rcx, [rbp-16]
 mov rdx, 1
 add rcx, rdx
-mov [rbp-16392], rcx
-mov rsi, [rbp-16392]
-mov rdi, [rbp-16400]
+mov [rbp-65428], rcx
+mov rsi, [rbp-65428]
+mov rdi, [rbp-65436]
 call f
 mov rsp, rbp
 pop rbp
@@ -33,14 +33,14 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov rcx, 10
-mov [rbp-16400], rcx
+mov [rbp-65436], rcx
 mov rcx, 0
-mov [rbp-16392], rcx
-mov rsi, [rbp-16392]
-mov rdi, [rbp-16400]
+mov [rbp-65428], rcx
+mov rsi, [rbp-65428]
+mov rdi, [rbp-65436]
 call f
 mov rdi, rax
 mov eax, 60

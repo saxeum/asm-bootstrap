@@ -2,7 +2,7 @@
 f:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -45,17 +45,17 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 lea rcx, [rbp-400]
-mov [rbp-16400], rcx
+mov [rbp-65436], rcx
 mov rcx, 0
-mov [rbp-16392], rcx
+mov [rbp-65428], rcx
 mov rcx, 4194424+m1
-mov [rbp-16384], rcx
-mov rdx, [rbp-16384]
-mov rsi, [rbp-16392]
-mov rdi, [rbp-16400]
+mov [rbp-65420], rcx
+mov rdx, [rbp-65420]
+mov rsi, [rbp-65428]
+mov rdi, [rbp-65436]
 call f
 mov [rbp-16], rax
 mov rax, [rbp-16]

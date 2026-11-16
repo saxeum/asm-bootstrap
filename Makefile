@@ -21,7 +21,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 dis cc hello test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 dis cc hello test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help test-port test-d2 test-cc-source
 help:
 	@echo 'make            build asm1 from seed/asm1, then the decoder (which needs it)'
 	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
@@ -32,6 +32,10 @@ help:
 	@echo 'make test-coverage  every supported form is exercised by some test input'
 	@echo 'make test-capability  new syntax vs the old spelling: same bytes'
 	@echo 'make test-superior  inputs asm1 handles and asm0a cannot'
+	@echo 'make test-cc    the compiler: goldens, behaviour, refusals'
+	@echo 'make test-port  the port byte-identical to cc on every golden'
+	@echo 'make test-d2    the port compiles its own source to identical text'
+	@echo 'make test-cc-source  asm1 < src/cc.s still reproduces cc byte for byte'
 	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
 	@echo 'make bootstrap-check  asm0a and seed/asm1 must agree on src/asm1.s'
 	@echo 'make triage     which is broken: your source edit, or the seed'
@@ -128,7 +132,7 @@ verify-provenance: asm1 dis
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: test-tools test-tmp test-header test-selfhost asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
+check: test-tools test-tmp test-header test-cc-source test-port test-d2 asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -260,6 +264,18 @@ cc: src/cc.s asm1
 	@chmod +x $@
 	@printf '  cc    %s bytes  sha %s  (built by %s from src/cc.s)\n' \
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(ASM1)"
+
+# ---- the dialect compiler's source is invariant ------------------------------
+# cc is built by asm1 from src/cc.s, and this target says so a second time: the
+# same source assembles to the same bytes. Work on the C port must not move the
+# dialect compiler's source or binary; if it does, this line is red.
+test-cc-source: cc
+	@mkdir -p $(WORK); \
+	$(ASM1) < src/cc.s > $(WORK)/cc.rebuild || exit 1; \
+	if cmp -s cc $(WORK)/cc.rebuild; then \
+	  printf '  cc source invariant: asm1 < src/cc.s == cc, %s bytes, sha %s\n' \
+	    "$$(wc -c < cc)" "$$(sha256sum cc | cut -c1-16)"; \
+	else echo '  cc source is NOT invariant: rebuilding src/cc.s differs from cc'; exit 1; fi
 
 # One command for the whole pipeline. The two-stage version is easy to half-copy
 # -- and half-copied, cc's output is dialect TEXT that the shell will happily
@@ -671,6 +687,15 @@ test-cc: cc asm1
 	    echo "  loop case: exits $$g1/$$g2, [$$(cat $$tmp/a)] vs [$$(cat $$tmp/b)]"; fail=1; fi; \
 	else \
 	  echo "  the loop case does not assemble"; fail=1; fi; \
+	if $(CC) < tests/golden/exit.c > $$tmp/ex.s 2>/dev/null && cmp -s $$tmp/ex.s tests/golden/exit.s; then :; \
+	else echo "  exit.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/exit.s > $$tmp/ex 2>/dev/null; then \
+	  chmod +x $$tmp/ex; \
+	  $$tmp/ex > $$tmp/ex.out; g1=$$?; \
+	  if [ $$g1 -eq 3 ] && [ ! -s $$tmp/ex.out ]; then \
+	    printf '  cc    exit(3): the program stops with 3 and writes nothing\n'; \
+	  else echo "  exit stopped with $$g1 and wrote $$(wc -c < $$tmp/ex.out) bytes"; fail=1; fi; \
+	else echo "  asm1 refuses exit.s"; fail=1; fi; \
 	refuse() { \
 	  n=$$((n+1)); \
 	  printf '%s' "$$1" > $$tmp/bad.c; \
@@ -708,7 +733,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { int a[4]; int y = a; }'; \
 	refuse 'int main(void) { char s[4]; int n = read(&s, 4); }'; \
 	refuse 'int main(void) { int a[4]; int b[4]; int y = a[b[0]]; }'; \
-	refuse 'int main(void) { int a[3000]; }'; \
+	refuse 'int main(void) { int a[9000]; }'; \
 	refuse 'int main(void) { int a[2]; int a[2]; }'; \
 	refuse 'int main(void) { char x = 65; }'; \
 	refuse 'int main(void) { char a[4]; a = 1; }'; \
@@ -725,10 +750,9 @@ test-cc: cc asm1
 # input. A form nobody tests is a red gate with a name on it, which is the
 # difference between "we have 18 fixtures" and "we know what they reach".
 # ---- D2: the port compiles itself --------------------------------------------
-# The goal in one target. It is expected to FAIL until the port is a compiler; a
-# target that reports its own failure is worth more than a paragraph claiming
-# progress. cc1.s is the dialect text cc emits for src/cc.c; cc1 is that
-# assembled; cc1 must then compile src/cc.c to the SAME text.
+# The goal in one target. cc1.s is the dialect text cc emits for src/cc.c; cc1
+# is that assembled; cc1 must then compile src/cc.c to the SAME text. It does,
+# and the port also reproduces every golden byte for byte (test-port).
 test-d2: asm1 cc
 	@mkdir -p $(WORK); \
 	if ! $(CC) < src/cc.c > $(WORK)/cc1.s 2>$(WORK)/d2.err; then \
@@ -737,40 +761,43 @@ test-d2: asm1 cc
 	  echo '  d2: asm1 refuses the text cc emitted for src/cc.c'; exit 1; fi; \
 	chmod +x $(WORK)/cc1; \
 	if ! $(WORK)/cc1 < src/cc.c > $(WORK)/cc2.s 2>>$(WORK)/d2.err; then \
-	  echo '  d2: the port does not run as a compiler yet'; exit 1; fi; \
+	  echo '  d2: the port does not run as a compiler'; head -3 $(WORK)/d2.err; exit 1; fi; \
 	if cmp -s $(WORK)/cc1.s $(WORK)/cc2.s; then \
-	  printf '  d2: THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical\n'; \
+	  printf '  d2: THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, %s bytes\n' "$$(wc -c < $(WORK)/cc1.s)"; \
 	else \
 	  printf '  d2: the port is not yet a compiler: %s bytes emitted, expected %s\n' "$$(wc -c < $(WORK)/cc2.s)" "$$(wc -c < $(WORK)/cc1.s)"; \
 	  exit 1; \
 	fi
 
-# ---- the port ----------------------------------------------------------------
-# The compiler, written in the subset it compiles. Slice 1 is the output side:
-# emitstr/emitc/putn/line and one fixed program. The expected text was written
-# before src/cc.c existed, and this target is what makes the claim "the port has
-# started" mean something. A later slice will replace the pipeline below with
-# cc1 compiling src/cc.c itself (cc1.s vs cc2.s).
-test-selfhost: asm1 cc
+# ---- the port equals the dialect compiler on every golden --------------------
+# src/cc.c is the compiler written in the subset it compiles. Building it is not
+# enough: it must emit exactly what src/cc.s emits, or the two implementations
+# have diverged and the self-hosting text is pinned to the wrong one. Every
+# tests/golden/*.c is compiled by the port and compared with the golden that the
+# dialect cc produced; then one port-emitted program is assembled and run.
+test-port: asm1 cc
 	@mkdir -p $(WORK); \
-	if $(CC) < src/cc.c > $(WORK)/cc1.s 2>$(WORK)/cc1.err; then \
-	  if $(ASM1) < $(WORK)/cc1.s > $(WORK)/cc1 2>$(WORK)/asm1.err; then \
-	    chmod +x $(WORK)/cc1; \
-	    if $(WORK)/cc1 > $(WORK)/cc1.out 2>$(WORK)/cc1.run.err; then \
-	      if cmp -s $(WORK)/cc1.out tests/selfhost/slice3.expected; then \
-	        printf '  selfhost: slices 1-3 -- src/cc.c compiled and assembled emits the expected text\n'; \
-	        $(ASM1) < $(WORK)/cc1.out > $(WORK)/prog 2>$(WORK)/prog.err; \
-	        chmod +x $(WORK)/prog; \
-	        if [ "$$($(WORK)/prog)" = "Hello, World!" ]; then \
-	          printf '  selfhost: and the emitted program RUNS: it prints Hello, World!\n'; \
-	        else echo '  selfhost: the emitted program did not print Hello, World!'; exit 1; fi; \
-	      else \
-	        echo '  selfhost: the emitted text differs from tests/selfhost/slice1.expected:'; \
-	        diff tests/selfhost/slice3.expected $(WORK)/cc1.out | head -8; exit 1; \
-	      fi; \
-	    else echo "  selfhost: $(WORK)/cc1 failed at run time"; head -3 $(WORK)/cc1.run.err; exit 1; fi; \
-	  else echo '  selfhost: asm1 refuses the dialect text cc emitted for src/cc.c'; head -3 $(WORK)/asm1.err; exit 1; fi; \
-	else echo '  selfhost: cc refuses src/cc.c'; head -3 $(WORK)/cc1.err; exit 1; fi
+	if ! $(CC) < src/cc.c > $(WORK)/cc1.s 2>$(WORK)/port.err; then \
+	  echo '  port: cc refuses src/cc.c'; head -3 $(WORK)/port.err; exit 1; fi; \
+	if ! $(ASM1) < $(WORK)/cc1.s > $(WORK)/cc1 2>>$(WORK)/port.err; then \
+	  echo '  port: asm1 refuses the text for src/cc.c'; head -3 $(WORK)/port.err; exit 1; fi; \
+	chmod +x $(WORK)/cc1; \
+	ok=0; bad=0; \
+	for f in tests/golden/*.c; do \
+	  n=$${f%.c}; \
+	  if $(WORK)/cc1 < "$$f" > $(WORK)/p.s 2>/dev/null && cmp -s $(WORK)/p.s "$$n.s"; then \
+	    ok=$$((ok+1)); \
+	  else echo "  port: $$f differs from $$n.s"; bad=$$((bad+1)); fi; \
+	done; \
+	if $(WORK)/cc1 < helloworld.c > $(WORK)/p.s 2>/dev/null && cmp -s $(WORK)/p.s tests/golden/hello.s; then \
+	  ok=$$((ok+1)); \
+	else echo '  port: helloworld.c differs from tests/golden/hello.s'; bad=$$((bad+1)); fi; \
+	if [ $$bad -ne 0 ]; then echo "  port: $$ok identical, $$bad different"; exit 1; fi; \
+	$(ASM1) < tests/golden/putn.s > $(WORK)/prog && chmod +x $(WORK)/prog; \
+	printf '4321\n' > $(WORK)/want; \
+	if $(WORK)/prog > $(WORK)/got && cmp -s $(WORK)/got $(WORK)/want; then \
+	  printf '  port: %s/%s goldens byte-identical to cc, and the port-built putn prints 4321\n' $$ok $$ok; \
+	else echo '  port: the port-built putn did not print 4321'; exit 1; fi
 
 # ---- nothing outside the tree -------------------------------------------------
 # Invariant 13. A file in /tmp is invisible to git, to review and to the next

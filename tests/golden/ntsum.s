@@ -2,7 +2,7 @@
 sum:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov [rbp-8], rdi
 mov rax, [rbp-8]
@@ -20,8 +20,8 @@ push rax
 mov rdx, [rbp-8]
 mov rsi, 1
 sub rdx, rsi
-mov [rbp-16400], rdx
-mov rdi, [rbp-16400]
+mov [rbp-65436], rdx
+mov rdi, [rbp-65436]
 call sum
 mov rcx, rax
 pop rax
@@ -32,11 +32,11 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov rcx, 4
-mov [rbp-16400], rcx
-mov rdi, [rbp-16400]
+mov [rbp-65436], rcx
+mov rdi, [rbp-65436]
 call sum
 mov rdi, rax
 mov eax, 60

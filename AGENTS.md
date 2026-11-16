@@ -5,13 +5,16 @@ Repo-specific rules for `saxeum/asm-bootstrap`. Universal rules live in the glob
 
 ## Where this is
 
-Past the bootstrap. `asm1` (7 506 bytes, built by `seed/asm1` from `src/asm1.s`) is self-hosting and
-**demonstrably better than the thing that built it**: 18/18 hand-emitted fixtures, 30 capability
-pairs of syntax `asm0a` cannot parse, 5 superiority cases where `asm0a` fails or answers wrongly, and
-12 rejections that name their line. The goal is now a **compiler** emitting this dialect — see
-`docs/ROADMAP.md` for what a high-level language still needs. `asm0a` is frozen history — it can no
-longer build the assembler, and it has a known wrong-answer defect (`and` assembled as `add`) that
-`asm1` must never reproduce.
+Past the bootstrap, and the compiler is self-hosting. `asm1` (8 053 bytes, built by `seed/asm1` from
+`src/asm1.s`) is self-hosting and **demonstrably better than the thing that built it**: 18/18
+hand-emitted fixtures, 36 capability pairs of syntax `asm0a` cannot parse, 8 superiority cases where
+`asm0a` fails or answers wrongly, and rejections that name their line. `cc` (10 106 bytes, built by
+`asm1` from `src/cc.s`) compiles a C subset to this dialect, and `src/cc.c` is the same compiler
+written in that subset: `make test-d2` shows `cc1.s == cc2.s`, and `make test-port` shows the port
+emits exactly what `cc` emits on all 42 goldens. The remaining bootstrap step is `asm2`, `asm1` in C.
+`docs/continue-here.md` is the current state. `asm0a` is frozen history — it can no longer build the
+assembler, and it has a known wrong-answer defect (`and` assembled as `add`) that `asm1` must never
+reproduce.
 
 Milestones: `milestone-fixpoint` (`X == X' == X''`) and `milestone-handover` (better than `asm0a`,
 and `asm0a` can no longer build it). `docs/ROADMAP.md` is where it goes next.
@@ -201,7 +204,7 @@ written down is that the tempting move on discovering one is to make `asm1` agre
 | **`and eax, ecx` emits `01 c8` — `add`.** It picks the mnemonic from the first letter and never re-checks the rest. | `21 c8` | `make test-superior`: fails if the two ever agree |
 | entry point hardcoded to the first body byte | `entry <expr>` directive, `e_entry` written | `make test-superior` (data-before-code, must run) |
 | reads at most 65 536 bytes, no check | 200 000, in 120-byte chunks, **refuses** above | `make test-superior` (99 KB source, must run) |
-| 128 labels | 256 | it cannot build the source at all — the handover |
+| 128 labels | 2 048 | it cannot build the source at all — the handover |
 | decimal immediates only | hex, character, negative literals | `make test-capability` |
 | no expressions | `label`, `label+4`, `end - start` | `make test-capability` |
 | no `and` / `or` / `test`, no register forms of them | all present, immediate and register | `make test-capability` |

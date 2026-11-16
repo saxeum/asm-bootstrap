@@ -2,19 +2,17 @@
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
-mov eax, 1
-mov edi, 1
-mov esi, 4194424+m1
-mov edx, m1end-m1
+mov r10, 65536
+sub rsp, r10
+mov rax, 7
+mov [rbp-8], rax
+mov rax, 3
+mov rdi, rax
+mov eax, 60
 syscall
-mov rax, 0
+mov [rbp-16], rax
+mov rax, [rbp-8]
 mov rdi, rax
 mov eax, 60
 syscall
 entry main
-m1:
-db "Hello, World!\n"
-m1end:
-db 0

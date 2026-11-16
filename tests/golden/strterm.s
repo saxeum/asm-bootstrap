@@ -2,7 +2,7 @@
 es:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -45,7 +45,7 @@ ret
 ec:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -65,28 +65,28 @@ ret
 line:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
 mov [rbp-24], rdx
 mov rcx, [rbp-8]
-mov [rbp-16400], rcx
+mov [rbp-65436], rcx
 mov rcx, [rbp-16]
-mov [rbp-16392], rcx
+mov [rbp-65428], rcx
 mov rcx, [rbp-24]
-mov [rbp-16384], rcx
-mov rdx, [rbp-16384]
-mov rsi, [rbp-16392]
-mov rdi, [rbp-16400]
+mov [rbp-65420], rcx
+mov rdx, [rbp-65420]
+mov rsi, [rbp-65428]
+mov rdi, [rbp-65436]
 call es
 mov [rbp-16], rax
 mov rcx, [rbp-8]
-mov [rbp-16400], rcx
+mov [rbp-65436], rcx
 mov rcx, [rbp-16]
-mov [rbp-16392], rcx
-mov rsi, [rbp-16392]
-mov rdi, [rbp-16400]
+mov [rbp-65428], rcx
+mov rsi, [rbp-65428]
+mov rdi, [rbp-65436]
 call ec
 mov [rbp-16], rax
 mov rax, [rbp-16]
@@ -96,32 +96,32 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 lea rax, [rbp-400]
 mov [rbp-16], rax
 mov rax, 0
 mov [rbp-24], rax
 mov rcx, [rbp-16]
-mov [rbp-16400], rcx
+mov [rbp-65436], rcx
 mov rcx, [rbp-24]
-mov [rbp-16392], rcx
+mov [rbp-65428], rcx
 mov rcx, 4194424+m1
-mov [rbp-16384], rcx
-mov rdx, [rbp-16384]
-mov rsi, [rbp-16392]
-mov rdi, [rbp-16400]
+mov [rbp-65420], rcx
+mov rdx, [rbp-65420]
+mov rsi, [rbp-65428]
+mov rdi, [rbp-65436]
 call line
 mov [rbp-24], rax
 mov rcx, [rbp-16]
-mov [rbp-16400], rcx
+mov [rbp-65436], rcx
 mov rcx, [rbp-24]
-mov [rbp-16392], rcx
+mov [rbp-65428], rcx
 mov rcx, 4194424+m2
-mov [rbp-16384], rcx
-mov rdx, [rbp-16384]
-mov rsi, [rbp-16392]
-mov rdi, [rbp-16400]
+mov [rbp-65420], rcx
+mov rdx, [rbp-65420]
+mov rsi, [rbp-65428]
+mov rdi, [rbp-65436]
 call line
 mov [rbp-24], rax
 mov rax, [rbp-24]
