@@ -63,7 +63,7 @@ produces prints `1`…`10`.
 | self-hosted | `asm1`, 4295 bytes, sha256 `250e02c9…`, built by `asm0a` from `src/asm1.s` (1146 lines) |
 | fixpoint | `asm0a(asm1.s) == asm1(asm1.s) == asm1(asm1.s)(asm1.s)`, all 4295 bytes, one sha256 |
 | fixtures | 18, all byte-identical to hand-emitted references and behaviourally correct |
-| branches | 288 sites pinned in `docs/branches.tsv`, verified by decoding |
+| branches | 290 sites pinned in `docs/branches.tsv`, verified by decoding |
 | source language | `mov` in 8/32/64-bit widths, `movzx` from registers and memory, `lea`, `add`/`sub`/`cmp`/`xor`/`inc`/`dec`/`div`, `call`/`ret`, `jmp`/`jz`/`jnz`/`jb` with `rel8` and `.l` `rel32`, `syscall`, `db` with strings and escapes, labels, two passes, decimal immediates |
 
 `src/asm1.s` assembles every fixture, including `src/count10.s` → exactly `ref/count10`.

@@ -1643,3 +1643,35 @@ computed, so neither is subject to the disp8 limit.
 The stack pointer at process start is a few hundred bytes below the top of the address space.
 Any buffer placed *above* `rsp` has only that much room, no matter how large the mapping looks.
 Everything the program allocates for itself belongs *below* `rsp`, on the side that grows.
+
+## A Makefile, and the checker doing its job on me
+
+`make` now drives the whole bootstrap: `make` builds `asm1` from `asm0a`, `make test` assembles
+every fixture with **both** assemblers and compares to `ref/`, `make fixpoint` requires
+`asm1(asm1.s) == asm0a(asm1.s)`, `make demo` builds and runs count10, `make check` verifies the
+pinned shas and branch decodes.
+
+Every rule compares bytes. A rule that checked exit status instead would pass on an assembler that
+emitted garbage and returned 0, and would pass hardest when the assembler was missing.
+
+### The gate caught a real omission
+
+`make check` failed on first run:
+
+    FAIL 0x3e2   want jae  0x2b3   got 0xe8f   jae  0xe8f
+    PINNED BRANCHES CHANGED
+
+That is the label-limit shim from this session: `0x3e2` used to jump straight to the failure
+routine and now jumps to the shim that checks the real limit and falls back to `0x3e8`. The change
+was intentional, but I never re-pinned it, so the recording had gone stale — and the checker
+noticed rather than the corpus, which passes either way because the limit check is not exercised by
+any fixture.
+
+Re-pinned, and the diff against the old file is exactly what the change explains:
+
+    0x3e2  0x2b3 -> 0xe8f        retargeted to the shim
+    0xe96  0x2b3                 the shim's own jae to the failure routine
+    0xe9c  0x3e8                 the shim's fall-back to the original next instruction
+
+288 pins became 290; all 290 decode as recorded, and `--selftest` still rejects the three known-bad
+sites.
