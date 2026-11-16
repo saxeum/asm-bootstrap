@@ -116,7 +116,8 @@ int fail(int m)
 	}
 	while (k > 0) {
 		k = k - 1;
-		ob[len] = 48 + d[k];
+		int dv = d[k];
+		ob[len] = 48 + dv;
 		len = len + 1;
 	}
 	ob[len] = 58;

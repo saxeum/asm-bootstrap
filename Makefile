@@ -21,7 +21,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 dis cc hello test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help test-port test-d2 test-cc-source test-asm2
+.PHONY: all bootstrap from-c asm1 dis cc hello test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help test-port test-d2 test-cc-source test-asm2 test-frozen freeze
 help:
 	@echo 'make            build asm1 from seed/asm1, then the decoder (which needs it)'
 	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
@@ -36,6 +36,9 @@ help:
 	@echo 'make test-port  the port byte-identical to cc on every golden'
 	@echo 'make test-d2    the port compiles its own source to identical text'
 	@echo 'make test-asm2  the assembler in C reproduces asm1 on the corpus and itself'
+	@echo 'make from-c      rebuild the .c assembler and compiler from the frozen seeds'
+	@echo 'make test-frozen every .s under src/ and tests/ is frozen (sha256 record)'
+	@echo 'make freeze      write docs/frozen.tsv (a deliberate act)'
 	@echo 'make test-cc-source  asm1 < src/cc.s still reproduces cc byte for byte'
 	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
 	@echo 'make bootstrap-check  asm0a and seed/asm1 must agree on src/asm1.s'
@@ -133,7 +136,60 @@ verify-provenance: asm1 dis
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: test-tools test-tmp test-header test-cc-source test-port test-d2 test-asm2 asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
+# ---- the C bootstrap, from the frozen seeds ----------------------------------
+# The assembly sources are frozen (make test-frozen). This target rebuilds every
+# .c artifact from scratch with the two committed seed binaries: seed/cc (the
+# frozen C compiler) and seed/asm1 (the frozen assembler).
+#
+# Order matters and is the answer to "assembler, then compiler":
+#   1. cc < asm1.c -> text; asm1 -> asm2          the assembler in C
+#   2. cc < cc.c   -> text; asm2 -> cc1            the compiler, assembled by asm2
+#   3. cc1 < cc.c  -> text; asm2 -> cc2            cc1 rebuilds itself
+#   4. cc1 < asm1.c-> text; asm2 -> asm2b          cc1 rebuilds the assembler
+# Steps 3 and 4 are the fixpoints: cc2 == cc1 and asm2b == asm2.
+from-c:
+	@mkdir -p $(WORK)/from-c; \
+	if ! seed/cc < src/asm1.c > $(WORK)/from-c/asm1.c.s; then \
+	  echo '  from-c: seed/cc refuses src/asm1.c'; exit 1; fi; \
+	if ! seed/asm1 < $(WORK)/from-c/asm1.c.s > $(WORK)/from-c/asm2; then \
+	  echo '  from-c: asm1 refuses the text for src/asm1.c'; exit 1; fi; \
+	chmod +x $(WORK)/from-c/asm2; \
+	if ! seed/cc < src/cc.c > $(WORK)/from-c/cc1.s; then \
+	  echo '  from-c: seed/cc refuses src/cc.c'; exit 1; fi; \
+	if ! $(WORK)/from-c/asm2 < $(WORK)/from-c/cc1.s > $(WORK)/from-c/cc1; then \
+	  echo '  from-c: asm2 refuses the text for src/cc.c'; exit 1; fi; \
+	chmod +x $(WORK)/from-c/cc1; \
+	if ! $(WORK)/from-c/cc1 < src/cc.c > $(WORK)/from-c/cc2.s; then \
+	  echo '  from-c: the C-built compiler cannot compile src/cc.c'; exit 1; fi; \
+	if ! $(WORK)/from-c/asm2 < $(WORK)/from-c/cc2.s > $(WORK)/from-c/cc2; then \
+	  echo '  from-c: asm2 refuses cc2.s'; exit 1; fi; \
+	if cmp -s $(WORK)/from-c/cc1 $(WORK)/from-c/cc2; then :; else \
+	  echo '  from-c: the C compiler is not a fixpoint'; exit 1; fi; \
+	if ! $(WORK)/from-c/cc1 < src/asm1.c > $(WORK)/from-c/asm1b.c.s; then \
+	  echo '  from-c: the C-built compiler cannot compile src/asm1.c'; exit 1; fi; \
+	if ! $(WORK)/from-c/asm2 < $(WORK)/from-c/asm1b.c.s > $(WORK)/from-c/asm2b; then \
+	  echo '  from-c: asm2 refuses its own C text'; exit 1; fi; \
+	if cmp -s $(WORK)/from-c/asm2 $(WORK)/from-c/asm2b; then :; else \
+	  echo '  from-c: the C assembler is not a fixpoint'; exit 1; fi; \
+	printf '  from-c: asm2 %s bytes sha %s, cc1 %s bytes sha %s\n' \
+	  "$$(wc -c < $(WORK)/from-c/asm2)" "$$(sha256sum $(WORK)/from-c/asm2 | cut -c1-16)" \
+	  "$$(wc -c < $(WORK)/from-c/cc1)" "$$(sha256sum $(WORK)/from-c/cc1 | cut -c1-16)"; \
+	printf '  from-c: cc2 == cc1 and asm2b == asm2 -- both .c artifacts reproduce\n'
+
+# ---- the assembly sources are frozen ----------------------------------------
+# docs/frozen.tsv is the record: every .s under src/ and tests/, by sha256.
+# `make freeze` is the only writer; `make test-frozen` fails on any change.
+test-frozen:
+	@mkdir -p $(WORK); \
+	find src tests -name '*.s' | sort | xargs sha256sum > $(WORK)/frozen.now; \
+	if cmp -s $(WORK)/frozen.now docs/frozen.tsv; then \
+	  printf '  frozen: %s assembly sources unchanged\n' "$$(wc -l < docs/frozen.tsv)"; \
+	else echo '  FROZEN ASSEMBLY CHANGED:'; diff docs/frozen.tsv $(WORK)/frozen.now | head -20; exit 1; fi
+freeze:
+	@find src tests -name '*.s' | sort | xargs sha256sum > docs/frozen.tsv; \
+	printf '  wrote docs/frozen.tsv (%s assembly sources)\n' "$$(wc -l < docs/frozen.tsv)"
+
+check: test-tools test-frozen test-tmp test-header test-cc-source test-port test-d2 test-asm2 asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \

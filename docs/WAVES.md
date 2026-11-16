@@ -3576,3 +3576,27 @@ Two defects in the port surfaced: `gd`/`pd` (32-bit state accessors) were missin
 bound moved to a 32-bit slot, and the port's 16-bit array offset could not survive the larger limits.
 `asm1` is unchanged (`71c5dbdba797ed40`) and remains the witness; promoting `asm2` is a deliberate
 next decision, not a build step.
+
+## Wave: freeze the assembly, bootstrap from the .c sources
+
+All 160 `.s` sources under `src/` and `tests/` are frozen in `docs/frozen.tsv`; `make test-frozen`
+fails on any change and `make freeze` is the only writer. `seed/cc` (the dialect compiler, 10 429
+bytes, sha `a81345ad5a67490d`) joins `seed/asm1` as a committed seed.
+
+`make from-c` uses only those two seeds and the order that matters:
+
+```
+seed/cc < src/asm1.c > text ; seed/asm1 < text > asm2        the assembler in C
+seed/cc < src/cc.c   > text ; asm2      < text > cc1         the compiler, assembled in C
+cc1     < src/cc.c   > text ; asm2      < text > cc2         cc2 == cc1
+cc1     < src/asm1.c > text ; asm2      < text > asm2b       asm2b == asm2
+```
+
+It reports `asm2 51783 bytes sha aa9e992e912f95b6, cc1 43418 bytes sha 74e4dd9725169c08`, and both
+fixpoints hold. The C compiler's 16-bit array offsets and 26 000-byte input cap had to become 32-bit
+and 200 000 for `cc1` to compile `src/asm1.c`; `asm1.c` also stages `d[k]` through a local so the
+dialect `cc`'s shared `[rbp-308]` slot cannot turn a char store into a 64-bit store.
+
+The default `make` still builds `asm1`/`cc` from the frozen assembly sources. Installing the C-built
+artifacts as the canonical `asm1`/`cc` is the next deliberate decision, with `seed/` and
+`docs/toolchain.tsv` consequences.
