@@ -2237,3 +2237,37 @@ awk insert in an earlier session. Nothing had ever fed `cc` a lone `/`. Removed.
 
 The lesson, again, and this time about tooling rather than the dialect: **anchor edits on content,
 commit before experimenting, and never `git checkout` a file that holds work you have not saved.**
+
+## A calling convention, and a session that mostly debugged its own edits
+
+`cc` gained functions: parameters, a frame, a prologue that copies the arguments into locals, a
+return in `eax`, `entry main`, and calls with constant arguments. Gate 11 is behavioural and about
+*order*: `add(2,3)` must exit 5 and `sub2(3,2)` must exit 1 — swapping rdi/rsi gives 5 and 255.
+Verified by corrupting the golden. `cc` 4877 → 5734 bytes.
+
+The convention itself is short enough to state in a table (docs/cc.md): rdi/rsi/rdx/rcx, eax, the
+callee copies, `sub rsp, 64` because that is exactly eight variables, and nothing is callee-saved
+because nothing is live across a call. The one design point that earns its keep is the copy: syscall
+destroys rcx, so an ABI leaving the fourth argument in rcx would corrupt it as soon as the function
+wrote anything.
+
+### The honest part
+
+Most of this session went into my own editing, not into the compiler. The sequence: an `awk` that
+inserted a jump after "the first `call gcur`" hit the main flow and deleted `call flush` (the compiler
+then emitted zero bytes and exited 0 — "succeeding" on everything); a `git checkout` that discarded an
+hour of work; a splice that duplicated a label; several insertions that landed between a label and its
+data; and, repeatedly, binaries left stale by a failed build so that a test reported on the previous
+compile. Every one was caught by a gate, and every one cost more than writing the code did.
+
+The working method, when I finally used it, is the one already written in `AGENTS.md`: build the new
+block in a file, splice it by *line ranges verified by counting*, then check the seam with a
+`grep -c` on labels and a diff, then build and test. The last four edits went in first time.
+
+### An open defect, recorded rather than papered over
+
+A call with a **variable** argument (`f(x)`) fails inside the recursive expression parse, while a
+constant argument (`f(3)`) works. Probes localise it to `call expr` inside `callargs`: everything
+before it runs, nothing after it does, and the same `expr` called from a statement handles the same
+variable correctly. It is refused today (the refusal is in the suite) and it is the first thing to
+fix, because recursion and any real program need it.

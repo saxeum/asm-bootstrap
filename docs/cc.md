@@ -467,3 +467,50 @@ its output checked, not just diffed.
 
 Gate 10 is behavioural and would be wrong if precedence were inverted: `return a + b * 4` with
 `a = 2, b = 3` must exit **14**. Left-to-right evaluation would give 20.
+
+## Stage 5: a calling convention
+
+The largest remaining decision, and it is now written down and gated:
+
+| | |
+|---|---|
+| arguments | `rdi`, `rsi`, `rdx`, `rcx` — four, left to right |
+| return value | `eax` |
+| who copies them | the callee, into its own locals, in the prologue |
+| frame | `push rbp` / `mov rbp, rsp` / `sub rsp, 64`; restored before `ret` |
+| callee-saved | nothing, because nothing is live across a call |
+| temporaries | `eax`, `ecx`, `r8d`, `r9d`, `r10d`, `r11d` — no argument register among them |
+| entry point | `entry main`, because `main` is not necessarily the first function |
+| `main` | exits; every other function returns |
+
+The callee copying its arguments at entry is the part that earns its keep: `syscall` destroys `rcx`,
+so an ABI that left the fourth argument in `rcx` would corrupt it the first time the function wrote
+anything. After the prologue the argument registers are dead.
+
+64 bytes of frame is not a guess: it is eight variables of eight bytes, which is the symbol table's
+whole capacity, so the frame cannot be too small for the variables the language can declare.
+
+### The gate is behavioural, and it is about *order*
+
+```
+int add(int a, int b) { return a + b; }   int sub2(int a, int b) { return a - b; }
+int main(void) { return add(2, 3); }      int main(void) { return sub2(3, 2); }
+```
+
+`add(2,3)` must exit **5** and `sub2(3,2)` must exit **1**. Swapping `rdi` and `rsi` gives 5 and
+**255**, so an argument-register mistake is a wrong number, not a diff. Verified by corrupting the
+golden: `mov rdi, rax` → `mov rsi, rax` produces `calls exited 3/1, wanted 5/1`.
+
+### What this stage does *not* have
+
+- **Only constant arguments.** `f(3, 2)` works; `f(x)` does not, and it is refused. The failure is
+  inside the recursive expression parse — a variable argument is parsed by the same `expr` that is
+  already running for the enclosing `return`, and that nesting fails; the constant path does not go
+  through it. Recorded as an open defect with its evidence, not as a design choice.
+- **No call inside a larger expression**, and no call inside an argument list: both are refused,
+  because they would clobber argument registers or temporaries. The refusals are in the suite.
+- **No recursion** — not because the frame would fail (it would work) but because a recursive call
+  needs an argument that is a variable.
+- **No forward declarations**: a call to a function defined later still works, because the assembler
+  resolves the label, but a call to one that does not exist fails at assembly time (`label`), not at
+  compile time.

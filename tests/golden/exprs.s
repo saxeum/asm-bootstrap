@@ -2,6 +2,8 @@
 main:
 push rbp
 mov rbp, rsp
+mov ecx, 64
+sub rsp, rcx
 mov eax, 2
 mov [rbp-8], eax
 mov eax, 3
@@ -24,3 +26,4 @@ add eax, ecx
 mov edi, eax
 mov eax, 60
 syscall
+entry main

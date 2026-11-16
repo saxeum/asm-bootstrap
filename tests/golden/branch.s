@@ -2,6 +2,8 @@
 main:
 push rbp
 mov rbp, rsp
+mov ecx, 64
+sub rsp, rcx
 mov eax, 0
 mov [rbp-8], eax
 L1:
@@ -38,6 +40,7 @@ mov eax, 0
 mov edi, eax
 mov eax, 60
 syscall
+entry main
 m1:
 db "-"
 m1end:

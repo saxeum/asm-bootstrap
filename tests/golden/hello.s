@@ -2,6 +2,8 @@
 main:
 push rbp
 mov rbp, rsp
+mov ecx, 64
+sub rsp, rcx
 mov eax, 1
 mov edi, 1
 mov esi, 4194424+m1
@@ -11,6 +13,7 @@ mov eax, 0
 mov edi, eax
 mov eax, 60
 syscall
+entry main
 m1:
 db "Hello, World!\n"
 m1end:

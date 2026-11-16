@@ -1259,3 +1259,19 @@ would exit 20. A precedence bug is a wrong number, not a diff.
 
 Next: a calling convention. That is the largest remaining decision, and it also retires the frame
 shortcut (locals at `[rbp-8k]` with no `sub rsp`, safe today only because nothing calls anything).
+
+## Compiler stage 5: a calling convention
+
+Arguments in rdi/rsi/rdx/rcx, return in eax, the callee copies its arguments into locals at entry
+(syscall destroys rcx, so an ABI that trusted rcx would corrupt the fourth argument), a 64-byte frame
+that is exactly the symbol table's capacity, nothing callee-saved because nothing is live across a
+call, and `entry main` so the entry point does not depend on function order.
+
+Gate 11 is behavioural: `add(2,3)` exits 5, `sub2(3,2)` exits 1, and swapping the argument registers
+gives 5 and 255. Verified by corrupting the golden.
+
+Open, and first in the queue: **a call with a variable argument fails** inside the recursive
+expression parse. `f(3)` works; `f(x)` is refused. Recursion, and any real program, needs it.
+
+`cc` 4 877 → 5 734 bytes. Coverage of the assembler is unchanged: the emitted code uses only forms
+that already had fixtures, which is the payoff of emitting text.

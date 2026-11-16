@@ -47,6 +47,7 @@ mov [rbp+48], eax
 mov eax, 0
 mov [rbp+96], eax
 mov [rbp-108], eax      ; no variables declared yet
+mov [rbp-208], eax      ; not inside an argument list
 mov [rbp+112], eax
 mov [rbp+116], eax
 
@@ -80,41 +81,238 @@ mov ecx, [rbp+8]
 add ecx, eax
 mov [rbp+8], ecx
 
-; ---- the one function header --------------------------------------------
+; ---- function definitions, one after another ----------------------------
+; Calling convention, and this is all of it:
+;   * arguments in rdi, rsi, rdx, rcx -- four, left to right
+;   * the return value in eax
+;   * the callee copies each argument into a local at entry, so the argument
+;     registers are dead after the prologue and a syscall in the body cannot
+;     corrupt them (syscall destroys rcx)
+;   * every function owns rbp: push rbp / mov rbp, rsp / sub rsp, 64, restored
+;     before ret. 64 bytes is eight variables of eight: the symbol table's whole
+;     capacity, so the frame cannot be too small
+;   * nothing is callee-saved, because nothing is live across a call: the
+;     expression temporaries are eax, ecx, r8d, r9d, r10d, r11d and no argument
+;     register is among them
+;   * `main` exits, every other function returns, and `entry main` tells the
+;     assembler where execution starts when main is not the first function
+mov esi, 4194424+f_hdr
+call emitstr
+fnloop:
+call skipws
+call gcur
+cmp al, 0
+jz.l fndone
 mov esi, 4194424+f_int
 call want
-mov esi, 4194424+f_main
-call want
+call ident
+call emitname
+mov esi, 4194424+f_dcol
+call emitstr
+mov eax, 0
+mov [rbp-164], eax      ; 1 when this function is main
+mov eax, 0
+mov [rbp+24], eax       ; no return seen in this function yet
+mov eax, 0
+mov [rbp-108], eax      ; a fresh symbol table for this function
+lea rdx, [rbp-16064]
+mov eax, [rdx]
+mov ecx, 1852399981     ; "main", four bytes little-endian
+cmp eax, ecx
+jnz fnnm
+mov eax, 1
+mov [rbp-164], eax
+fnnm:
 mov esi, 4194424+f_lpar
 call want
 mov esi, 4194424+f_void
+call isword
+cmp eax, 0
+jnz fnpdone
+fnparm:
+mov esi, 4194424+f_int
 call want
+call ident
+call defvar
+call skipws
+call gcur
+cmp al, 44
+jnz fnpdone
+mov eax, 1
+call bump
+jmp fnparm
+fnpdone:
 mov esi, 4194424+f_rpar
 call want
 mov esi, 4194424+f_lbrc
 call want
-mov esi, 4194424+f_hdr
-call emitstr
 mov esi, 4194424+f_pro
 call emitstr
+mov eax, 0
+mov [rbp-176], eax      ; copy the parameters in from their argument registers
+argcl:
+mov eax, [rbp-176]
+mov ecx, [rbp-108]
+cmp eax, ecx
+jz argcd
+call eargc
+mov eax, [rbp-176]
+inc eax
+mov [rbp-176], eax
+jmp argcl
+argcd:
 call body
 mov eax, [rbp+24]
 cmp eax, 0
-jnz.l mnexit
-mov esi, 4194424+f_zero
+jnz fnnext              ; the body returned and emitted its own exit
+mov eax, 0
+call emitret            ; fell off the end: return 0
+fnnext:
+jmp.l fnloop
+fndone:
+mov esi, 4194424+f_entry
 call emitstr
-mov esi, 4194424+f_edi
-call emitstr
-mnexit:
 call lits
 call skipws
 call gcur
-cmp al, 0               ; nothing may follow the closing brace
+cmp al, 0               ; nothing may follow the last function
 jnz.l fail
 call flush
 mov eax, 60
 mov edi, 0
 syscall
+
+; eargc: copy the parameter whose index is in eax from its argument register
+; into its local, so the argument registers are dead after the prologue
+eargc:
+mov [rbp-168], eax
+mov esi, 4194424+f_arg1
+call emitstr
+mov eax, [rbp-168]
+call varoff
+call emitnum
+mov esi, 4194424+f_arg2
+call emitstr
+mov eax, [rbp-168]
+call emitarg
+mov esi, 4194424+f_nl
+call emitstr
+ret
+
+; emitarg: the name of argument register eax
+emitarg:
+cmp eax, 4
+jb eargok
+jmp.l fail              ; more than four arguments
+eargok:
+add eax, eax
+add eax, eax
+mov ecx, 4194424+argnames
+add eax, ecx
+mov [rbp-144], eax
+mov eax, 0
+mov [rbp-148], eax
+eagl:
+mov eax, [rbp-148]
+mov ecx, 3
+cmp eax, ecx
+jz eagd
+mov eax, [rbp-144]
+mov ecx, [rbp-148]
+add eax, ecx
+movzx eax, byte [rax]
+call emitc
+mov eax, [rbp-148]
+inc eax
+mov [rbp-148], eax
+jmp eagl
+eagd:
+ret
+
+; callargs: the cursor is at '(' ; emits the arguments, then "call <name>".
+; The name is saved across the arguments because an argument may itself be a
+; call, and every ident reuses the same name buffer.
+callargs:
+lea rdx, [rbp-16064]
+mov eax, [rdx]
+mov [rbp-200], eax
+mov eax, [rdx+4]
+mov [rbp-204], eax
+mov eax, 1
+call bump
+mov eax, 0
+mov [rbp-168], eax
+call skipws
+call gcur
+cmp al, 41              ; no arguments
+jz cardskip
+mov eax, 1
+mov [rbp-208], eax
+cargloop:
+call expr              ; an argument is an expression that must be a constant today: a variable argument fails inside the recursive parse (docs/cc.md)
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-168]
+call emitarg
+mov esi, 4194424+f_mveax
+call emitstr
+mov eax, [rbp-168]
+inc eax
+mov [rbp-168], eax
+call skipws
+call gcur
+cmp al, 44
+jnz cardskip
+mov eax, 1
+call bump
+jmp cargloop
+cardskip:
+mov esi, 4194424+f_rpar
+call want
+lea rdx, [rbp-16064]
+mov eax, [rbp-200]
+mov [rdx], eax
+mov eax, [rbp-204]
+mov [rdx+4], eax
+mov eax, 0
+mov [rbp-208], eax
+mov esi, 4194424+f_callk
+call emitstr
+call emitname
+mov esi, 4194424+f_nl
+call emitstr
+ret
+
+; emitret: the value is in eax; main exits, everything else returns
+emitret:
+mov eax, [rbp-164]
+cmp eax, 0
+jz erret
+mov esi, 4194424+f_edi
+call emitstr
+ret
+erret:
+mov esi, 4194424+f_epi
+call emitstr
+ret
+
+; emitname: the current name, from the buffer. The address lives in a 64-bit
+; slot because emitc clobbers rdx and a truncated pointer would be fatal.
+emitname:
+lea rax, [rbp-16064]
+mov [rbp-192], rax
+emnl:
+mov rax, [rbp-192]
+movzx eax, byte [rax]
+cmp eax, 0
+jz emnd
+call emitc
+mov rax, [rbp-192]
+inc rax
+mov [rbp-192], rax
+jmp emnl
+emnd:
+ret
 
 ; ---- statements until '}' -----------------------------------------------
 ; ---- statements until '}', which is consumed on the way out --------------
@@ -187,6 +385,10 @@ call want
 jmp.l bodloop
 stasg:
 call ident
+call skipws
+call gcur
+cmp al, 40
+jz stcall
 call findvar
 mov [rbp-116], eax
 mov esi, 4194424+f_eq
@@ -197,6 +399,12 @@ call emit_ls
 mov esi, 4194424+f_semi
 call want
 jmp.l bodloop
+stcall:
+call callargs
+mov esi, 4194424+f_semi
+call want
+jmp.l bodloop
+
 streto:
 mov eax, [rbp+112]
 cmp eax, 1
@@ -204,8 +412,7 @@ jnz.l fail              ; `return` is only allowed at function level
 call expr
 mov esi, 4194424+f_semi
 call want
-mov esi, 4194424+f_edi  ; mov edi, eax / mov eax, 60 / syscall
-call emitstr
+call emitret
 mov eax, 1
 mov [rbp+24], eax
 call skipws
@@ -289,11 +496,15 @@ ex3:
 call skipws
 call gcur
 cmp al, 48
-jb ex3var
+jb.l ex3var
 cmp al, 58
-jb ex3num
+jb.l ex3num
 ex3var:
 call ident
+call skipws
+call gcur
+cmp al, 40
+jz ex3call
 call findvar
 call varoff
 mov [rbp-140], eax
@@ -310,6 +521,22 @@ call emitstr
 mov esi, 4194424+f_nl
 call emitstr
 ret
+ex3call:
+; a call is allowed only as a whole expression: its arguments would clobber the
+; temporaries of an enclosing one
+mov eax, [rbp-128]
+cmp eax, 0
+jz ex3cok
+jmp.l fail
+ex3cok:
+mov eax, [rbp-208]
+cmp eax, 0
+jz ex3fin
+jmp.l fail              ; a call inside an argument list would clobber the arg registers
+ex3fin:
+call callargs
+ret
+
 ex3num:
 call numval
 mov [rbp-140], eax
@@ -1341,13 +1568,51 @@ db 0
 f_hdr:
 db "; generated by cc: dialect source, not a program. Assemble it with asm1"
 db 10
-db "main:"
-db 10
 db 0
 f_pro:
 db "push rbp"
 db 10
 db "mov rbp, rsp"
+db 10
+db "mov ecx, 64"
+db 10
+db "sub rsp, rcx"
+db 10
+db 0
+f_arg1:
+db "mov [rbp-"
+db 0
+f_arg2:
+db "], "
+db 0
+argnames:
+db "rdi"
+db 0
+db "rsi"
+db 0
+db "rdx"
+db 0
+db "rcx"
+db 0
+
+f_callk:
+db "call "
+db 0
+f_mveax:
+db ", rax"
+db 10
+db 0
+f_entry:
+db "entry main"
+db 10
+db 0
+
+f_epi:
+db "mov rsp, rbp"
+db 10
+db "pop rbp"
+db 10
+db "ret"
 db 10
 db 0
 f_while:
