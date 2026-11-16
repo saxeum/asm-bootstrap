@@ -609,3 +609,62 @@ Two gates, both exact:
 Also fixed while here: `emitreg` copied exactly three characters per register name, so `r8` was
 emitted as `r8 ` and `mov r8 , rax` is not a line any assembler should accept. The table is
 null-terminated now.
+
+## The nesting bug was a missing `sub rsp`
+
+`cc` never reserved stack. Its prologue was `pop rax; pop rax; lea rbp, [rsp]` and nothing else, so
+`rsp == rbp` — and every `call` pushes its return address at `rbp-8`, `rbp-16`, … straight into the
+region where `cc` keeps its state (`-100` … `-264`). The slots survived only because no parse path had
+ever been deeper than twelve calls. Adding one call (`exprd`) to the variable-argument path pushed it
+over, and `cc` started refusing `f(x)` — which is how the bug was found, not by reading.
+
+**The fix is two instructions and a number:**
+
+```
+lea rbp, [rsp]
+mov ecx, 320
+sub rsp, rcx        ; every call pushes at rbp-8, -16, ...; the state is at -100..-264
+```
+
+**And it is the nesting bug.** With the reserve in place, the parse that had corrupted the symbol-name
+buffer runs to completion: replacing `argexpr` with `exprd` in the argument loop makes every golden
+byte-identical except `recursion`, which differs by two blank lines. The "value 1 where a variable's
+name should have been" was a state slot overwritten by a return address — `[rbp-208]`, the
+"inside an argument list" flag, is exactly `1`.
+
+The guard (`cc: internal: nested expression`) therefore enforces a constraint that no longer holds.
+It stays until the next step removes it together with `argexpr`, because removing a guard and
+changing the argument parser in the same breath as adding arrays would mean three changes with one
+gate between them.
+
+## Stage 8: arrays
+
+`int a[4];` allocates four consecutive slots, and `a[i]` addresses one of them:
+
+| source | emitted |
+|---|---|
+| `int a[4];` | four slots; `a` at `[rbp-8]`, `a[3]` at `[rbp-32]` |
+| `a[i]` | `lea rcx, [rbp-8]` / index at the next depth / `add rcx, rcx` ×3 / `add rax, rcx` / `mov rax, [rax]` |
+| `a[i] = v` | the value first, then `lea rcx, [rbp-8]` / `add rcx, <scaled index>` / `mov [rcx], rax` |
+
+The base sits in `reg d` while the index is computed at `d+1` — that is what the depth mechanism is
+for — which needed one new routine, `exprd`: an expression at a caller-given depth.
+
+```
+exprd:
+mov [rbp-128], eax
+call ex1
+ret
+```
+
+Three refusals came out of doing it: a bare array name (`a = 1`, `int y = a;`) because silently
+reading `a[0]` is a wrong answer; a subscript of something that is not an array; and an array too big
+for the eight slots. A **nested** subscript (`a[b[0]]`) is refused too, because it re-enters the
+parser from inside a term — the shape that used to corrupt state. Now that the cause is known that
+refusal is probably unnecessary; it stays until a test can show it is safe.
+
+Still absent, deliberately: no bounds check, no arrays as function arguments (a bare name is refused),
+no initialiser list, and the eight-slot budget is shared with scalars.
+
+Gates: 42 from `a[0] = 10; a[i] = 32; return a[0] + a[i];` with `i = 2` — a wrong stride, base or slot
+gives anything else — and 42 from `f(a[i])`, an element crossing a call.

@@ -1317,3 +1317,26 @@ codegen.
 After that: `div` (both the 8-bit dialect form's limitations and `/` in `cc`), `char` and byte
 strings, then `.data` for mutable globals — the point at which `cc` could hold a string table, which
 is what compiling its own source needs.
+
+## Compiler stage 8: arrays
+
+`int a[N];`, `a[i]` and `a[i] = v` with a computed index, gated by two programs that exit 42. The
+enabling change was `exprd` (an expression at a caller-given depth), which is also what retires
+`argexpr`.
+
+The bug this wave found is bigger than the feature: **`cc` never reserved stack space**, so its state
+slots sat exactly where every `call` pushes return addresses, and the "unexplained nesting corruption"
+of two waves ago was a return address landing on a flag. Fixed with `mov ecx, 320; sub rsp, rcx`
+(`docs/cc.md`, `docs/WAVES.md`).
+
+Next, in order:
+
+1. **Remove the `expr` nesting guard and delete `argexpr`**, using `expr` for arguments — the premise
+   of the guard is falsified, so keeping it is now a false constraint. Arguments can then be
+   expressions (`f(a * b)`), which today they cannot.
+2. **A call inside a larger expression** (`n * f(n-1)`): the result comes back in `rax`, so a call at
+   depth `d` needs `mov <reg d>, rax` after it, and its arguments must be evaluated at `d+1`.
+3. `div r32` is an *assembler* gap and `/` is refused because of it; `add`/`sub r32,imm` likewise
+   (`cc` loads a register instead, which is why its code is longer than it needs to be).
+4. `char` and byte strings, then `.data` for a string table — at which point a C version of `cc` is
+   within reach.

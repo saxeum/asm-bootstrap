@@ -37,6 +37,10 @@ start:
 pop rax
 pop rax                 ; argv[0], discarded: cc takes no arguments
 lea rbp, [rsp]
+mov ecx, 320
+sub rsp, rcx            ; reserve: every call pushes at rbp-8, -16, ... and the
+                        ; state slots live at -100..-264. Without this, a call
+                        ; chain deeper than twelve overwrites them.
 mov eax, 0
 mov [rbp+12], eax
 mov [rbp+8], eax
@@ -413,6 +417,10 @@ call wblock
 jmp.l bodloop
 stint:
 call ident
+call skipws
+call gcur
+cmp al, 91
+jz.l stintarr           ; `int a[N];` instead of `int x = ...;`
 call defvar
 mov [rbp-116], eax
 mov esi, 4194424+f_eq
@@ -423,6 +431,21 @@ call emit_ls
 mov esi, 4194424+f_semi
 call want
 jmp.l bodloop
+
+stintarr:
+; `int a[N];` -- a count, then `]` and `;`, no initialiser
+mov eax, 1
+call bump
+call numval
+mov [rbp-256], eax
+mov esi, 4194424+f_rbrk
+call want
+mov esi, 4194424+f_semi
+call want
+mov eax, [rbp-256]
+call defarr
+jmp.l bodloop
+
 stasg:
 call skipws
 call gcur
@@ -431,9 +454,20 @@ jz.l stptr
 call ident
 call skipws
 call gcur
+cmp al, 91
+jz.l stsub
+call skipws
+call gcur
 cmp al, 40
 jz stcall
 call findvar
+mov [rbp-112], eax      ; -112: this check is immediate
+call isarr
+cmp eax, 0
+jz stbare
+jmp.l fail              ; a bare array name is refused
+stbare:
+mov eax, [rbp-112]
 mov [rbp-116], eax
 mov esi, 4194424+f_eq
 call want
@@ -447,6 +481,99 @@ stcall:
 call callargs
 mov esi, 4194424+f_semi
 call want
+jmp.l bodloop
+
+stsub:
+; `a[i] = v;` -- the scaled index is parked at -284 because `want` and `expr`
+; own every register; the address is built after the value is in rax
+mov eax, 1
+call bump               ; '['
+call findvar
+mov [rbp-268], eax
+call isarr
+cmp eax, 0
+jnz stsok
+jmp.l fail
+stsok:
+mov eax, [rbp-236]
+cmp eax, 0
+jz stsgo
+jmp.l fail              ; a subscript inside a subscript: refused
+stsgo:
+mov eax, 1
+mov [rbp-236], eax
+mov eax, 1
+call exprd              ; the index into depth 1
+mov eax, 3
+mov [rbp-280], eax
+stscl:
+mov esi, 4194424+f_add
+call emitstr
+mov eax, 1
+call emitreg
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, 1
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+mov eax, [rbp-280]
+dec eax
+mov [rbp-280], eax
+cmp eax, 0
+jnz stscl
+mov esi, 4194424+f_isav
+call emitstr
+mov eax, 1
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_rbrk
+call want
+mov esi, 4194424+f_eq
+call want
+call expr               ; the value into rax
+mov esi, 4194424+f_lea1
+call emitstr
+mov eax, 1
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-268]
+call varoff
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, 2
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, 284
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov esi, 4194424+f_add
+call emitstr
+mov eax, 1
+call emitreg
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, 2
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_lst1
+call emitstr
+mov esi, 4194424+f_rax
+call emitstr
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_semi
+call want
+mov eax, 0
+mov [rbp-236], eax
 jmp.l bodloop
 
 streto:
@@ -492,10 +619,17 @@ exprok:
 mov eax, 1
 mov [rbp-212], eax
 mov eax, 0
-mov [rbp-128], eax
-call ex1
+call exprd
 mov eax, 0
 mov [rbp-212], eax
+ret
+
+exprd:
+; eax is the caller's depth: an expression at depth d leaves its value in reg d
+; and leaves reg 0..d-1 alone. That is what a subscript needs -- the base stays
+; in reg d while the index is computed at d+1.
+mov [rbp-128], eax
+call ex1
 ret
 ex1:
 call ex2
@@ -567,7 +701,16 @@ call skipws
 call gcur
 cmp al, 40
 jz ex3call
+cmp al, 91
+jz.l ex3sub
 call findvar
+mov [rbp-112], eax      ; -112: this check is immediate
+call isarr
+cmp eax, 0
+jz ex3bare
+jmp.l fail              ; a bare array name is no value
+ex3bare:
+mov eax, [rbp-112]
 call varoff
 mov [rbp-140], eax
 mov esi, 4194424+f_mov
@@ -681,6 +824,91 @@ mov esi, 4194424+f_semi
 call want
 jmp.l bodloop
 
+
+ex3sub:
+; `a[i]` -- the base goes into reg d and the index is computed at d+1, so the
+; base survives: that is what the depth mechanism is for. d is saved in -288
+; because exprd overwrites [rbp-128] with its own depth.
+mov eax, 1
+call bump               ; '['
+call findvar
+mov [rbp-268], eax      ; the array's index: must survive the index parse
+call isarr
+cmp eax, 0
+jnz ex3sok
+jmp.l fail              ; `x[i]` where x is not an array
+ex3sok:
+mov eax, [rbp-236]
+cmp eax, 0
+jz ex3sgo
+jmp.l fail              ; a subscript inside a subscript: refused, docs/cc.md
+ex3sgo:
+mov eax, 1
+mov [rbp-236], eax
+mov eax, [rbp-128]
+mov [rbp-288], eax      ; d: the base's register
+mov eax, [rbp-268]
+call varoff
+mov [rbp-272], eax
+mov esi, 4194424+f_lea1
+call emitstr
+mov eax, [rbp-288]
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-272]
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov eax, [rbp-288]
+inc eax
+mov [rbp-276], eax      ; d+1: the index's register
+call exprd
+mov eax, [rbp-288]
+mov [rbp-128], eax      ; exprd left its own depth behind: restore d
+mov eax, 3
+mov [rbp-280], eax
+ex3scl:
+mov esi, 4194424+f_add
+call emitstr
+mov eax, [rbp-276]
+call emitreg
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, [rbp-276]
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+mov eax, [rbp-280]
+dec eax
+mov [rbp-280], eax
+cmp eax, 0
+jnz ex3scl
+mov esi, 4194424+f_add
+call emitstr
+mov eax, [rbp-288]
+call emitreg
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, [rbp-276]
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-288]
+call emitreg
+mov esi, 4194424+f_dref1
+call emitstr
+mov eax, [rbp-288]
+call emitreg
+mov esi, 4194424+f_le2
+call emitstr
+mov esi, 4194424+f_rbrk
+call want
+mov eax, 0
+mov [rbp-236], eax
+ret
 
 ex3num:
 call numval
@@ -881,6 +1109,82 @@ mov eax, [rbp-108]
 inc eax
 mov [rbp-108], eax
 dec eax                 ; the new variable's index
+ret
+
+; ---- arrays ---------------------------------------------------------------
+; `int a[N];` allocates N consecutive slots and marks the name an array in a
+; byte-per-slot table at rbp-14000. The slots after the first have their name
+; zeroed, because ident never produces an empty name -- so they can never be
+; found, and a bare `a` is refused rather than quietly reading a[0].
+;   [rbp-256] count   [rbp-260] base index   [rbp-264] loop index
+defarr:
+mov [rbp-256], eax
+call idfind
+cmp eax, -1
+jnz.l fail              ; already declared
+mov eax, [rbp-108]
+mov edx, [rbp-256]      ; the dialect has no `add r32, [mem]`
+add eax, edx
+cmp eax, 8
+jb defafit
+jmp.l fail              ; does not fit in the eight slots
+defafit:
+mov eax, [rbp-108]
+mov [rbp-260], eax
+mov [rbp-264], eax
+defazl:
+mov eax, [rbp-264]
+mov ecx, [rbp-108]
+mov edx, [rbp-256]
+add ecx, edx
+cmp eax, ecx
+jz defazd
+mov edx, eax
+add eax, eax
+add eax, eax
+add eax, eax
+lea rcx, [rbp-16000]
+add rcx, rax
+mov eax, 0
+mov [rcx], eax
+mov [rcx+4], eax        ; no name: this slot cannot be found
+mov eax, [rbp-264]
+lea rcx, [rbp-14000]
+add rcx, rax
+mov eax, 0
+mov [rcx], al           ; and not an array itself
+mov eax, [rbp-264]
+inc eax
+mov [rbp-264], eax
+jmp defazl
+defazd:
+mov eax, [rbp-260]
+add eax, eax
+add eax, eax
+add eax, eax
+lea rcx, [rbp-16000]
+add rcx, rax
+mov eax, [rbp-16064]
+mov [rcx], eax
+mov eax, [rbp-16060]
+mov [rcx+4], eax
+mov eax, [rbp-260]
+lea rcx, [rbp-14000]
+add rcx, rax
+mov eax, 1
+mov [rcx], al
+mov eax, [rbp-108]
+mov edx, [rbp-256]
+add eax, edx
+mov [rbp-108], eax
+mov eax, [rbp-260]
+ret
+
+; isarr: eax = index, result eax = 1 if that slot is an array
+isarr:
+lea rcx, [rbp-14000]
+add rcx, rax
+movzx eax, byte [rcx]
 ret
 
 ; varoff: eax = index, result eax = the byte offset 8*(index+1)
@@ -1695,9 +1999,6 @@ syscall
 f_int:
 db "int"
 db 0
-f_main:
-db "main"
-db 0
 f_lpar:
 db "("
 db 0
@@ -1777,41 +2078,11 @@ db "while"
 db 0
 db "int"
 db 0
-f_x:
-db "x"
-db 0
 f_eq:
 db "="
 db 0
 f_L:
 db "L"
-db 0
-f_i1:
-db "mov rax, "
-db 0
-f_i2:
-db 10
-db "mov [rbp-8], rax"
-db 10
-db 0
-f_a1:
-db "mov rax, [rbp-8]"
-db 10
-db "mov rcx, "
-db 0
-f_a2:
-db 10
-db "add rax, rcx"
-db 10
-db "mov [rbp-8], rax"
-db 10
-db 0
-f_s2:
-db 10
-db "sub rax, rcx"
-db 10
-db "mov [rbp-8], rax"
-db 10
 db 0
 f_jl:
 db "jmp.l L"
@@ -1821,10 +2092,6 @@ db ":"
 db 10
 db 0
 f_nl:
-db 10
-db 0
-f_nlb:
-db "b"
 db 10
 db 0
 f_nle:
@@ -1849,10 +2116,6 @@ db 10
 db 0
 f_dlx:
 db "x:"
-db 10
-db 0
-f_cmov:
-db "mov rax, [rbp-8]"
 db 10
 db 0
 f_ccmp:
@@ -1884,13 +2147,6 @@ db "if"
 db 0
 f_else:
 db "else"
-db 0
-f_mi1:
-db "mov rax, "
-db 0
-f_mi2:
-db 10
-db "mov [rbp-"
 db 0
 f_ls2:
 db "], rax"
@@ -1977,16 +2233,6 @@ db 10
 db "syscall"
 db 10
 db 0
-f_exit:
-db "mov eax, 60"
-db 10
-db "mov rdi, "
-db 0
-f_exit2:
-db 10
-db "syscall"
-db 10
-db 0
 f_m:
 db "m"
 db 0
@@ -2022,4 +2268,10 @@ db "mov [rcx], "
 db 0
 f_rax:
 db "rax"
+db 0
+f_rbrk:
+db "]"
+db 0
+f_isav:
+db "mov [rbp-284], "
 db 0

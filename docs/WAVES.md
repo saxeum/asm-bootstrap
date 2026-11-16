@@ -2390,3 +2390,40 @@ the value was computed, then reloaded it — 12 bytes and a second mechanism for
 two steps solves: compute the value into `rax`, *then* load the pointer into `rcx`, then `mov [rcx],
 rax`. `cc` 6 434 → 6 358 bytes, both gates still exactly 40 and 42, and one fewer fixed slot to
 collide with later. The golden text was re-pinned; the exit codes are what carry the meaning.
+
+## `cc` had no stack reservation, and that was the nesting bug
+
+The prologue was `lea rbp, [rsp]` and nothing else, so `rsp == rbp`: every `call` pushed a return
+address into the region where `cc` keeps its state slots (`-100` … `-264`). Nothing had ever nested a
+parse deeper than twelve calls, so nothing had ever noticed.
+
+`f(x)` stopped compiling while arrays were being added, because `exprd` added one frame to the deepest
+path. The diagnosis took one measurement: count the state slots against the push distance. The fix is
+`mov ecx, 320; sub rsp, rcx`.
+
+With it, the parse that had corrupted the symbol-name buffer completes: `exprd` in place of `argexpr`
+makes 13 of 14 goldens byte-identical and the fourteenth differ by two blank lines. So the
+"unexplained corruption" of two waves ago was a return address landing on `[rbp-208]` — the "inside
+an argument list" flag, whose value is exactly the `1` that appeared in the name buffer.
+
+That is worth sitting with for a moment: two probes, a journal and a lot of reading failed to find it,
+and the answer was that the compiler had no stack. The gate that would have caught it earlier is not
+a test of the language at all — it is a test of a *deeply nested* input, which no test was.
+
+## Arrays
+
+`int a[N];` with no initialiser, plus `a[i]` read and `a[i] = v` write, where `i` may be any
+expression. The base rides in `reg d` and the index is computed at `d+1`, which needed `exprd` — an
+expression at a caller-given depth, six lines, and the thing `argexpr` was standing in for.
+
+Three bugs while building it, all the same class and all found by reading off the emitted text:
+
+- `[rbp-268]` held the array's index across the nested parse, and a variable term inside that parse
+  wrote the same slot. The isarr check moved to the immediate scratch `-112`.
+- `exprd` overwrites `[rbp-128]`, so the subscript's own depth was read back as `d+1`. `d` is saved in
+  `-288` and restored.
+- the parse-depth leak made `a[0] + a[i]` emit `add rdx, rsi` — a combine at the wrong depth, which
+  is exactly the kind of thing a wrong answer looks like and a golden catches.
+
+Six refusals added (a bare array name in two positions, a subscript of a non-array, a nested
+subscript, an array too big, a duplicate array name): 29 now. Two gates, both 42. `cc` 7 403 bytes.

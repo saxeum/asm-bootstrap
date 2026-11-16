@@ -376,6 +376,24 @@ test-cc: cc asm1
 	    printf '  cc    a pointer across a call: bump(&x) writes 42 into the caller\n'; \
 	  else echo "  ptrarg exited $$g1, wanted 42 -- the address did not survive the call"; fail=1; fi; \
 	else echo "  asm1 refuses ptrarg.s"; fail=1; fi; \
+	if $(CC) < tests/golden/array.c > $$tmp/ay.s 2>/dev/null && cmp -s $$tmp/ay.s tests/golden/array.s; then :; \
+	else echo "  array.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/array.s > $$tmp/ay 2>/dev/null; then \
+	  chmod +x $$tmp/ay; \
+	  if $$tmp/ay; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 42 ]; then \
+	    printf '  cc    arrays: a[0] and a[i] with i=2, read back and summed, exit 42\n'; \
+	  else echo "  array exited $$g1, wanted 42 -- the stride or the base is wrong"; fail=1; fi; \
+	else echo "  asm1 refuses array.s"; fail=1; fi; \
+	if $(CC) < tests/golden/arrayarg.c > $$tmp/aa.s 2>/dev/null && cmp -s $$tmp/aa.s tests/golden/arrayarg.s; then :; \
+	else echo "  arrayarg.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/arrayarg.s > $$tmp/aa 2>/dev/null; then \
+	  chmod +x $$tmp/aa; \
+	  if $$tmp/aa; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 42 ]; then \
+	    printf '  cc    an element as an argument: f(a[i]) exits 42\n'; \
+	  else echo "  arrayarg exited $$g1, wanted 42"; fail=1; fi; \
+	else echo "  asm1 refuses arrayarg.s"; fail=1; fi; \
 	    else echo "  f(x) exited $$g1, wanted 42"; fail=1; fi; \
 	  else echo "  asm1 refuses callvar.s"; fail=1; fi; \
 	else echo "  callvar.c does not compile to its golden"; fail=1; fi; \
@@ -423,6 +441,12 @@ test-cc: cc asm1
 	refuse 'int main(void) { int p = &5; }'; \
 	refuse 'int main(void) { int y = *q; }'; \
 	refuse 'int main(void) { int p = &nope; }'; \
+	refuse 'int main(void) { int a[4]; a = 1; }'; \
+	refuse 'int main(void) { int a[4]; int y = a; }'; \
+	refuse 'int main(void) { int i = 0; int y = i[0]; }'; \
+	refuse 'int main(void) { int a[4]; int b[4]; int y = a[b[0]]; }'; \
+	refuse 'int main(void) { int a[9]; }'; \
+	refuse 'int main(void) { int a[2]; int a[2]; }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(f()); }'; \
 	refuse 'int main(void) { int a1 = 1; int a2 = 2; int a3 = 3; int a4 = 4; int a5 = 5; int a6 = 6; int a7 = 7; int a8 = 8; int a9 = 9; }'; \
 	if [ $$ok -ne $$n ]; then echo "  cc: $$ok/$$n refusals"; fail=1; fi; \
