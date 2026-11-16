@@ -551,3 +551,46 @@ The recurring failure mode across four waves is now clear enough to state as a r
 patch offsets only from a decode of the site, never from a remembered layout, and re-decode
 after writing.* Every one of these was found by decoding or by an observable output; none by
 re-reading the hex.
+
+## Wave 2d-7 — PASS: `mov r32,[mem]` (the first load)
+
+Artifact: `asm0a`, 2874 bytes, sha `b2ffe574070b81deaffc3eee77ff937f5e3d638e3c05db21322e1e5e1214dde9`, entry `0x400110`, filesz `0xb3a`.
+
+`mchk` sits at the exit of `do_mov`'s blank-skip loop: if the operand begins with `[` it is a
+load, otherwise it is an immediate. `do_movload` emits `8B`, then reuses `memop2` and
+`emit_mem` — so the load cost 25 bytes and no new addressing logic.
+
+### Gate
+
+```
+load   byte-identical to ref/load (138 B), exits 7
+exit42 42 | hello_num "Hello, World!" | jmp 7 | loop 10 | jz 5 | r8 7 | inc8 3 | cmp8 12 |
+stack "H" | count10 1..10 | dbnum "Hi" | load 7 — all byte-identical
+```
+
+`src/load.s` puts `db 7,0,0,0` after the code, loads it with `mov edi,[rsi]`, and exits with
+it — so the load is observed.
+
+### The bug this wave found was in *old* code, and it was masked by the fixtures
+
+`emit_mem` decided "needs a SIB byte" with `test r11b,4`. Bit 2 is set for bases **4, 5, 6 and
+7** — so `[rsi]`, `[rdi]`, `[rbp]` all got a spurious `SIB 0x24`, encoding a different
+addressing mode entirely. It went unnoticed because every fixture so far used `[rsp]` (base 4,
+where SIB is genuinely required) or `[rcx]` (base 1, where it is not). The first base in 4..7
+other than `rsp` exposed it.
+
+Fixed by comparing rather than bit-testing: `cmp r11d,4` with the branch sense inverted
+(`jne` to skip). Four bytes, same size, and both `[rsp]` and `[rsi]` fixtures pass afterwards.
+
+That is the strongest argument yet for the rule "one fixture per addressing form": a shared
+emitter is exactly where a wrong predicate hides behind the cases that happen to agree with it.
+
+### Fourth patch-site error, and the recovery
+
+I patched `0x1B6` for the `sb`-loop exit, which is two bytes into `jae fail` — the bounds check
+added in wave 2a — not the `jne num` I wanted at `0x1BF`. The result mangled the instruction
+into `0F 83 0F 85` and broke *every* fixture, including ones that had passed for six waves.
+
+Recovered by restoring the 2d-6 backup and re-patching against a decode of the real site rather
+than a remembered layout. Both lessons from 2d-6 were then applied: decode first, and re-decode
+after.
