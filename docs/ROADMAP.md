@@ -455,3 +455,36 @@ that the produced binary **runs** with the expected exit status rather than only
 Still open in item 5: `.text` / `.data` sections with two program headers and a writable data
 segment. `entry` was the piece of that which does not change the header *shape* — the rest does, and
 the second segment is what will change every fixture's bytes unless it is opt-in.
+
+### Phase 2, item 6 begun: `and`, `or`, `test` with immediates
+
+```
+and eax, 255   -> 81 e0 ff 00 00 00
+or  ebp, 255   -> 81 cd ff 00 00 00
+test edi, 7    -> f7 c7 07 00 00 00
+```
+
+`asm1` 5 515 → **5 651 bytes**. Three forms from one change: `cmp r32,imm32` was already emitting
+`81 /7 id`, so the opcode and the `/digit` became parameters (`[rbp+44]`, `[rbp+48]`) and the same
+handler now serves `cmp` (81/7), `and` (81/4), `or` (81/1) and `test` (F7/0). Capability pairs added
+against hand-computed `db` dumps: 14 pairs.
+
+**Four defects, and they are the same defect four times: a dispatch letter change that broke a
+neighbour.**
+
+1. `and` shares its first letter with `add`, so the dispatcher tests the *second* character — but I
+   dropped the guard that checked the first, so **`inc` was parsed as `and`** (`inc` and `and` match
+   at offset 1). `inc al`, `inc bl`, `inc bh` failed; `inc eax` worked, because that path tests the
+   operand's first character. Four fixtures caught it.
+2. `or` (3 characters) and `test` (5) went through `pc32`, which advanced the cursor by 4 — right for
+   `cmp`/`add`/`and`, wrong for both new ones. The advance moved into each dispatcher.
+3. The new `d_o`/`d_t` handlers were inserted *before* their own letter checks, so a non-matching
+   letter advanced the cursor before falling through to the next test.
+4. `pc32`'s parameters were set by each caller but the advance stayed inside the handler — the split
+   that caused (2).
+
+Every one was found by a test rather than by reading, and (1) was found by the *fixtures*, not by the
+new capability pairs — which is the argument for keeping both.
+
+Still missing and noticed while testing: `test eax, eax` (register form, `85 /r`) is not implemented;
+it is rejected with a line number, which is the right failure, not a wrong answer.

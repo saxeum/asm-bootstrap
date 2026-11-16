@@ -1,5 +1,3 @@
-; asm1 — step 3: syscall / mov r32,imm32 / db, with a real ELF header.
-;
 ; FRAME. rbp = rsp, taken once before the first call, and every scratch slot hangs
 ; off it. This is not style: "call" pushes the return address AT rsp and lowers
 ; rsp, so [rsp] inside a called routine is the return address — addressing scratch
@@ -270,6 +268,20 @@ jmp.l pu32
 d_a:
 cmp al, 97
 jnz.l d_c
+movzx edx, byte [rbx+1]
+cmp dl, 100
+jz.l d_add
+cmp dl, 110
+jnz.l d_c
+mov eax, 129
+mov [rbp+44], eax
+lea rbx, [rbx+4]
+mov eax, 32
+mov [rbp+48], eax
+jmp.l pc32
+d_add:
+cmp al, 97
+jnz.l d_c
 movzx edx, byte [rbx+6]
 cmp dl, 44
 jz.l padd8
@@ -307,6 +319,11 @@ mov eax, 0
 mov [rbp+52], eax
 jmp.l p8i
 d_c32:
+lea rbx, [rbx+4]
+mov eax, 129
+mov [rbp+44], eax
+mov eax, 56
+mov [rbp+48], eax
 jmp.l pc32
 d_i:
 cmp al, 105
@@ -1024,7 +1041,6 @@ call emital
 jmp.l pline
 
 pc32:
-lea rbx, [rbx+4]
 call reg32
 mov [rbp+32], edx
 lea rbx, [rbx+1]
@@ -1032,12 +1048,12 @@ call skipsp
 call expr
 mov [rbp+36], ecx
 mov eax, [rbp+32]
-mov edx, 56
+mov edx, [rbp+48]
 add eax, edx
 mov edx, 192
 add eax, edx
 mov [rbp+40], eax
-mov eax, 129
+mov eax, [rbp+44]
 call emital
 mov eax, [rbp+40]
 call emital
@@ -1201,7 +1217,7 @@ jmp.l pret
 
 d_en:
 cmp al, 101
-jnz.l fail
+jnz.l d_o
 movzx edx, byte [rbx+1]
 cmp dl, 110
 jnz.l fail
@@ -1210,6 +1226,25 @@ call skipsp
 call expr
 mov [rbp+28], ecx
 jmp.l pline
+
+d_o:
+cmp al, 111
+jnz.l d_t
+lea rbx, [rbx+3]
+mov eax, 129
+mov [rbp+44], eax
+mov eax, 8
+mov [rbp+48], eax
+jmp.l pc32
+d_t:
+cmp al, 116
+jnz.l fail
+lea rbx, [rbx+5]
+mov eax, 247
+mov [rbp+44], eax
+mov eax, 0
+mov [rbp+48], eax
+jmp.l pc32
 
 d_call:
 mov eax, 235
