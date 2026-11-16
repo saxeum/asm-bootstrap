@@ -1381,12 +1381,12 @@ mov [rbp+2], al
 jmp.l fail
 lbdnew:
 mov eax, [rbp+80]
-cmp eax, 512            ; the table holds 512 entries: 20 bytes each, below rbp
+cmp eax, 2048           ; the table holds 2048 entries: 20 bytes each, below rbp
 jb.l lok
 jmp.l fail
 lok:
 lea rcx, [rbp+1]
-mov esi, 18801            ; 512 entries of 20 bytes, below rbp
+mov esi, 60001            ; 2048 entries of 20 bytes, below rbp
 sub rcx, rsi
 mov edx, [rbp+80]
 lget:
@@ -1460,7 +1460,7 @@ call emital
 jmp.l pline
 pbr1:
 lea rcx, [rbp+1]
-mov esi, 18801            ; 512 entries of 20 bytes, below rbp
+mov esi, 60001            ; 2048 entries of 20 bytes, below rbp
 sub rcx, rsi
 mov edx, [rbp+80]
 lfind:
@@ -1599,7 +1599,7 @@ mov edi, 1
 syscall
 lku:
 lea rcx, [rbp+1]
-mov esi, 18801            ; 512 entries of 20 bytes, below rbp
+mov esi, 60001            ; 2048 entries of 20 bytes, below rbp
 sub rcx, rsi
 mov edx, [rbp+80]
 lkul:
@@ -2055,7 +2055,7 @@ ret
 
 lku0:
 lea rcx, [rbp+1]
-mov esi, 18801            ; 512 entries of 20 bytes, below rbp
+mov esi, 60001            ; 2048 entries of 20 bytes, below rbp
 sub rcx, rsi
 mov edx, [rbp+80]
 lk0l:

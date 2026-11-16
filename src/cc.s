@@ -31,9 +31,9 @@
 ;   [rbp+56] emit byte   [rbp+60] emit pointer  [rbp+64] number
 ;   [rbp+68] scratch     [rbp+72] want pointer  [rbp+76] want byte
 ;   [rbp+80] number      [rbp+84] digits
-; Buffers, all below rsp: input rbp-70000 (19000), output rbp-50000 (19000),
-; literal table rbp-29000 (99 entries of offset+length). The port needs more than
-; 8192 bytes of output: src/cc.c is 4.7 KB of C and its text is ~10 KB.
+; Buffers, all below rsp: input rbp-550000 (200000), output rbp-300000 (200000),
+; literal table rbp-80000 (999 entries of offset+length). The port needs more than
+; 8192 bytes of output: src/cc.c is 23.6 KB of C and its text is ~126 KB.
 
 start:
 pop rax
@@ -84,7 +84,7 @@ mov ecx, [rbp+8]
 mov edx, 120
 add ecx, edx
 mov [rbp+8], ecx
-mov edx, 19000
+mov edx, 200000
 cmp ecx, edx
 jb rdnext
 jmp.l fail              ; larger than the buffer: refuse, never truncate
@@ -130,7 +130,7 @@ mov eax, 0
 mov [rbp+24], eax       ; no return seen in this function yet
 mov eax, 0
 mov [rbp-108], eax      ; a fresh symbol table for this function
-lea rdx, [rbp-16064]
+lea rdx, [rbp-70064]
 mov eax, [rdx]
 mov ecx, 1852399981     ; "main", four bytes little-endian
 cmp eax, ecx
@@ -248,7 +248,7 @@ ret
 ; The name is saved across the arguments because an argument may itself be a
 ; call, and every ident reuses the same name buffer.
 callargs:
-lea rdx, [rbp-16064]
+lea rdx, [rbp-70064]
 mov eax, [rdx]
 mov [rbp-200], eax
 mov eax, [rdx+4]
@@ -277,7 +277,7 @@ mov eax, [rbp-292]     ; the argument's depth: one deeper than the call's
 call exprd
 mov esi, 4194424+f_ls1
 call emitstr
-mov eax, 16400
+mov eax, 65436
 mov ecx, [rbp-168]
 add ecx, ecx
 add ecx, ecx
@@ -303,7 +303,7 @@ jmp cargloop
 cardskip:
 mov esi, 4194424+f_rpar
 call want
-lea rdx, [rbp-16064]
+lea rdx, [rbp-70064]
 mov eax, [rbp-200]
 mov [rdx], eax
 mov eax, [rbp-204]
@@ -330,7 +330,7 @@ mov eax, [rbp-336]
 call emitarg
 mov esi, 4194424+f_cev
 call emitstr
-mov eax, 16400
+mov eax, 65436
 mov ecx, [rbp-336]
 add ecx, ecx
 add ecx, ecx
@@ -364,7 +364,7 @@ ret
 ; emitname: the current name, from the buffer. The address lives in a 64-bit
 ; slot because emitc clobbers rdx and a truncated pointer would be fatal.
 emitname:
-lea rax, [rbp-16064]
+lea rax, [rbp-70064]
 mov [rbp-192], rax
 emnl:
 mov rax, [rbp-192]
@@ -930,14 +930,34 @@ ex3call:
 ; Arguments are evaluated at d+1 so they cannot touch reg 0..d. A call inside
 ; an *argument list* is still refused: it would overwrite the argument
 ; registers, which is a different resource from the depth registers.
-mov eax, [rbp-16064]
+mov eax, [rbp-70064]
 cmp eax, 1684104562      ; "read", four bytes little-endian
 jz ex3rdgo
 cmp eax, 1953067639      ; "writ", four bytes little-endian
 jz ex3wrgo
-jmp ex3cgo
+cmp eax, 1953069157      ; "exit", four bytes little-endian
+jz ex3xtgo
+jmp.l ex3cgo
+ex3xtgo:
+lea rdx, [rbp-70064]
+movzx eax, byte [rdx+4]
+cmp eax, 0               ; "exit" is four bytes
+jz ex3xt
+jmp.l fail
+ex3xt:
+; `exit(n)` is the subset's one way OUT of a program that is not a return:
+; the port needs it to refuse without a partial program. It emits the same
+; three instructions main's return does, in place.
+mov eax, 1
+call bump               ; '('
+call expr
+mov esi, 4194424+f_edi
+call emitstr
+mov esi, 4194424+f_rpar
+call want
+ret
 ex3wrgo:
-lea rdx, [rbp-16064]
+lea rdx, [rbp-70064]
 movzx eax, byte [rdx+4]
 cmp eax, 101             ; 'e'
 jnz.l fail
@@ -946,7 +966,7 @@ cmp eax, 0               ; "write" is five bytes
 jz.l ex3wr
 jmp.l fail
 ex3rdgo:
-lea rdx, [rbp-16064]
+lea rdx, [rbp-70064]
 mov eax, [rdx+4]
 cmp eax, 0               ; the name must be exactly four bytes
 jz.l ex3read
@@ -1482,19 +1502,19 @@ call emitstr
 ret
 
 ; ---- the symbol table -----------------------------------------------------
-; Eight variables, eight bytes of name each, at rbp-16000. A variable's slot is
-; [rbp-8*(index+1)]. The name being scanned lives at rbp-16064.
+; Thirty-two variables, sixteen bytes of name each, at rbp-70000. A variable's slot is
+; [rbp-8*(index+1)]. The name being scanned lives at rbp-70064.
 ;   [rbp-100] length of the current name   [rbp-104] scan index
 ;   [rbp-108] variable count               [rbp-112] scratch
 ;   [rbp-116] [rbp-120] saved indices
 ident:
 ; scan a name: letters, digits and '_', at most fifteen characters, not starting
-; with a digit. Leaves the padded name at rbp-16064 and its length in [rbp-100].
+; with a digit. Leaves the padded name at rbp-70064 and its length in [rbp-100].
 mov eax, 0
-mov [rbp-16064], eax
-mov [rbp-16060], eax
-mov [rbp-16056], eax
-mov [rbp-16052], eax
+mov [rbp-70064], eax
+mov [rbp-70060], eax
+mov [rbp-70056], eax
+mov [rbp-70052], eax
 mov [rbp-100], eax
 call skipws
 idloop:
@@ -1524,7 +1544,7 @@ cmp ecx, 16
 jb idstore
 jmp.l fail              ; longer than fifteen characters
 idstore:
-lea rdx, [rbp-16064]
+lea rdx, [rbp-70064]
 add rdx, rcx
 mov [rdx], al
 mov ecx, [rbp-100]
@@ -1552,22 +1572,22 @@ add eax, eax
 add eax, eax
 add eax, eax
 add eax, eax            ; 16i
-lea rcx, [rbp-16000]
+lea rcx, [rbp-70000]
 add rcx, rax
 mov eax, [rcx]
-mov edx, [rbp-16064]
+mov edx, [rbp-70064]
 cmp eax, edx
 jnz idfn
 mov eax, [rcx+4]
-mov edx, [rbp-16060]
+mov edx, [rbp-70060]
 cmp eax, edx
 jnz idfn
 mov eax, [rcx+8]
-mov edx, [rbp-16056]
+mov edx, [rbp-70056]
 cmp eax, edx
 jnz idfn
 mov eax, [rcx+12]
-mov edx, [rbp-16052]
+mov edx, [rbp-70052]
 cmp eax, edx
 jnz idfn
 mov eax, [rbp-104]
@@ -1603,22 +1623,22 @@ add eax, eax
 add eax, eax
 add eax, eax
 add eax, eax            ; 16i
-lea rcx, [rbp-16000]
+lea rcx, [rbp-70000]
 add rcx, rax
-mov eax, [rbp-16064]
+mov eax, [rbp-70064]
 mov [rcx], eax
-mov eax, [rbp-16060]
+mov eax, [rbp-70060]
 mov [rcx+4], eax
-mov eax, [rbp-16056]
+mov eax, [rbp-70056]
 mov [rcx+8], eax
-mov eax, [rbp-16052]
+mov eax, [rbp-70052]
 mov [rcx+12], eax
 mov eax, [rbp-108]
 inc eax
 mov [rbp-108], eax
 dec eax                 ; the new variable's index
 mov edx, eax
-lea rcx, [rbp-14000]
+lea rcx, [rbp-72200]
 add rcx, rdx
 mov edx, 0
 mov [rcx], dl           ; a scalar is not an array: its subscript is a pointer
@@ -1652,7 +1672,7 @@ mov eax, [rbp-320]
 mov [rbp-260], eax      ; this array's offset from rbp
 mov edx, [rbp-256]
 add eax, edx
-cmp eax, 16000
+cmp eax, 64000
 jb defabfit
 jmp.l fail              ; does not fit in the frame
 defabfit:
@@ -1666,26 +1686,26 @@ add eax, eax
 add eax, eax
 add eax, eax
 add eax, eax            ; 16i
-lea rcx, [rbp-16000]
+lea rcx, [rbp-70000]
 add rcx, rax
-mov eax, [rbp-16064]
+mov eax, [rbp-70064]
 mov [rcx], eax
-mov eax, [rbp-16060]
+mov eax, [rbp-70060]
 mov [rcx+4], eax
-mov eax, [rbp-16056]
+mov eax, [rbp-70056]
 mov [rcx+8], eax
-mov eax, [rbp-16052]
+mov eax, [rbp-70052]
 mov [rcx+12], eax
 mov eax, [rbp-268]
 mov edx, eax
 add eax, eax
 add eax, eax
-lea rcx, [rbp-13800]
+lea rcx, [rbp-72000]
 add rcx, rax
 mov eax, [rbp-272]
 mov [rcx], eax          ; the array's offset
 mov eax, [rbp-268]
-lea rcx, [rbp-14000]
+lea rcx, [rbp-72200]
 add rcx, rax
 mov eax, [rbp-304]
 mov [rcx], al           ; the element size is the kind
@@ -1697,7 +1717,7 @@ ret
 
 ; isarr: eax = index, result eax = 1 if that slot is an array
 isarr:
-lea rcx, [rbp-14000]
+lea rcx, [rbp-72200]
 add rcx, rax
 movzx eax, byte [rcx]
 ret
@@ -1711,7 +1731,7 @@ mov ecx, eax
 mov edx, eax
 add edx, edx
 add edx, edx
-lea rsi, [rbp-14000]
+lea rsi, [rbp-72200]
 add rsi, rcx
 movzx edx, byte [rsi]
 cmp edx, 0
@@ -1719,7 +1739,7 @@ jz varoffsc
 mov edx, eax
 add edx, edx
 add edx, edx
-lea rsi, [rbp-13800]
+lea rsi, [rbp-72000]
 add rsi, rdx
 mov eax, [rsi]
 ret
@@ -2022,12 +2042,12 @@ call emitstr
 jmp.l cj_fin
 
 
-; newid: the next block id, refused beyond nine (one digit per label)
+; newid: the next block id, refused beyond 65000 (the label table has room)
 newid:
 mov eax, [rbp+96]
 inc eax
 mov [rbp+96], eax
-mov ecx, 10
+mov ecx, 65000
 cmp eax, ecx
 jb newidok
 jmp.l fail
@@ -2211,10 +2231,10 @@ call bump
 jmp.l litloop
 litdone:
 mov eax, [rbp+20]
-mov ecx, 99
+mov ecx, 999
 cmp eax, ecx
 jb litok
-jmp.l fail              ; more than 99 literals: no room in the table
+jmp.l fail              ; more than 999 literals: no room in the table
 litok:
 ret
 ret
@@ -2287,13 +2307,13 @@ ret
 ; dialect had no disp32 and `lea rax, [rbp-40000]` could not be written. It can
 ; now: one instruction each, and the workaround is gone.
 ldin:
-lea rax, [rbp-70000]
+lea rax, [rbp-550000]
 ret
 ldout:
-lea rax, [rbp-50000]
+lea rax, [rbp-300000]
 ret
 ldtab:
-lea rax, [rbp-29000]
+lea rax, [rbp-80000]
 ret
 ; rax = input + cursor ; rax = input + [rbp+28]
 ldcur:
@@ -2311,7 +2331,7 @@ ret
 emitc:
 mov [rbp+56], al
 mov eax, [rbp+16]
-mov ecx, 19000
+mov ecx, 200000
 cmp eax, ecx
 jb emok
 jmp.l fail              ; larger than the output buffer: refuse, never overrun
@@ -2683,7 +2703,7 @@ db "push rbp"
 db 10
 db "mov rbp, rsp"
 db 10
-db "mov r10, 16500"
+db "mov r10, 65536"
 db 10
 db "sub rsp, r10"
 db 10

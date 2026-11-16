@@ -185,8 +185,9 @@ registers were assigned differently.
 ## What this stage is not
 
 - **Not a C compiler.** One function, no expressions, no variables, no control flow, no types.
-- **Not self-hosting.** `cc.s` is ~500 lines of dialect assembled by `asm1`; it does not compile
-  itself, and it will not for a long time.
+- **Not self-hosting.** *(Stage 0. Superseded: `src/cc.c`, the same compiler written in the subset,
+  is compiled by `cc` and compiles itself; see Stage 11. `src/cc.s` is still its own source and is
+  still assembled by `asm1`.)*
 - **Not fast, not small.** It reads at most 8000 bytes and writes at most 8000, and refuses beyond
   rather than truncating.
 
@@ -753,3 +754,72 @@ it means and a symbol table needs a byte *buffer*, not a byte variable.
 `add r32, imm` does not exist in the dialect, which is why the allocation above loads 7 into a
 register. That gap has now cost three separate workarounds in `cc` and is the next thing `asm1`
 should learn.
+
+## Stage 11: the port compiles itself
+
+`src/cc.c` is the same compiler, written in the subset it compiles. It is not a sketch: it
+implements the whole subset above — scanner, symbol table, arrays, expressions with precedence,
+division, calls, recursion, conditions, literals, `read`/`write`, and the new `exit` builtin — and it
+emits the same text as `src/cc.s` does.
+
+The proof is two targets, and they are different claims:
+
+```
+make test-port    42/42 goldens byte-identical to cc, and the port-built putn prints 4321
+make test-d2      THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 129721 bytes
+```
+
+`test-port` builds `cc1` (`cc < src/cc.c` then `asm1`) and compiles every committed `.c` golden and
+`helloworld.c` with it, comparing each output with the golden `cc` produced. That is equivalence, not
+just self-consistency: a port that disagreed with the dialect compiler would be pinning the wrong
+text. `test-d2` then runs `cc1 < src/cc.c` and compares with `cc1.s`; a correct compiler is
+deterministic, so the two must be identical.
+
+**One language addition: `exit(n)`.** The subset's only way out of a program was `return` from
+`main`, and a compiler needs to stop from inside `fail`. `exit` emits the same three instructions
+`main`'s return does, and is gated by `tests/golden/exit.c` (exits 3, writes nothing).
+
+### How the port is built inside the subset
+
+All state lives in one `char mem[31500]`, addressed through one `int` pointer, because a scalar
+pointer subscript is a **byte** subscript in this dialect: an `int` array cannot cross a call. Values
+wider than a byte are two bytes little-endian (`gw`/`pw` for the state block, `gwa`/`pwa` for the
+tables). Names, symbol entries, literal entries and the state block have fixed offsets in that one
+buffer; the offsets are at the top of the file.
+
+Two passes: the first parses with `EM = 0`, so every emitter discards, and a refusal exits 1 with no
+bytes written; the second resets the cursor, literal counter, block id and array allocator, sets
+`EM = 1`, and parses again. The output is written one byte at a time with the `write` builtin, so
+there is no output buffer to overrun.
+
+### The five things the port found in the compiler it is porting
+
+1. **Arrays are addressed upward from `rbp-off`.** A buffer of size `B` declared when the allocator is
+   at `off` occupies `[rbp-off, rbp-off+B)`; it is below `rbp` only when `B <= off`. A 31 KB buffer
+   declared first would run through the return address. The port declares `char pad[31500]` first and
+   never touches it, which moves `mem`'s base to `rbp-31924`; `mem`'s 31 500 bytes then end at
+   `rbp-424`. `tests/golden/strterm.s` shows the same base arithmetic with an 8 000-byte buffer whose
+   used indices happen to stay small.
+2. **A subscript in the value of an array store overwrites the left side's saved kind.** `st_sub`
+   keeps `kind` in `[rbp-308]`; `ex3sub` uses the same slot for its own result. `nm[k] = m[...]`
+   therefore emits `mov rcx, [rbp-408]` (load the first eight bytes of `nm` as an address) instead of
+   `lea rcx, [rbp-408]`. `src/cc.c` reads through a temporary; the dialect `cc` still has the defect.
+3. **A call in an argument list is refused** (`f(g(x))`), so staging through a local is not optional.
+4. **State-field overlap**: `AD` is a 16-bit field at offset 27, so writing it also writes offset 28.
+   `EM` was at 28 in the first version, and the first call silently switched emission off. `EM` is 29.
+5. **The frame is 65 536 and arrays are cumulative across functions**, so `pad` + `mem` (63 000
+   bytes) must leave room for the helper functions' `b[8]` and `nm[16]`. The total is 63 024; the
+   limit is 64 000.
+
+### What the port is not
+
+- Its input cap is **26 000 bytes** (`src/cc.c` is 24 307); a source that fills the buffer is refused,
+  not truncated — a full buffer cannot be told from a truncated one.
+- A refusal is `exit(1)` with **no stderr text**; the subset's `write` is fd 1 only, and adding a
+  fd-2 builtin would be a second mechanism for a message the dialect compiler still prints.
+- It is a port of this compiler, not a new design: it keeps the same ABI, the same emitted text, and
+  the same accepted subset.
+
+The next bootstrap step is `asm2`: rewrite `asm1` in C, build it with `cc` + `asm1`, and accept it
+only when it assembles everything `asm1` does, byte for byte. `src/cc.c` is step 4 of that chain;
+step 5 has not started.

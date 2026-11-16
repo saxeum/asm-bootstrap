@@ -2,7 +2,7 @@
 ll:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -45,7 +45,7 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 16500
+mov r10, 65536
 sub rsp, r10
 mov rcx, 0
 add rcx, rcx
@@ -80,9 +80,9 @@ jb L2b
 jmp.l L2e
 L2b:
 mov rcx, [rbp-24]
-mov [rbp-16400], rcx
+mov [rbp-65436], rcx
 mov rcx, [rbp-32]
-mov [rbp-16392], rcx
+mov [rbp-65428], rcx
 lea rcx, [rbp-464]
 mov rdx, [rbp-40]
 add rdx, rdx
@@ -90,10 +90,10 @@ add rdx, rdx
 add rdx, rdx
 add rcx, rdx
 mov rcx, [rcx]
-mov [rbp-16384], rcx
-mov rdx, [rbp-16384]
-mov rsi, [rbp-16392]
-mov rdi, [rbp-16400]
+mov [rbp-65420], rcx
+mov rdx, [rbp-65420]
+mov rsi, [rbp-65428]
+mov rdi, [rbp-65436]
 call ll
 mov [rbp-32], rax
 mov rax, [rbp-40]
