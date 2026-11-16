@@ -164,3 +164,36 @@ Note what did *not* happen yet: `src/asm1.s` has not been rewritten to use hex, 
 parse it and `make bootstrap-check` still holds. That cross-check between two independent
 implementations is worth keeping for as long as possible; the handover will happen when the source
 starts using the new syntax, and it will be visible.
+
+### Stage 1, second increment: negatives, negative displacements — and the source outgrowing its own buffer
+
+`asm1` 4587 → 4680 bytes. Negative literals (`-1`), and `[rbp-8]` / `[rbx-100]` (negative displacements
+were previously unrepresentable, which is why the label table needed a `sub`-based address).
+
+Range checks became **signed**: the value is biased by +128 and compared unsigned, so `-128..127`
+maps onto `0..255`. That is the same trick the `rel8` check already used. Sites that take a byte
+immediate now accept `-128..255`; `add`/`cmp r8` and `disp8` accept `-128..127`.
+
+**Then the source outgrew the assembler's own input buffer.** `src/asm1.s` reached 24 581 bytes while
+`asm1` read at most 24 000, so the seed silently assembled a *truncated* source and failed with a
+bare exit 1. `asm0a` reads 65 536, which is why it still accepted — two builders, one of them
+silently seeing a prefix.
+
+The failure mode is the defect, not the size: **a short read was treated as the whole input.** Two
+changes:
+
+1. A read that returns exactly the buffer size now **fails loudly** — the source may have been cut,
+   and a prefix is not a source.
+2. A larger buffer was tried first (60 KB at `rbp-70000`) and *partially worked*: `read` returned
+   22 021 of 26 000 bytes because the kernel only copies into pages already mapped below `rsp`.
+   Measured, not assumed. The buffer stayed at the proven `rbp-26000` / 24 000.
+
+So the source had to shrink: 24 581 → **17 004 bytes** by deleting inline comments, keeping every
+full-line comment. The detail they carried lives in this file and `docs/WAVES.md`, which is where the
+project's own rule puts prose that repeats what the code already says.
+
+Checked that stripping comments changed no semantics: `asm0a` produced the identical 4 680 bytes
+before and after.
+
+After that the seed could read the source again, so the build went back through `seed/asm1` as the
+invariant requires — no exception was needed, and `bootstrap-check` still has `asm0a` agree.
