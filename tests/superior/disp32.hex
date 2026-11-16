@@ -1,0 +1,10 @@
+# hand-computed: mod 10 (disp32) when the displacement does not fit in a signed
+# byte; disp8 otherwise. disp32 is 4 bytes, little-endian.
+8b83e8030000      # mov eax, [rbx+1000]       1000 = 0x3e8
+8983e8030000      # mov [rbx+1000], eax
+488d8424e8030000  # lea rax, [rsp+1000]       W; SIB 0x24; mod 10
+8b83d4feffff      # mov eax, [rbx-300]        -300 = 0xfffffed4
+498b85e8030000    # mov rax, [r13+1000]       W B; rm 5 (r13&7); 1000 = 0x3e8
+8b840de8030000    # mov eax, [rbp+rcx+1000]   SIB index=rcx base=rbp; 1000 = 0x3e8
+8b437f            # mov eax, [rbx+127]        disp8 0x7f
+8b8380000000      # mov eax, [rbx+128]        128 does not fit: disp32

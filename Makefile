@@ -495,7 +495,7 @@ test-msg-exact: asm1
 	  else echo "  message for [$$2]: got '$$got', wanted '$$1'"; fail=1; fi; \
 	}; \
 	check "line 1: range" "mov bl, 300"; \
-	check "line 1: range" "mov eax, [rbx+1000]"; \
+	check "line 1: range" "cmp bl, 200"; \
 	check "line 1: label" "db nosuch"; \
 	check "line 1: label" "jmp nosuch"; \
 	check "line 2: rejected" "mov eax, 1\nfrobnicate 1"; \

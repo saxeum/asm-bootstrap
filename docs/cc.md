@@ -244,3 +244,30 @@ which is how the `B8+rd`/`REX.W` defect above was found.
   subset allows and would be wrong for negatives — so negatives are not in the subset.
 - **No functions, no calls, no `if`.** `write` is still a statement because there is no calling
   convention to call anything with.
+
+## Bootstrap order: what comes after self-hosting
+
+The chain is a chain, and each link is only worth making when the one before it is verified:
+
+| | artifact | source | built by | gate |
+|---|---|---|---|---|
+| 0 | `asm0a` | — (hand-emitted machine code) | nothing | frozen; sha in `docs/SHAS` |
+| 1 | `asm1` | `src/asm1.s` (dialect) | `seed/asm1` | fixpoint, 18 fixtures, 290 pins |
+| 2 | `cc` | `src/cc.s` (dialect) | `asm1` | 6 gates, `make test-cc` |
+| 3 | a first C tool | `.c` | `cc` + `asm1` | an oracle it inherits, not one it defines |
+| 4 | **`cc` in C** | `cc.c` | `cc` + `asm1` | its emitted text must equal the dialect `cc`'s on every golden |
+| 5 | **`asm2`** | `src/asm1.c` | `cc` + `asm1` | it must assemble **everything `asm1` does, byte for byte**; then `asm1.s` retires to history like `asm0a` |
+
+Step 5 is `asm1.c -> cc -> asm1 -> asm2`: the assembler rewritten in C, built by the whole chain, and
+only then does the dialect implementation become history. Two rules for it:
+
+1. **`asm2` is not accepted until it is byte-identical to `asm1` on the whole corpus** — the 18
+   fixtures, the capability pairs, the reject sources, `src/dis.s`, `src/cc.s` and `src/asm1.s`
+   itself. `asm1` is the implementation with hand-emitted evidence behind it; a rewrite inherits the
+   obligation, not the credit.
+2. **The dialect `asm1` is kept, and frozen, not deleted.** It is the only implementation that the
+   hand-emitted bytes were checked against, so it stays in the tree the way `asm0a` did — as the
+   reference for the rewrite, and as the thing a corrupted `asm2` would be caught by.
+
+Nothing in that order may use a system compiler (invariant 10). The first C compiler has to be
+written in the dialect, which is why step 2 precedes step 4 at all.

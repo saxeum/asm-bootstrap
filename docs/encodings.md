@@ -359,3 +359,55 @@ instead of being truncated. `jne`, `jnb`, `jno`, `jns`, `jbe` are all rejections
 It was found by the coverage gate noticing the mnemonic `jbe` in a corpus file — my own compiler used
 it — and the build then refusing it. Two gates catching each other's blind spots is the arrangement
 working.
+
+## disp32: displacements that do not fit in a signed byte
+
+`[base+disp32]` is now emitted when the displacement needs it, which removes the wall that stopped
+any frame or record from exceeding 127 bytes:
+
+```
+mov eax, [rbx+1000]       -> 8b 83 e8 03 00 00          mod 10, disp32
+mov eax, [rbx+127]        -> 8b 43 7f                   mod 01, disp8
+mov eax, [rbx+128]        -> 8b 83 80 00 00 00          128 does not fit
+mov eax, [rbx-129]        -> 8b 83 7f ff ff ff          -129 does not fit either
+lea rax, [rsp+1000]       -> 48 8d 84 24 e8 03 00 00    SIB, then disp32
+mov eax, [rbp+rcx+1000]   -> 8b 84 0d e8 03 00 00       index, then disp32
+mov rax, [r13+1000]       -> 49 8b 85 e8 03 00 00       r13&7 = 5
+```
+
+The displacement is classified once (`emitmem`, byte slot `[rbp-80]`): 0 = none, 1 = disp8, 2 =
+disp32. mod 00 needs "none", mod 01 needs a byte, mod 10 needs four. Two things force at least a
+disp8 and the classification has to know both: an **index** (mod 00 with a SIB and base 101 means "no
+base") and a base of **rbp/r13** (mod 00 with rm 101 means RIP-relative).
+
+`memop` no longer range-checks the displacement at all: every 32-bit value is encodable as disp32, so
+the check that used to refuse `[rbx+1000]` is gone, and three reject cases became a superiority case
+(`tests/superior/disp32`, hand-computed).
+
+**The workaround in `cc` died with it.** Its buffer bases were three instructions each
+(`lea rax,[rbp+1]` then `sub rax, rdx`) because a 40 000-byte displacement could not be written. They
+are now `lea rax, [rbp-40000]` and `cc` shrank by 15 bytes for it.
+
+### A byte slot that is not safe, measured rather than assumed
+
+`emitmem` needs one byte of state. The obvious free-looking byte, `[rbp+3]` (inside the argc slot,
+which nothing reads), **does not work**: with the class stored there, `cc.s` fails at a short `jz`
+with `line 629: rejected`, i.e. a rel8 range error, which is the symptom of the validation pass
+disagreeing with the counting pass. Moving the same byte to `[rbp-80]` makes the output *identical to
+the previous assembler's* for the whole corpus.
+
+Measured, by putting the class in each candidate slot and assembling `src/cc.s`:
+
+| slot | result |
+|---|---|
+| `[rbp+0]` | works |
+| `[rbp+1]` | fails (rel8 range error downstream) |
+| `[rbp+3]` | fails (same) |
+| `[rbp+5]`, `[rbp+6]`, `[rbp+7]` | assembles, **wrong output** |
+| `[rbp-80]` | works, byte-identical to the previous assembler |
+
+`[rbp+5..7]` are explained: they are inside the 4-byte expression scratch at `[rbp+4]`. `[rbp+1]` and
+`[rbp+3]` are **not** explained — no code in `src/asm1.s` writes them, and the failure mode says
+something does. That is recorded here as an open question rather than a conclusion, and the rule until
+it is answered is: **the safe bytes are `[rbp+2]`, `[rbp+8..11]`, `[rbp+104]`'s companions and the
+negative slots `[rbp-64]`…`[rbp-128]`; do not put state in `[rbp+0..7]`.**

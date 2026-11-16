@@ -1145,3 +1145,37 @@ The coverage gate and the build caught each other here: the census noticed the m
 
 Next for the compiler: expressions (`x = x + 1 + 1`), then `if`, then a second variable. Next for the
 assembler, unchanged and still without a pressing user: `.data`, then disp32.
+
+## disp32 landed: the 127-byte wall is gone
+
+```
+mov eax, [rbx+1000]  -> 8b 83 e8 03 00 00      mod 10 when disp8 does not fit
+mov eax, [rbx+127]   -> 8b 43 7f               mod 01 when it does
+lea rax, [rsp+1000]  -> 48 8d 84 24 e8 03 00 00    SIB then disp32
+mov rax, [r13+1000]  -> 49 8b 85 e8 03 00 00   r13 & 7 = 5, the RIP trap
+```
+
+`asm1` 7 623 → 7 669. The displacement is classified once (none / disp8 / disp32) and `memop` no
+longer range-checks it, because every 32-bit value is encodable. Three `tests/reject` cases stopped
+rejecting — the suite correctly announcing that the language grew — and became
+`tests/superior/disp32`, hand-computed.
+
+**`cc` got smaller.** Its buffer bases were three instructions each, with a comment saying disp32 did
+not exist; they are one `lea` each now.
+
+This is what the compiler's next milestone needed: a frame or an array over 127 bytes. `.data` is
+still the item after it, and its user is a mutable global or a heap — neither of which the subset has
+yet.
+
+### One thing learned that is not about disp32
+
+`emitmem` needs a byte of state. `[rbp+3]` looks free (it is inside the argc slot, which nothing
+reads) and **does not work**: with the classifier there, `src/cc.s` fails at a short `jz` with
+`line 629: rejected` — a rel8 range error, the signature of the validation pass disagreeing with the
+count pass. Moving the byte to `[rbp-80]` gives output byte-identical to the previous assembler.
+
+Measured across candidate slots: `[rbp+0]` and `[rbp-80]` work; `[rbp+1]`, `[rbp+3]` fail;
+`[rbp+5..7]` assemble and emit the **wrong bytes**. The last three are inside the 4-byte expression
+scratch at `[rbp+4]`, so they are explained. The first two have no writer anywhere in
+`src/asm1.s` and are recorded as an open question, with the rule in `docs/encodings.md`: state goes in
+`[rbp+2]`, `[rbp+8..11]` or the negative slots, never `[rbp+0..7]`.

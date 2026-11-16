@@ -2069,3 +2069,44 @@ cases). And `cc`'s own loop bound, which had relied on `jbe`, became `mov ecx, 1
 `tools/shape.awk` did not strip labels containing capitals (`f_L:` in `cc.s`), so the coverage census
 reported a mnemonic called `f_L:`; the label character class is now `[A-Za-z_0-9]`, matching what
 `lcpy` actually accepts.
+
+## disp32, and the workaround that died
+
+`[base+disp32]` landed: `emitmem` classifies the displacement once (none / disp8 / disp32) and picks
+mod 00, 01 or 10, and `memop` no longer range-checks it, because every 32-bit value is encodable.
+`asm1` 7 623 → 7 669.
+
+Three `tests/reject` cases stopped rejecting (`[rbx+1000]`, `[rsp+1000]`, a store), which is the
+reject suite announcing that the language grew. They became `tests/superior/disp32`, hand-computed:
+mod 10, 4-byte little-endian, SIB when the base is rsp or there is an index, and `r13&7 = 5` for the
+RIP-relative trap. And `make test-msg-exact` had a `mov eax, [rbx+1000]` → `range` case that is now a
+*valid* instruction; it became `cmp bl, 200`, which is still out of range (signed imm8).
+
+**The workaround in `cc` died with it.** Its three buffer bases were `lea rax,[rbp+1]` followed by
+`sub rax, rdx`, with a comment explaining that disp32 did not exist. They are one instruction each
+now (`lea rax, [rbp-40000]`), and `cc` shrank 15 bytes. Removing a workaround is the best kind of
+commit: the diff is smaller than what it deletes.
+
+### A frame byte that is not safe, found the hard way
+
+The classifier needs one byte of state. I used `[rbp+3]` — inside the argc slot, which nothing reads —
+and `cc.s` failed with `line 629: rejected`, a rel8 range error, which is what you see when the
+validation pass and the counting pass disagree about offsets. That is a *frame slot* fault, not a
+displacement fault, and it took a while to believe it.
+
+Measured by moving the same byte to each candidate slot and assembling `src/cc.s`:
+
+```
+[rbp+0]  works          [rbp+5], [rbp+6], [rbp+7]  assembles, WRONG output
+[rbp+1]  fails          [rbp-80]                    works, byte-identical
+[rbp+3]  fails
+```
+
+`[rbp+5..7]` are inside the 4-byte expression scratch at `[rbp+4]`, which explains them.
+`[rbp+1]` and `[rbp+3]` have **no writer anywhere in `src/asm1.s`** and still fail, which is recorded
+as an open question rather than an answer. The actionable rule is written into `docs/encodings.md`:
+state goes in `[rbp+2]`, `[rbp+8..11]` or the negative slots; never `[rbp+0..7]`.
+
+Two things this says about the project: a frame map that is "obviously free" is not evidence, and the
+*fix* here was verified the only way that counts — the new assembler's output for `cc.s` is
+byte-identical to the previous assembler's, which is the same standard `asm2` will be held to.

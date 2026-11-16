@@ -399,24 +399,17 @@ jmp.l lstlp
 lsdun:
 ret
 
-; ---- addresses. Each of these exists because the dialect has no disp32:
-; `lea rax, [rbp-40000]` cannot be written, so a base is a small displacement
-; minus a constant. They use edx, never ecx, so callers can keep an offset in
-; ecx across them.
+; ---- addresses. Each of these used to be three instructions, because the
+; dialect had no disp32 and `lea rax, [rbp-40000]` could not be written. It can
+; now: one instruction each, and the workaround is gone.
 ldin:
-lea rax, [rbp+1]
-mov edx, 40001
-sub rax, rdx
+lea rax, [rbp-40000]
 ret
 ldout:
-lea rax, [rbp+1]
-mov edx, 30001
-sub rax, rdx
+lea rax, [rbp-30000]
 ret
 ldtab:
-lea rax, [rbp+1]
-mov edx, 20001
-sub rax, rdx
+lea rax, [rbp-20000]
 ret
 ; rax = input + cursor ; rax = input + [rbp+28]
 ldcur:

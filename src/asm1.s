@@ -1052,8 +1052,8 @@ cmp al, 45
 jnz.l fail
 memnum:
 call expr
-mov edx, 256
-call chklim
+; no range check: a displacement is either encodable (disp8 if it fits, disp32
+; otherwise) and every 32-bit value is encodable as disp32.
 mov [rbp+60], ecx
 memend:
 movzx eax, byte [rbx]
@@ -1065,78 +1065,121 @@ emitmem:
 ; Every register code is masked to three bits here: the extended bit of a
 ; register number belongs in the REX byte, which the handler has already
 ; emitted, not in the ModRM or SIB byte.
+;
+; The displacement is classified once into [rbp-80]: 0 = none, 1 = disp8,
+; 2 = disp32. mod 00 needs "no displacement", mod 01 needs a byte, mod 10 needs
+; four. Two things force at least a disp8: an index (mod 00 with a SIB and
+; base 101 means "no base"), and a base of rbp/r13 (mod 00 with rm 101 means
+; RIP-relative).
+mov eax, 0
+mov [rbp-80], al
+mov eax, [rbp+60]
+cmp eax, 0
+jz emdcd
+mov ecx, eax
+mov edx, 128
+add ecx, edx
+cmp ecx, 256
+jb emdc8
+mov eax, 2
+mov [rbp-80], al
+jmp emdcd
+emdc8:
+mov eax, 1
+mov [rbp-80], al
+emdcd:
+mov eax, [rbp-80]
+cmp eax, 0
+jnz emdmode
+mov edx, [rbp+56]
+and edx, 7
+cmp edx, 5
+jz emdf
+mov eax, [rbp+124]
+cmp eax, 0
+jz emdmode
+emdf:
+mov eax, 1
+mov [rbp-80], al
+emdmode:
+; modrm = mod << 6 | (reg & 7) << 3 | rm, rm = 4 when a SIB follows
+mov edx, [rbp+124]
+cmp edx, 0
+jnz emrm4
+mov edx, [rbp+56]
+and edx, 7
+cmp edx, 4
+jnz emrm
+emrm4:
+mov edx, 4
+emrm:
 mov eax, [rbp+64]
 and eax, 7
 add eax, eax
 add eax, eax
 add eax, eax
-mov edx, [rbp+124]
-cmp edx, 0
-jnz.l emrm4
-mov edx, [rbp+56]
-and edx, 7
-cmp edx, 4
-jnz.l emrm
-emrm4:
-mov edx, 4
-emrm:
 add eax, edx
-mov edx, [rbp+60]
+mov edx, [rbp-80]
 cmp edx, 0
-jnz.l emm1
-mov edx, [rbp+124]
-cmp edx, 0
-jnz.l emm1
-mov edx, [rbp+56]
-and edx, 7
-cmp edx, 5
-jz.l emm1
-jmp.l emm2
+jz emm0
+cmp edx, 1
+jz emm1
+mov edx, 128
+jmp emmod
+emm0:
+mov edx, 0
+jmp emmod
 emm1:
 mov edx, 64
+emmod:
 add eax, edx
-emm2:
 call emital
+; SIB, when rm was 4: scale 0, index (4 = none when there is no index), base
+mov edx, [rbp+124]
+cmp edx, 0
+jnz emsib
 mov edx, [rbp+56]
 and edx, 7
 cmp edx, 4
-jz.l emsib
-mov edx, [rbp+124]
-cmp edx, 0
-jz.l emnd
+jnz emdisp
 emsib:
 mov eax, [rbp+124]
 cmp eax, 0
-jz.l emsib0
+jz emsib0
 dec eax
 and eax, 7
 add eax, eax
 add eax, eax
 add eax, eax
+jmp emsib1
+emsib0:
+mov eax, 32
+emsib1:
 mov edx, [rbp+56]
 and edx, 7
 add eax, edx
 call emital
-jmp.l emnd
-emsib0:
-mov eax, 36
-call emital
-emnd:
+emdisp:
+mov edx, [rbp-80]
+cmp edx, 1
+jz emd8
+cmp edx, 2
+jz emd32
+jmp emdone
+emd8:
 mov eax, [rbp+60]
-cmp eax, 0
-jnz.l emdsp
-mov eax, [rbp+124]
-cmp eax, 0
-jnz.l emdz
-mov eax, [rbp+56]
-and eax, 7
-cmp eax, 5
-jnz.l em_done
-emdz:
-mov eax, 0
-emdsp:
 call emital
-em_done:
+jmp emdone
+emd32:
+movzx eax, byte [rbp+60]
+call emital
+movzx eax, byte [rbp+61]
+call emital
+movzx eax, byte [rbp+62]
+call emital
+movzx eax, byte [rbp+63]
+call emital
+emdone:
 ret
 pmovmem:
 call memop
