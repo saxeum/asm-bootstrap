@@ -762,3 +762,46 @@ opcode *does* set REX.W — is unchanged. Emitting the REX byte is the right fix
 
 The order changed because of the measurement: **Stage 5 is no longer the far end.** It is two
 mechanisms away, and those two mechanisms are the ones `asm0a`'s own instruction mix says are needed.
+
+## Correction: the decoder must be ours
+
+The instruction-mix table above was produced with `objdump`, and the branch gate has been using it
+since wave 1b. Both are violations of the project's own rule, recorded in `AGENTS.md`: a disassembler
+is the tool this project replaces, so it cannot be the thing that verifies it.
+
+**So the next phase is not `r8`–`r15`. It is `src/dis.s` — a decoder written in the dialect and
+assembled by `asm1`** — and it comes first because it is what makes every later measurement and every
+gate *ours*.
+
+### Scope: exactly what the gate consumes
+
+```
+in : a binary and a byte offset
+out: mnemonic and target for EB, E9, E8, 70-7F, 0F 80-0F 8F
+     jmp · je · jne · jz · jnz · jb · ja · jae · js · jg · jo · call
+     target = site + length + disp
+```
+
+Nothing else is needed: not a general x86 decoder, not a printer for operands, not a symbol table.
+Hex output is now expressible (`shr` and `and` exist, which they did not when the gate was written).
+
+### Why this is the right next step even though it is not the biggest feature
+
+1. It **removes a system dependency from a gate**, which is a correctness question, not a comfort one.
+2. It makes the branch pins evidence about *our* encoder checked by *our* decoder — weaker in one
+   sense (a shared bug could hide) and stronger in the only sense that matters here: nothing outside
+   the project is trusted.
+3. It re-derives the `asm0a` instruction mix with our own tool, replacing the provisional numbers
+   above with measured ones.
+4. It is real work for the dialect: a byte-at-a-time decoder with a jump table expressed as compares,
+   hex printing, and argument handling — the first `asm1`-built program that reads a file, rather
+   than stdin.
+
+### Consequences to plan for
+
+- `asm1` writes to stdout and reads stdin; a decoder needs a *file* argument. Either the gate passes
+  the binary on stdin (`dis < bin`) or `asm1` learns `argv` — the second is worth doing anyway, since
+  `[rsp]` at entry is `argc`.
+- A shared-bug risk appears the moment our decoder audits our encoder. The mitigation is the existing
+  one: hand-emitted `ref/` binaries whose bytes were written before either existed, plus capability
+  pairs that pin encodings against hand-computed dumps.
