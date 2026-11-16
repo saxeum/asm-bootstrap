@@ -3221,3 +3221,9 @@ while (i < 5) { len = line(p, len, pro[i]); i = i + 1; }
 which is the shape a prologue emitter actually takes — a table of lines walked by an index — and it now
 reproduces `tests/selfhost/slice1.expected` byte for byte. The gate that was red an hour ago is green, and
 it went red *because* it noticed, which is the whole point of having it.
+
+**And a fix that broke the gate it was fixing.** The commit that renamed the `selfhost` printf replaced the
+recipe line *without* its trailing `; \`, so `make test-selfhost` became a syntax error and `make check`
+stopped after five lines — and it was committed and pushed before `make check` was run. That is the
+"run the gate before claiming it passes" rule broken in the same commit that rewrote a gate's message. The
+repair is one line; the lesson is the ordering: `make check` *before* the commit, not after.
