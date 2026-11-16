@@ -238,8 +238,13 @@ mov eax, 1
 mov [rbp+52], eax
 jmp.l p8i
 d_c:
-cmp al, 99              ; 'c'  cmp r8,imm8: 80 /7
+cmp al, 99              ; 'c'  cmp r8,imm8 (80 /7) or cmp r32,imm32 (81 /7)
 jnz.l d_i
+movzx edx, byte [rbx+4]  ; operand first char: e/r means a 32-bit name
+cmp dl, 101
+jz.l d_c32
+cmp dl, 114
+jz.l d_c32
 mov eax, 128
 mov [rbp+44], eax
 mov eax, 7
@@ -247,6 +252,8 @@ mov [rbp+48], eax
 mov eax, 0
 mov [rbp+52], eax
 jmp.l p8i
+d_c32:
+jmp.l pc32
 d_i:
 cmp al, 105             ; 'i'  inc r8 (FE /0) or inc r32 (FF /0)
 jnz.l d_x
@@ -377,9 +384,13 @@ jmp.l pline
 pdb:
 lea rbx, [rbx+3]
 call skipsp
+movzx eax, byte [rbx]
+cmp al, 34              ; '"' => a string literal
+jz.l pdbstr
 call num32
 mov eax, ecx
 call emital
+dbnext:
 dbnext:
 movzx eax, byte [rbx]
 cmp al, 44
@@ -390,6 +401,40 @@ call num32
 mov eax, ecx
 call emital
 jmp.l dbnext
+pdbstr:
+lea rbx, [rbx+1]
+pdbstrl:
+movzx eax, byte [rbx]
+cmp al, 34
+jz.l pdbstre
+cmp al, 92              ; backslash: escape
+jz.l pdbesc
+call emital
+lea rbx, [rbx+1]
+jmp.l pdbstrl
+pdbesc:
+lea rbx, [rbx+1]
+movzx eax, byte [rbx]
+cmp al, 110             ; n
+jz.l pdbnl
+cmp al, 116             ; t
+jz.l pdbtab
+call emital
+lea rbx, [rbx+1]
+jmp.l pdbstrl
+pdbnl:
+mov eax, 10
+call emital
+lea rbx, [rbx+1]
+jmp.l pdbstrl
+pdbtab:
+mov eax, 9
+call emital
+lea rbx, [rbx+1]
+jmp.l pdbstrl
+pdbstre:
+lea rbx, [rbx+1]
+jmp.l pline
 
 skipsp:
 movzx eax, byte [rbx]
@@ -897,6 +942,33 @@ mov eax, [rbp+36]
 call emital
 jmp.l pline
 
+pc32:                   ; cmp r32,imm32 -> 81 /7 id
+lea rbx, [rbx+4]
+call reg32
+mov [rbp+32], edx
+lea rbx, [rbx+1]
+call skipsp
+call num32
+mov [rbp+36], ecx
+mov eax, [rbp+32]       ; modrm = C0 | (7<<3) | reg : the /digit IS the reg field
+mov edx, 56             ; 7 << 3
+add eax, edx
+mov edx, 192
+add eax, edx
+mov [rbp+40], eax
+mov eax, 129            ; 0x81
+call emital
+mov eax, [rbp+40]
+call emital
+movzx eax, byte [rbp+36]
+call emital
+movzx eax, byte [rbp+37]
+call emital
+movzx eax, byte [rbp+38]
+call emital
+movzx eax, byte [rbp+39]
+call emital
+jmp.l pline
 fail:
 mov eax, 60
 mov edi, 1
