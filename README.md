@@ -103,7 +103,7 @@ variable, a name of eight characters, an assignment inside a condition, `else if
 division, an unterminated string, an unterminated comment, `return 300`, five arguments, a call inside
 an argument list, `&5`, `*q` with `q` undeclared, `&nope`, `a = 1` and `int y = a;` where `a` is an
 array, a subscript of a non-array, a nested subscript, an array of nine, a duplicate array name, ten
-`write` calls in one function.
+`write` calls in one function, a `char` scalar, `char a[4]; a = 1;`.
 `docs/cc.md` gives the reason for each — most are consequences of a choice, not of an omission.
 
 Three kinds of check, because each sees something the others cannot:
