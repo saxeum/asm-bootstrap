@@ -52,6 +52,7 @@ extension, never inferred from entry order.
 | `mov [mem], r8` | `88 /r` | `88` | — | `MOV Eb, Gb` |
 | `mov byte [mem], imm8` | `C6 /0 ib` | `C6` | 0 | `MOV Eb, Ib` |
 | `movzx r32, r8` | `0F B6 /r` | `B6` | — | `MOVZX Gvqp, Eb` |
+| `movzx r32, byte [mem]` | `0F B6 /r` (memory rm) | `B6` | — | same primary opcode, `Eb` operand |
 | `lea r32\|r64, [mem]` | `8D /r` (`48` prefix for r64) | `8D` | — | `LEA Gvqp, M` |
 | `xor r32, r32` | `31 /r` | `31` | — | `XOR Evqp, Gvqp` |
 | `add r8, imm8` | `80 /0 ib`, or `04 ib` for `al` | `80` | 0 | `ADD Eb, Ib` |

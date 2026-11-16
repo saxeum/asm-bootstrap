@@ -30,7 +30,7 @@ To prove the output is the *verified* object and not merely something that runs:
 
 | | |
 |---|---|
-| artifact | `asm0a`, 3520 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
+| artifact | `asm0a`, 3573 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
 | identity | sha256 in `docs/SHAS` |
 | fixtures | 16, all byte-identical to hand-emitted references and behaviourally correct |
 | branches | 269 sites pinned in `docs/branches.tsv`, all verified by decoding |
@@ -58,7 +58,7 @@ is always `0x400078 + code offset`, which means data must follow code).
 
 | category | forms |
 |---|---|
-| moves | `mov r32,imm32` · `mov r8,imm8` · `mov r32,r32` · `movzx r32,r8` |
+| moves | `mov r32,imm32` · `mov r8,imm8` · `mov r32,r32` · `movzx r32,r8` · `movzx r32,byte [mem]` |
 | memory | `mov r32,[mem]` · `mov [mem],r32` · `mov [mem],r8` · `mov byte [mem],imm8` · `lea r32\|r64,[mem]` |
 | ALU | `add r8,imm8` · `cmp r8,imm8` · `cmp r32,imm32` · `inc`/`dec r8` and `r32` · `div r8` · `sub r64,r64` · `xor r32,r32` |
 | control | `jmp` · `jz` · `jnz` · `jb` (rel8) and `jmp.l` · `jz.l` · `jnz.l` · `jb.l` (rel32) |

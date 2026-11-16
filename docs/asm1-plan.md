@@ -36,6 +36,11 @@ isolated from memory**, and therefore no text can be scanned. The mnemonic-match
 `src/window.s` works because it compares four *known* characters at a known position; it cannot
 search for an unknown one.
 
+### The fix — landed as wave 2d-13
+
+`movzx r32, byte [mem]` is now implemented and verified (`src/scan.s` finds the end of the first
+line by byte scanning). The rest of this section is the reasoning that led there.
+
 ### The fix, and why it is small
 
 Add one form to `asm0a`: **`movzx r32, byte [mem]`** (`0F B6 /r` with a memory operand). Everything

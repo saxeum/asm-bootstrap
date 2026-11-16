@@ -1084,3 +1084,40 @@ Worth noting what this cost and what it saved: the probe is six lines and one to
 prevented writing the scanner of a 700-instruction program against a form that does not exist. The
 same class of mistake — assuming a capability instead of testing it — is what produced the earlier
 two rel32 reverts.
+
+## Wave 2d-13 — PASS: `movzx r32, byte [mem]` — `asm1.s` is unblocked
+
+Artifact: `asm0a`, 3573 bytes, sha `61116b6fced06770c46c200b2132ca44109322dadc6a9a3c76a588686c887638`, filesz `0xdf5`.
+
+The form whose absence blocked `asm1.s` step 2. `do_movzx`'s blank-skip exit now branches on
+the operand shape: `byte ` (recognised by `'y'` at offset 1, see below) is skipped, then `[` sends
+it to `memop2` + `emit_mem` — the same helpers `mov r32,[mem]` uses — with `0F B6` emitted first.
+
+### Gate
+
+```
+movzx eax, byte [rsi]     -> 0f b6 06
+movzx ecx, byte [rsp+4]   -> 0f b6 4c 24 04
+movzx eax, bl             -> 0f b6 c3        (register form, unchanged)
+movzx edi, al             -> 0f b6 f8
+corpus 16/16 byte-identical
+```
+
+And the payload — `src/scan.s`, which finds the end of the first input line by reading bytes:
+
+```
+"abc"           -> exit 3        ""                      -> exit 0
+"abcdefghij"    -> exit 10       "x"                     -> exit 1
+64 chars, no newline -> exit 64  (the loop's safety bound)
+```
+
+### Three defects
+
+1. **Computed the append point from the wrong baseline.** The file was 3520 bytes (with rel32
+   already in) and I wrote displacements as if the append landed at 0xC9D — which is inside the
+   rel32 shims. Every value was wrong and the retarget went into `shim_m`. The rule that works:
+   take `wc -c` *immediately before* appending and derive every offset from that.
+2. **`byte` qualifier not skipped.** `movzx eax, byte [rsi]` left the cursor on `b`, so the `[`
+   test never matched and it fell through to the register path, which failed on `byte`.
+3. **The `'b'` test was too loose** — it also matched `bl`, breaking `movzx eax, bl`. Fixed by
+   testing `'y'` at offset 1, which only `byte` has.
