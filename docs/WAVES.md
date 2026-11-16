@@ -3364,3 +3364,34 @@ The attempt is kept as `docs/selfhost-slice4a-attempt.c.txt`: scanner, symbol ta
 precedence, `int x = N`, `x = expr`, `return expr`, and a main that reads stdin and emits text. It is not
 committed as `src/cc.c` because it does not yet compile — and `src/cc.c` stays at slice 3, which does, and
 whose gate is green.
+
+## Slice 4a: the elimination chain, and where it stops
+
+The open question from the last entry — a three-level `else { if ... }` chain refused at cursor 1796 — is
+**not** about `else`. Eleven probes, each exonerating one candidate:
+
+| shape | result |
+|---|---|
+| `else`-if inside a `while` inside a function | compiles |
+| `else`-if inside a `while` inside `main` | compiles |
+| two-level `else`-if, no loop | compiles |
+| `while` with one, two, three `if`s | compiles |
+| `if` in a function body, then `return` | compiles |
+| array-element assignment in an `if`, in a `while`, at top level | compiles |
+| array-element assignment inside an `if` inside a `while` | compiles |
+
+Every construct in the failing region, in isolation, compiles. So the failure is **contextual**: something
+earlier in the file leaves state that makes a later construct refuse, and the cursor points at the
+*symptom*, not the cause.
+
+That is a different kind of question from the ones before it, and it is why this entry stops: the next move
+is to bisect *the file* — delete one function from the top, keep the rest, run the diagnostic — which is
+mechanical with the cursor-producing `cc` and pointless without it. It is a fifteen-minute loop of
+six or eight runs, not a design question, and doing it needs a fresher state than this session has left.
+
+The repaired attempt is `docs/selfhost-slice4a-attempt.c.txt`; `src/cc.c` is restored to slice 3, whose
+gate is green. The three rules and the diagnostic belong to the repo either way.
+
+**What the next session should do, in one sentence:** build `docs/tools-diagnostic-cc.s.txt` with `asm1`,
+then bisect `docs/selfhost-slice4a-attempt.c.txt` by deleting functions from the top until the cursor
+moves — the first deletion that changes it localises the context.

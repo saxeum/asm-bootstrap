@@ -74,10 +74,11 @@ int skipws(int s)
 	int go = 1;
 	while (go == 1) {
 		c = gch(s);
-		if (c == 32) { s[0] = s[0] + 1; }
 		if (c == 32) { s[0] = s[0] + 1; } else { go = 0; }
 		if (c == 9) { s[0] = s[0] + 1; go = 1; }
 		if (c == 10) { s[0] = s[0] + 1; go = 1; }
+	}
+	return gch(s);
 }
 
 int alpha(int c)

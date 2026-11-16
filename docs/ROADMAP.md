@@ -1826,3 +1826,15 @@ failure is a position rather than a guess.
 
 In order: answer the else-chain question; then the remaining front end (while, if/else in the real file,
 calls, arrays); then D2.
+
+## Next: bisect the file, not the construct
+
+Every construct in `docs/selfhost-slice4a-attempt.c.txt` compiles in isolation; the file as a whole is
+refused at cursor 1809, on a `}` that its neighbours do not explain. So the failure is contextual and the
+next step is mechanical: build the diagnostic `cc` (`docs/tools-diagnostic-cc.s.txt`, prints the input
+offset of any refusal), then delete functions from the top of the attempt one at a time until the cursor
+moves. The first deletion that changes it names the context.
+
+Candidates worth checking first, in order: the block-id counter (monotonic now, and nothing resets it
+between functions), the literal table (99 entries; the attempt has ~40), and the state array's pointer
+fields `s[10..14]` — a *pointer stored in an int array* is a shape only the port uses.
