@@ -152,6 +152,23 @@ cmp al, 32
 jz.l psp
 cmp al, 59
 jz.l pcom
+lea rdx, [rbx]
+ls1:
+movzx eax, byte [rdx]
+cmp al, 58              ; ':' before any delimiter => a label definition
+jz.l lbldef
+cmp al, 32
+jz.l dsp
+cmp al, 10
+jz.l dsp
+cmp al, 59
+jz.l dsp
+cmp al, 0
+jz.l dsp
+lea rdx, [rdx+1]
+jmp.l ls1
+dsp:
+movzx eax, byte [rbx]   ; the scan clobbered eax
 cmp al, 115             ; 's'  syscall or sub
 jnz.l d_m
 movzx edx, byte [rbx+1]
@@ -232,12 +249,38 @@ cmp al, 108             ; 'l'  lea
 jnz.l d_j
 jmp.l plea
 d_j:
-cmp al, 106             ; 'j'  (only jb so far)
-jnz.l lblscn
+cmp al, 106             ; 'j'
+jnz.l fail
 movzx edx, byte [rbx+1]
 cmp dl, 98              ; 'b'
-jnz.l fail
-jmp.l pjb
+jz.l jb3
+cmp dl, 122             ; 'z'
+jz.l jz3
+cmp dl, 110             ; 'n'  jnz
+jz.l jnz4
+cmp dl, 109             ; 'm'  jmp
+jz.l jmp4
+jmp.l fail
+jb3:
+mov eax, 114            ; 0x72
+mov [rbp+92], eax
+lea rbx, [rbx+3]
+jmp.l pbr
+jz3:
+mov eax, 116            ; 0x74
+mov [rbp+92], eax
+lea rbx, [rbx+3]
+jmp.l pbr
+jnz4:
+mov eax, 117            ; 0x75
+mov [rbp+92], eax
+lea rbx, [rbx+4]
+jmp.l pbr
+jmp4:
+mov eax, 235            ; 0xEB
+mov [rbp+92], eax
+lea rbx, [rbx+4]
+jmp.l pbr
 psp:
 lea rbx, [rbx+1]
 jmp.l pline
@@ -685,23 +728,25 @@ call emital
 call emitmem
 jmp.l pline
 
-lblscn:                 ; catch-all: a label definition has ':' before any delimiter
+lblchk:                 ; a label definition has ':' before any delimiter
 lea rdx, [rbx]
 ls1:
 movzx eax, byte [rdx]
 cmp al, 58              ; ':'
 jz.l lbldef
 cmp al, 32
-jz.l fail
+jz.l lcret
 cmp al, 10
-jz.l fail
+jz.l lcret
 cmp al, 59              ; ';'
-jz.l fail
+jz.l lcret
 cmp al, 0
-jz.l fail
+jz.l lcret
 lea rdx, [rdx+1]
 jmp.l ls1
 
+lcret:
+ret
 lbldef:
 call lcpy               ; name -> [rbp+72] zero padded
 lea rbx, [rbx+1]        ; past ':'
@@ -761,10 +806,17 @@ jmp.l lcpyl
 lcpyd:
 ret
 
-pjb:                    ; jb name -> 72 rel8
-lea rbx, [rbx+3]
+pbr:                    ; jb/jz/jnz/jmp name -> rel8, opcode in [rbp+92]
 call skipsp
 call lcpy
+movzx eax, byte [rbp+16]
+cmp al, 0
+jnz.l pbr1
+mov eax, 0              ; pass 0: a forward reference is not resolvable yet,
+call emital             ; so just account for the two bytes
+call emital
+jmp.l pline
+pbr1:
 lea rcx, [rbp+1]        ; rbp-120 without negative displacements, and without
 mov esi, 121            ; [rbp] at disp 0, which the encoder gets wrong (see
 sub rcx, rsi            ; docs/encodings.md: mod=00/rm=101 is RIP-relative)
@@ -791,7 +843,7 @@ mov esi, 2
 add edx, esi            ; no add r32,imm32 in the dialect
 sub rax, rdx
 mov [rbp+84], eax
-mov eax, 114            ; 0x72
+mov eax, [rbp+92]       ; the opcode for this branch
 call emital
 mov eax, [rbp+84]
 call emital
