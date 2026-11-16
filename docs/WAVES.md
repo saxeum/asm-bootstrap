@@ -2464,3 +2464,24 @@ accident; the ones that survived did so because their user happened to run befor
 A slot-allocation comment at the top of the frame state would have prevented all four.
 
 `cc` 7 179 → 7 471 bytes. Gates 17 → 19. Two new goldens (`fact`, `ntsum`), both exact values.
+
+## `char` arrays, and the element size as the kind
+
+A symbol table is bytes, so `char a[N]` came next: `ceil(N/8)` slots, no stride on the index, byte
+loads (`movzx`) and byte stores (`mov [rcx], al`). One field does two jobs — the flags table stores the
+*element size*, 8 for an int array and 1 for a char array — so allocation is `(n*size + 7) >> 3` with
+no branch and the reader distinguishes kinds with `cmp eax, 1`.
+
+Two gates worth their own sentence. 131 for `a[0]=65; a[i]=66`, which a wrong stride or width cannot
+produce. And 72 for `char a[9]` beside an `int b = 7`: nine bytes must occupy *exactly* two slots,
+because a char array that allocated a third would sit where `b` lives and the sum would be 130. That
+is a packing test rather than a value test, and it is the kind that catches an off-by-one slot.
+
+Two slips on the way, both mechanical: a `sed` for `cmp eax, 2` hit five sites and one of them was the
+jump-kind test in `condj` (fixed), and `add ecx, 7` was refused by the assembler — `add r32, imm` does
+not exist here, which has now cost three workarounds in this compiler.
+
+Label budget: 252 of 256. Three unused fragments were deleted to make room, and it is worth saying
+that the limit is now the binding constraint on `cc`'s growth, not imagination.
+
+`cc` 7 471 → 7 765 bytes. Gates 19 → 21, refusals 29 → 31.

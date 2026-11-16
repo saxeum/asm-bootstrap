@@ -358,6 +358,10 @@ call isword
 cmp eax, 0
 jnz.l stif
 
+mov esi, 4194424+f_char
+call isword
+cmp eax, 0
+jnz.l stchar
 mov esi, 4194424+f_int
 call isword
 cmp eax, 0
@@ -385,6 +389,8 @@ call want
 call wblock
 jmp.l bodloop
 stint:
+mov eax, 8
+mov [rbp-304], eax      ; eight bytes per element (unused for a scalar)
 call ident
 call skipws
 call gcur
@@ -401,7 +407,34 @@ mov esi, 4194424+f_semi
 call want
 jmp.l bodloop
 
+stchar:
+; `char a[N];` -- N bytes packed into ceil(N/8) slots. A char *scalar* is
+; refused: there is no type system to say what `char x;` would mean, and a
+; byte variable is not needed for a symbol table -- a byte buffer is.
+call ident
+call skipws
+call gcur
+cmp al, 91
+jz stcharok
+jmp.l fail              ; `char x` is not in the subset
+stcharok:
+mov eax, 1
+mov [rbp-304], eax      ; one byte per element: a char array
+mov eax, 1
+call bump               ; '['
+call numval
+mov [rbp-256], eax
+mov esi, 4194424+f_rbrk
+call want
+mov esi, 4194424+f_semi
+call want
+mov eax, [rbp-256]
+call defarr
+jmp.l bodloop
+
 stintarr:
+mov eax, 8
+mov [rbp-304], eax      ; eight bytes per element
 ; `int a[N];` -- a count, then `]` and `;`, no initialiser
 mov eax, 1
 call bump
@@ -456,12 +489,14 @@ jmp.l bodloop
 
 stsub:
 ; `a[i] = v;` -- the scaled index is parked at -284 because `want` and `expr`
-; own every register; the address is built after the value is in rax
+; own every register; the address is built after the value is in rax. A char
+; element takes no stride and stores one byte.
 mov eax, 1
 call bump               ; '['
 call findvar
 mov [rbp-268], eax
 call isarr
+mov [rbp-308], eax
 cmp eax, 0
 jnz stsok
 jmp.l fail
@@ -475,6 +510,9 @@ mov eax, 1
 mov [rbp-236], eax
 mov eax, 1
 call exprd              ; the index into depth 1
+mov eax, [rbp-308]
+cmp eax, 1              ; a char element is one byte
+jz stsnosc
 mov eax, 3
 mov [rbp-280], eax
 stscl:
@@ -493,6 +531,7 @@ dec eax
 mov [rbp-280], eax
 cmp eax, 0
 jnz stscl
+stsnosc:
 mov esi, 4194424+f_isav
 call emitstr
 mov eax, 1
@@ -535,12 +574,20 @@ mov eax, 2
 call emitreg
 mov esi, 4194424+f_nl
 call emitstr
+mov eax, [rbp-308]
+cmp eax, 1              ; a char element is one byte
+jz stsbyte
 mov esi, 4194424+f_lst1
 call emitstr
 mov esi, 4194424+f_rax
 call emitstr
 mov esi, 4194424+f_nl
 call emitstr
+jmp stsfin
+stsbyte:
+mov esi, 4194424+f_lstb
+call emitstr
+stsfin:
 mov esi, 4194424+f_semi
 call want
 mov eax, 0
@@ -766,12 +813,14 @@ ret
 ex3sub:
 ; `a[i]` -- the base goes into reg d and the index is computed at d+1, so the
 ; base survives: that is what the depth mechanism is for. d is saved in -288
-; because exprd overwrites [rbp-128] with its own depth.
+; because exprd overwrites [rbp-128] with its own depth; the element kind is
+; saved in -308 because isarr's answer is consumed by the refusal test.
 mov eax, 1
 call bump               ; '['
 call findvar
 mov [rbp-268], eax      ; the array's index: must survive the index parse
 call isarr
+mov [rbp-308], eax      ; 1 = int array, 2 = char array
 cmp eax, 0
 jnz ex3sok
 jmp.l fail              ; `x[i]` where x is not an array
@@ -784,7 +833,7 @@ ex3sgo:
 mov eax, 1
 mov [rbp-236], eax
 mov eax, [rbp-128]
-mov [rbp-288], eax      ; d: the base's register
+mov [rbp-288], eax      ; d, the base's register
 mov eax, [rbp-268]
 call varoff
 mov [rbp-272], eax
@@ -804,6 +853,9 @@ mov [rbp-276], eax      ; d+1: the index's register
 call exprd
 mov eax, [rbp-288]
 mov [rbp-128], eax      ; exprd left its own depth behind: restore d
+mov eax, [rbp-308]
+cmp eax, 1              ; a char element is one byte
+jz ex3snosc             ; a char element is one byte: no stride
 mov eax, 3
 mov [rbp-280], eax
 ex3scl:
@@ -822,6 +874,7 @@ dec eax
 mov [rbp-280], eax
 cmp eax, 0
 jnz ex3scl
+ex3snosc:
 mov esi, 4194424+f_add
 call emitstr
 mov eax, [rbp-288]
@@ -832,6 +885,9 @@ mov eax, [rbp-276]
 call emitreg
 mov esi, 4194424+f_nl
 call emitstr
+mov eax, [rbp-308]
+cmp eax, 1              ; a char element is one byte
+jz ex3sbyte
 mov esi, 4194424+f_mov
 call emitstr
 mov eax, [rbp-288]
@@ -842,6 +898,19 @@ mov eax, [rbp-288]
 call emitreg
 mov esi, 4194424+f_le2
 call emitstr
+jmp ex3sfin
+ex3sbyte:
+mov esi, 4194424+f_movzx
+call emitstr
+mov eax, [rbp-288]
+call emitreg
+mov esi, 4194424+f_drefb
+call emitstr
+mov eax, [rbp-288]
+call emitreg
+mov esi, 4194424+f_le2
+call emitstr
+ex3sfin:
 mov esi, 4194424+f_rbrk
 call want
 mov eax, 0
@@ -1139,6 +1208,17 @@ ret
 ; found, and a bare `a` is refused rather than quietly reading a[0].
 ;   [rbp-256] count   [rbp-260] base index   [rbp-264] loop index
 defarr:
+; eax is a count of *elements*. A variable occupies whole eight-byte slots, so
+; convert to bytes first -- elements times the element size in [rbp-304], then
+; round up to slots: (n*f + 7) >> 3. No branch: an int array of n has n*8 bytes
+; and therefore n slots, a char array of n has n bytes and so ceil(n/8).
+mov ecx, eax
+mov edx, [rbp-304]
+imul ecx, edx
+mov edx, 7              ; `add r32, imm` does not exist in this dialect
+add ecx, edx
+shr ecx, 3
+mov eax, ecx
 mov [rbp-256], eax
 call idfind
 cmp eax, -1
@@ -1192,8 +1272,8 @@ mov [rcx+4], eax
 mov eax, [rbp-260]
 lea rcx, [rbp-14000]
 add rcx, rax
-mov eax, 1
-mov [rcx], al
+mov eax, [rbp-304]
+mov [rcx], al           ; the element size is the kind: 8 int, 1 char
 mov eax, [rbp-108]
 mov edx, [rbp-256]
 add eax, edx
@@ -2067,10 +2147,6 @@ db 0
 f_callk:
 db "call "
 db 0
-f_mveax:
-db ", rax"
-db 10
-db 0
 f_entry:
 db "entry main"
 db 10
@@ -2172,16 +2248,6 @@ db 10
 db 0
 f_ls1:
 db "mov [rbp-"
-db 0
-f_aadd:
-db 10
-db "add rax, rcx"
-db 10
-db 0
-f_asub:
-db 10
-db "sub rax, rcx"
-db 10
 db 0
 f_mov:
 db "mov "
@@ -2287,4 +2353,17 @@ db "push "
 db 0
 f_pop:
 db "pop "
+db 0
+f_char:
+db "char"
+db 0
+f_movzx:
+db "movzx "
+db 0
+f_drefb:
+db ", byte ["
+db 0
+f_lstb:
+db "mov [rcx], al"
+db 10
 db 0

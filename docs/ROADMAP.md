@@ -1352,3 +1352,19 @@ names, `/` (blocked by the dialect having no `div r32`), and the seven-character
 The name limit is the one to watch: a compiler's symbol table holds identifiers longer than seven
 characters, and `cc` refuses them everywhere today — in its own source as much as in what it
 compiles. That is a change to `asm1` (labels and names), which means a bootstrap step.
+
+## Compiler stage 10: `char` arrays
+
+`char a[N];` with byte load and store, no element stride, packing proven by a gate (nine bytes take
+exactly two slots). The element size doubles as the array's kind, so allocation needs no branch.
+
+What a self-compiling `cc` still lacks, in the order that makes sense:
+
+1. **`add r32, imm` and `div r32` in `asm1`.** Both are assembler gaps that `cc` works around today;
+   `add r32, imm` has now cost three workarounds, and `/` is refused outright. Adding `add` needs the
+   usual bootstrap step: build with `seed/asm1`, promote, then the source may use it.
+2. **Labels and identifiers longer than seven characters.** `asm1`'s label limit is the binding
+   constraint on `cc`'s growth (252 of 256 labels), and `cc` refuses identifiers longer than seven
+   characters, which is what `identifier` is. Widening both is a bootstrap step in `asm1`.
+3. **`.data`** for a mutable table outside the frame, then string literals that live in memory rather
+   than being emitted as `db` and written straight out.

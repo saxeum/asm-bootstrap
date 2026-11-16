@@ -718,3 +718,38 @@ run between them.
 And the `sub rsp, 320` under all of it: a slot above `rsp` is safe from pushes, a slot below it is
 not. `-100` … `-264` are above; the buffers are below and are safe only because no call chain
 reaches 1 750 frames.
+
+## Stage 10: `char` arrays
+
+`char a[N];` allocates `ceil(N/8)` slots and uses one byte of each element:
+
+| source | emitted |
+|---|---|
+| `char a[4];` | one slot (4 bytes of it) |
+| `a[i]` | `lea rax, [rbp-8]` / the index / **no stride** / `add rax, rcx` / `movzx rax, byte [rax]` |
+| `a[i] = v` | the value first, then the address / `mov [rcx], al` |
+
+The only new idea is that the *element size* is the kind: the flags table stores 8 for an int array
+and 1 for a char array, so one field answers both "is this an array" and "how big is an element".
+Allocation converts elements to slots without a branch:
+
+```
+mov ecx, <elements>
+mov edx, [rbp-304]      ; the element size: 8 or 1
+imul ecx, edx           ; bytes
+mov edx, 7
+add ecx, edx
+shr ecx, 3              ; slots
+```
+
+Gates: `a[0] = 65; a[i] = 66` with `i = 1` exits **131** (a wrong stride or width gives anything else),
+and `char a[9]` beside `int b = 7` with `a[8] = 65` exits **72** — which only holds if the nine-byte
+array occupies exactly two slots, because a char array that overran would overwrite `b` and the sum
+would be 130.
+
+Refused, deliberately: a `char` scalar (`char x = 65;`), because there is no type system to say what
+it means and a symbol table needs a byte *buffer*, not a byte variable.
+
+`add r32, imm` does not exist in the dialect, which is why the allocation above loads 7 into a
+register. That gap has now cost three separate workarounds in `cc` and is the next thing `asm1`
+should learn.

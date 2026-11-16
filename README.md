@@ -22,7 +22,7 @@ included; `docs/continue-here.md` is where a session starts.
 | self-hosted | `asm1` | 7 731 | `ac80d9f9094d7051` | `seed/asm1` from `src/asm1.s` |
 | seed | `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted previous stage |
 | decoder | `dis` | 1 343 | `2d2eb451d7c7a9a9` | `asm1` from `src/dis.s` |
-| compiler | `cc` | 7 471 | `33727e32d6e6e8c9` | `asm1` from `src/cc.s` |
+| compiler | `cc` | 7 765 | `ad243b31bd2ac10c` | `asm1` from `src/cc.s` |
 
 Past the bootstrap. `asm1` is self-hosting, reaches its fixpoint, and is demonstrably better than
 what built it — 6 byte-level cases where `asm0a` answers wrongly and 30 syntax pairs it cannot parse.
@@ -90,13 +90,14 @@ anything that tries to run it directly.
 | 7 | 64-bit values, then `&x`, `*p`, `*p = v` — addresses, with no type system yet | `*p = 33` after `int y = *p` exits 40; a callee writing through `&x` exits 42 |
 | 8 | `int a[N];`, `a[i]`, `a[i] = v` — the index may be any expression | `a[0] + a[i]` with `i=2` exits 42; `f(a[i])` exits 42 |
 | 9 | a call inside a larger expression — the live registers are pushed around it | `fact(5)` exits 120; `sum(4)` exits 10 |
+| 10 | `char a[N];` — one byte per element, no stride | `a[0]=65, a[i]=66` exits 131; `char a[9]` beside an `int` exits 72 |
 
 The subset, exactly: `int` declarations, assignment, `while`, `if`/`else`, `return`, six comparisons,
 `+ - *` with precedence, `&`/`*` on a name, function definitions with up to four arguments, calls, and
 recursion. Values are 64-bit; an `int` may hold an address and the compiler neither knows nor checks
 which.
 
-Boundaries are refusals with no output, and all **29** are pinned in `make test-cc`: `int main()`
+Boundaries are refusals with no output, and all **31** are pinned in `make test-cc`: `int main()`
 without `void`, `void main`, an undeclared name (three spellings), a duplicate declaration, a ninth
 variable, a name of eight characters, an assignment inside a condition, `else if`, `x <= 255`,
 division, an unterminated string, an unterminated comment, `return 300`, five arguments, a call inside
@@ -270,8 +271,8 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1` |
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div` (8-bit form: `div bl`, quotient in `al`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `add`/`sub` with an immediate, `imul r,r,imm`, `div r32` (only the 8-bit form), `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 7 characters |
-| compiler | `cc`, 7 471 bytes, built by `asm1` from `src/cc.s` (2 290 lines): C subset → dialect **text** → `asm1` → executable. 16 text goldens, 3 output oracles, 29 refusals (`make test-cc`, `docs/cc.md`) |
-| `make check` | 44 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 19 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| compiler | `cc`, 7 765 bytes, built by `asm1` from `src/cc.s` (2 369 lines): C subset → dialect **text** → `asm1` → executable. 18 text goldens, 3 output oracles, 29 refusals (`make test-cc`, `docs/cc.md`) |
+| `make check` | 46 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 21 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.

@@ -417,6 +417,24 @@ test-cc: cc asm1
 	  if $$tmp/ns; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 10 ]; then \
 	    printf '  cc    and inside a sum: sum(4) exits 10\n'; \
+	if $(CC) < tests/golden/char.c > $$tmp/cr.s 2>/dev/null && cmp -s $$tmp/cr.s tests/golden/char.s; then :; \
+	else echo "  char.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/char.s > $$tmp/cr 2>/dev/null; then \
+	  chmod +x $$tmp/cr; \
+	  if $$tmp/cr; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 131 ]; then \
+	    printf '  cc    char array: a[0]=65, a[i]=66 with i=1, byte load and store, exits 131\n'; \
+	  else echo "  char exited $$g1, wanted 131 -- a byte was written with the wrong width or stride"; fail=1; fi; \
+	else echo "  asm1 refuses char.s"; fail=1; fi; \
+	if $(CC) < tests/golden/charpack.c > $$tmp/cp.s 2>/dev/null && cmp -s $$tmp/cp.s tests/golden/charpack.s; then :; \
+	else echo "  charpack.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/charpack.s > $$tmp/cp 2>/dev/null; then \
+	  chmod +x $$tmp/cp; \
+	  if $$tmp/cp; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 72 ]; then \
+	    printf '  cc    char a[9] takes two slots: a[8]=65 beside int b=7 exits 72\n'; \
+	  else echo "  charpack exited $$g1, wanted 72 -- the char array overran its slots"; fail=1; fi; \
+	else echo "  asm1 refuses charpack.s"; fail=1; fi; \
 	  else echo "  ntsum exited $$g1, wanted 10"; fail=1; fi; \
 	else echo "  asm1 refuses ntsum.s"; fail=1; fi; \
 	  else echo "  argmul exited $$g1, wanted 42"; fail=1; fi; \
@@ -474,6 +492,8 @@ test-cc: cc asm1
 	refuse 'int main(void) { int a[4]; int b[4]; int y = a[b[0]]; }'; \
 	refuse 'int main(void) { int a[9]; }'; \
 	refuse 'int main(void) { int a[2]; int a[2]; }'; \
+	refuse 'int main(void) { char x = 65; }'; \
+	refuse 'int main(void) { char a[4]; a = 1; }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(f()); }'; \
 	refuse 'int main(void) { int a1 = 1; int a2 = 2; int a3 = 3; int a4 = 4; int a5 = 5; int a6 = 6; int a7 = 7; int a8 = 8; int a9 = 9; }'; \
 	if [ $$ok -ne $$n ]; then echo "  cc: $$ok/$$n refusals"; fail=1; fi; \
