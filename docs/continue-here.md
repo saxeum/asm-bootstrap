@@ -15,16 +15,16 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | | bytes | sha256 (16) | notes |
 |---|---|---|---|
 | `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
-| `asm1` | 7 903 | `5db95315a741a858` | built by `seed/asm1` from `src/asm1.s` |
-| `seed/asm1` | 7 903 | `5db95315a741a858` | the promoted stage; identical to `asm1` |
+| `asm1` | 7 979 | `f55616648f56a109` | built by `seed/asm1` from `src/asm1.s` |
+| `seed/asm1` | 7 979 | `f55616648f56a109` | the promoted stage; identical to `asm1` |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
-| `src/asm1.s` | 33 062 | — | 2 209 lines, 208 labels (limit 256), **no duplicates** |
+| `src/asm1.s` | 33 842 | — | 2244 lines, 212 labels (limit 256), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
 | `cc` | 7 888 | `3927cdab7effa2b0` | built by `asm1` from `src/cc.s` (2 400 lines) — C to dialect TEXT |
 
-Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **34 capability
+Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **36 capability
 pairs** · **6 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
-**97 coverage forms** · **cc: 22 checks, 31 refusals** · 290 branch pins · 36 provenance records.
+**99 coverage forms** · **cc: 22 checks, 31 refusals** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 

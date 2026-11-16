@@ -2540,3 +2540,26 @@ Three defects, all mine, all found by the gates rather than by reading:
 A gate had to change with the feature: `int abcdefgh = 1;` is no longer refused, so the refusal is now
 seventeen characters. An obsolete refusal that still passes is worse than none, which is exactly what
 the "check a gate can fail" rule is for.
+
+## `div r32` and `div r64`
+
+The last refusal in `cc` with an assembler cause. `div` was wired to the 8-bit form only (`F6 /6`) —
+`div bl` worked, `div ecx` refused — because the dispatch had no way to tell which width was meant.
+The width is in the *text*: an 8-bit name is two characters, so the byte where a three-character name
+has its last letter is a delimiter. `r8`..`r15` are checked first, since `r` plus a digit is a 64-bit
+register whose delimiter sits one byte earlier.
+
+Four forms, all hand-verified: `div bl` → `F6 F3`, `div ecx` → `F7 F1`, `div rcx` → `48 F7 F1`,
+`div r10` → `49 F7 F2`. And it computes: `100 / 7` exits 14.
+
+Gates: two capability pairs with `db` references, two coverage forms (99 now), and a *superiority*
+case — the seven-instruction program whose body bytes are `b864000000b907000000ba00000000f7f189c7
+b83c0000000f05`, hand-assembled, which `asm0a` cannot produce.
+
+One thing worth recording about the attempt: the first awk that inserted the handler deleted 581 lines
+of `src/asm1.s`, because a state machine that starts on `d_d:` and only ends on `d_dec:` runs past the
+end of the block it was meant to cover. `git diff --stat` caught it before the assembler did. The
+second attempt used the edit tool with exact anchors, which is what the repo's own rules say to do.
+
+`asm1` 7 903 → 7 979 bytes, promoted. Next: `.data`, and then `/` in `cc` — the operator is still
+refused there even though the instruction now exists.

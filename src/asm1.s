@@ -306,11 +306,46 @@ cmp dl, 98
 jz.l pdb
 cmp dl, 101
 jz.l d_dec
+jmp.l d_div
+d_div:
+; `div` in the F7 group (/6) for 32- and 64-bit registers, and /6 of F6 for the
+; 8-bit form that already existed. The register's width decides, and the width is
+; read from the text: an 8-bit name is two characters, so the byte where a
+; three-character name has its last letter is a delimiter. `r8`..`r15` are
+; recognised first, because `r` followed by a digit is a 64-bit register whose
+; delimiter sits one byte earlier.
+movzx edx, byte [rbx+4]
+cmp dl, 114
+jnz d_div8
+movzx edx, byte [rbx+5]
+add dl, -48
+cmp dl, 10
+jb d_div32
+d_div8:
+movzx edx, byte [rbx+6]
+cmp dl, 32
+jz d_divgo
+cmp dl, 9
+jz d_divgo
+cmp dl, 10
+jz d_divgo
+cmp dl, 0
+jz d_divgo
+cmp dl, 59
+jz d_divgo
+d_div32:
+mov eax, 247
+mov [rbp+44], eax
+mov eax, 6
+mov [rbp+48], eax
+jmp.l pu32
+d_divgo:
 mov eax, 246
 mov [rbp+44], eax
 mov eax, 6
 mov [rbp+48], eax
 jmp.l pu8
+
 d_dec:
 movzx edx, byte [rbx+4]
 cmp dl, 101

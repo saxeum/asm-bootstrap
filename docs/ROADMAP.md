@@ -1397,3 +1397,19 @@ That was the last *size* limit blocking a self-compiling `cc`. What is left is c
 3. Then the real thing: `src/cc.c`, compiled by `cc`, assembled by `asm1`, byte-identical to
    `src/cc.s`'s product on the whole corpus. `cc` 7 888 bytes is a large but finite target, and every
    construct it uses now exists in the subset it compiles — except `.data` and `/`.
+
+## Assembler: `div r32` and `div r64`
+
+`div` takes 32- and 64-bit registers now (`F7 /6`, with REX.W for the 64-bit form), so the dialect can
+finally divide at the width everything else uses. Four hand-verified encodings, a capability pair each
+for the 32- and 64-bit form, two coverage forms and a superiority case whose body bytes are
+hand-assembled.
+
+Two things follow, in order:
+
+1. **`/` and `%` in `cc`.** The instruction exists; the compiler still refuses `/`. The emission is
+   `mov rax, <left>` / `xor rdx, rdx` / `div <right>`, quotient in `rax` and remainder in `rdx`, which
+   needs its own path in `ex2` rather than the one-instruction `emitop`.
+2. **`.data`** — a read-write segment, `filesz`/`memsz` from label differences, and string literals
+   that live in memory. `write("...")` emits its literal with `db` and writes it straight out; a C
+   program needs the bytes to be addressable.
