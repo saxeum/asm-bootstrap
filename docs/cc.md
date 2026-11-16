@@ -421,3 +421,49 @@ There is no call in the language yet, so nothing pushes over the frame and `[rbp
 reserving space. That stops being true the moment a function call exists — and then the frame size has
 to be known *before* the prologue is emitted, which means two passes over the input or a patched
 prologue. Recording it here because it is the first thing a calling convention will change.
+
+## Stage 4: expressions, with precedence
+
+```
+expr := mulk (('+'|'-') mulk)*
+mulk := term ('*' term)*
+term := number | variable
+```
+
+`*` binds tighter than `+`/`-`, left associative, and it is used everywhere an operand used to be:
+`int c = a + b * 4;`, `d = c - 5 * 2;`, `return c + d;`.
+
+**One register per nesting depth** — `eax`, `ecx`, `edx`, `esi`, `edi`, `r8d` — so the generated code
+carries no stack traffic and a simple expression looks exactly as it always did:
+
+```
+a + b * 4          2 + 3 * 4
+mov eax, [rbp-8]   mov ecx, 3       (depth 1)
+mov ecx, [rbp-16]  mov edx, 4       (depth 2)
+mov edx, 4         imul ecx, edx    (combine at depth 1)
+imul ecx, edx      add eax, ecx     (combine at depth 0)
+add eax, ecx
+```
+
+Depth beyond six is refused (there is no parentheses syntax yet, so it is unreachable — a guard, not
+a feature). `/` is refused: the dialect has `div r8` only, never `div r32`, so 32-bit division is an
+assembler gap, not a compiler one. Recorded in the refusals.
+
+### `return` is now uniform, and that changed every golden
+
+`return N` used to emit `mov eax, 60 / mov edi, N / syscall` with the constant spliced in. With an
+expression there is no constant to splice — the value is in `eax` — so every `return` now emits
+
+```
+mov edi, eax
+mov eax, 60
+syscall
+```
+
+and a program that falls off the end emits `mov eax, 0` first. One mechanism instead of two, at the
+cost of one instruction and of regenerating five goldens. The goldens are regression pins, so
+regenerating them is a reviewed act: `hello.s` was read line by line, and every program was run and
+its output checked, not just diffed.
+
+Gate 10 is behavioural and would be wrong if precedence were inverted: `return a + b * 4` with
+`a = 2, b = 3` must exit **14**. Left-to-right evaluation would give 20.

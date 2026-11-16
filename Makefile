@@ -328,6 +328,15 @@ test-cc: cc asm1
 	if $(CC) < tests/golden/branch.c > $$tmp/br.s 2>/dev/null && cmp -s $$tmp/br.s tests/golden/branch.s; then :; \
 	else echo "  branch.c does not compile to its golden"; fail=1; fi; \
 	if $(ASM1) < tests/golden/branch.s > $$tmp/bc 2>/dev/null && $(ASM1) < tests/oracle/branch.s > $$tmp/bo 2>/dev/null; then \
+	if $(CC) < tests/golden/exprs.c > $$tmp/ex.s 2>/dev/null && cmp -s $$tmp/ex.s tests/golden/exprs.s; then :; \
+	else echo "  exprs.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/exprs.s > $$tmp/ex 2>/dev/null; then \
+	  chmod +x $$tmp/ex; \
+	  if $$tmp/ex; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 18 ]; then \
+	    printf '  cc    precedence: (2 + 3*4) - 10 + 14 exits 18\n'; \
+	  else echo "  exprs exited $$g1, wanted 18 (precedence is wrong)"; fail=1; fi; \
+	else echo "  asm1 refuses tests/golden/exprs.s"; fail=1; fi; \
 	  chmod +x $$tmp/bc $$tmp/bo; \
 	  if $$tmp/bc > $$tmp/c1; then g1=0; else g1=$$?; fi; \
 	  if $$tmp/bo > $$tmp/c2; then g2=0; else g2=$$?; fi; \
@@ -362,8 +371,8 @@ test-cc: cc asm1
 	refuse 'int main(void) { int x = 255; if (x <= 255) { } }'; \
 	refuse 'int main(void) { y = 1; }'; \
 	refuse 'int main(void) { int x = 1; int x = 2; }'; \
-	refuse 'int main(void) { int x = 1; int y = x; }'; \
 	refuse 'int main(void) { int abcdefgh = 1; }'; \
+	refuse 'int main(void) { int x = 4 / 2; }'; \
 	refuse 'int main(void) { int a1 = 1; int a2 = 2; int a3 = 3; int a4 = 4; int a5 = 5; int a6 = 6; int a7 = 7; int a8 = 8; int a9 = 9; }'; \
 	if [ $$ok -ne $$n ]; then echo "  cc: $$ok/$$n refusals"; fail=1; fi; \
 	printf '  cc    %s/%s rejections outside the subset, with no output\n' $$ok $$n; \

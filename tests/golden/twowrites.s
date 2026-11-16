@@ -12,8 +12,9 @@ mov edi, 1
 mov esi, 4194424+m2
 mov edx, m2end-m2
 syscall
+mov eax, 255
+mov edi, eax
 mov eax, 60
-mov edi, 255
 syscall
 m1:
 db "A"

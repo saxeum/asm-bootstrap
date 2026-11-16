@@ -2203,3 +2203,37 @@ The lesson is the one already in `AGENTS.md` and was ignored anyway: **anchor ed
 on the first match of a short pattern.** Four of the six defects above came from edits applied by
 pattern, and the two that did not came from not reading the emitted text before believing the exit
 code.
+
+## Expressions with precedence, and a `git checkout` that cost an hour
+
+`cc` gained a precedence-climbing parser over `+ - *`, with one register per nesting depth (eax, ecx,
+edx, esi, edi, r8d) so the generated code has no stack traffic and `x + 1` still emits the three lines
+it always did. Expressions are now used everywhere an operand was: initialisers, assignments and
+`return`. `cc` 4386 → 4877 bytes.
+
+`return` became uniform — `mov edi, eax; mov eax, 60; syscall` — because an expression's value is in a
+register, not a constant to splice. That changed all five goldens; they were regenerated, but each
+program was *run* and its output checked, and hello.s was read line by line. A golden regenerated
+without being read is a gate that pins whatever the compiler happens to do.
+
+Gate 10 is the interesting one: `return a + b * 4` with a=2, b=3 must exit **14**. Left-to-right
+evaluation gives 20, so an inverted precedence fails with a number, not a diff.
+
+Four defects, and the worst was self-inflicted process:
+
+1. **The operator was stored in one slot**, so `a + b * 4` emitted `imul eax, ecx` for the `+`: the
+   inner `*` overwrote the outer operator. Fixed by pushing the operator across the recursive parse.
+2. **A blank line before every combining instruction** — `emitop` began with a newline the previous
+   fragment had already emitted.
+3. **`f_edi` and `f_zero` shared a body**, because an insertion landed between a label and its data:
+   `return` emitted `mov eax, 0` and the program fell into its own string table.
+4. **I ran `git checkout src/cc.s` while it held an hour of uncommitted work**, which discarded the
+   whole expression implementation and its three fixes. Everything was redone as one script with the
+   fixes baked in — and the redo went faster and came out cleaner, which is its own comment on how
+   much of the first attempt was archaeology.
+
+Also found while reading: `skipws` wrote `[rbp+8]` (the input size) on the "lone slash" path, from an
+awk insert in an earlier session. Nothing had ever fed `cc` a lone `/`. Removed.
+
+The lesson, again, and this time about tooling rather than the dialect: **anchor edits on content,
+commit before experimenting, and never `git checkout` a file that holds work you have not saved.**

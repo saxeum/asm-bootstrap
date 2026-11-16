@@ -1239,3 +1239,23 @@ applied by pattern.
 Next: expressions with precedence (`x = 1 + 2 * 3`), then functions and a calling convention — which
 will also force the frame question (locals sit at `[rbp-8k]` with no `sub rsp` today, which is only
 safe because nothing calls anything).
+
+## Compiler stage 4: expressions with precedence
+
+`expr := mulk (('+'|'-') mulk)*`, `mulk := term ('*' term)*`, over numbers and variables, used in
+initialisers, assignments and `return`. One register per nesting depth (eax, ecx, edx, esi, edi, r8d),
+so no stack traffic in the generated code and `x + 1` still emits the three lines it always did.
+`cc` 4 386 → 4 877 bytes.
+
+`/` is refused, and it is an *assembler* gap: the dialect has `div r8` only, never `div r32`. That is
+a two-line handler away (`F7 /6` with the 32-bit form) whenever division is wanted.
+
+`return` became uniform (`mov edi, eax; mov eax, 60; syscall`), which changed all five goldens. They
+were regenerated and then *run*, and one was read line by line — a golden regenerated without being
+read pins whatever the compiler happens to do.
+
+Gate 10 is behavioural: `return a + b * 4` with a=2, b=3 must exit 14, and left-to-right evaluation
+would exit 20. A precedence bug is a wrong number, not a diff.
+
+Next: a calling convention. That is the largest remaining decision, and it also retires the frame
+shortcut (locals at `[rbp-8k]` with no `sub rsp`, safe today only because nothing calls anything).

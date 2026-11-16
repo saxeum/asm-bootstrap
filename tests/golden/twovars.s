@@ -45,8 +45,9 @@ mov esi, 4194424+m3
 mov edx, m3end-m3
 syscall
 L2x:
+mov eax, 0
+mov edi, eax
 mov eax, 60
-mov edi, 0
 syscall
 m1:
 db "."

@@ -98,12 +98,14 @@ call emitstr
 mov esi, 4194424+f_pro
 call emitstr
 call body
-mov esi, 4194424+f_exit
+mov eax, [rbp+24]
+cmp eax, 0
+jnz.l mnexit
+mov esi, 4194424+f_zero
 call emitstr
-mov eax, [rbp+48]
-call emitnum
-mov esi, 4194424+f_exit2
+mov esi, 4194424+f_edi
 call emitstr
+mnexit:
 call lits
 call skipws
 call gcur
@@ -177,66 +179,35 @@ call defvar
 mov [rbp-116], eax
 mov esi, 4194424+f_eq
 call want
-call numval
-mov [rbp-120], eax
+call expr
+mov eax, [rbp-116]
+call emit_ls
 mov esi, 4194424+f_semi
 call want
-mov esi, 4194424+f_mi1
-call emitstr
-mov eax, [rbp-120]
-call emitnum
-mov esi, 4194424+f_mi2
-call emitstr
-mov eax, [rbp-116]
-call varoff
-call emitnum
-mov esi, 4194424+f_ls2
-call emitstr
 jmp.l bodloop
 stasg:
 call ident
 call findvar
-mov [rbp-116], eax      ; the destination's slot index
+mov [rbp-116], eax
 mov esi, 4194424+f_eq
 call want
-call ident
-call findvar
-call emit_le            ; mov eax, [rbp-<source>]
-mov esi, 4194424+f_cmov2
-call emitstr            ; mov ecx,
-call sign
-mov [rbp-124], eax
-call numval
-call emitnum            ; the value, BEFORE want() clobbers eax
+call expr
+mov eax, [rbp-116]
+call emit_ls
 mov esi, 4194424+f_semi
 call want
-mov eax, [rbp-124]
-cmp eax, 43
-jz stplus
-mov esi, 4194424+f_asub
-call emitstr
-jmp stasg2
-stplus:
-mov esi, 4194424+f_aadd
-call emitstr
-stasg2:
-mov eax, [rbp-116]
-call emit_ls            ; mov [rbp-<destination>], eax
 jmp.l bodloop
 streto:
 mov eax, [rbp+112]
 cmp eax, 1
 jnz.l fail              ; `return` is only allowed at function level
-call numval
-mov [rbp+48], eax
-mov eax, 0
-mov [rbp+96], eax
-mov [rbp+112], eax
-mov [rbp+116], eax
-mov eax, 1
-mov [rbp+24], eax
+call expr
 mov esi, 4194424+f_semi
 call want
+mov esi, 4194424+f_edi  ; mov edi, eax / mov eax, 60 / syscall
+call emitstr
+mov eax, 1
+mov [rbp+24], eax
 call skipws
 call gcur
 cmp al, 125             ; and it must be the last statement
@@ -247,6 +218,175 @@ mov eax, [rbp+112]
 dec eax
 mov [rbp+112], eax
 ret
+; ---- expressions ---------------------------------------------------------
+; One register per nesting depth: eax, ecx, edx, esi, edi, r8d. The left
+; operand is computed at depth d, the right at d+1, and one instruction
+; combines them -- no stack in the generated code, and `x + 1` still emits the
+; same three lines it always did. Precedence: `*` binds tighter than `+`/`-`,
+; left associative.
+;   [rbp-128] current depth   [rbp-132] the operator being combined
+;   [rbp-140] value/offset    [rbp-144..148] emitreg scratch
+expr:
+mov eax, 0
+mov [rbp-128], eax
+call ex1
+ret
+
+ex1:
+call ex2
+ex1l:
+call skipws
+call gcur
+cmp al, 43
+jz ex1op
+cmp al, 45
+jnz ex1d
+ex1op:
+push rax                ; the operator, across the recursive parse
+mov eax, 1
+call bump
+mov eax, [rbp-128]
+inc eax
+call chkdep
+mov [rbp-128], eax
+call ex2
+mov eax, [rbp-128]
+dec eax
+mov [rbp-128], eax
+pop rax
+mov [rbp-132], eax
+call emitop
+jmp ex1l
+ex1d:
+ret
+
+ex2:
+call ex3
+ex2l:
+call skipws
+call gcur
+cmp al, 42
+jnz ex2d
+push rax
+mov eax, 1
+call bump
+mov eax, [rbp-128]
+inc eax
+call chkdep
+mov [rbp-128], eax
+call ex3
+mov eax, [rbp-128]
+dec eax
+mov [rbp-128], eax
+pop rax
+mov [rbp-132], eax
+call emitop
+jmp ex2l
+ex2d:
+ret
+
+ex3:
+call skipws
+call gcur
+cmp al, 48
+jb ex3var
+cmp al, 58
+jb ex3num
+ex3var:
+call ident
+call findvar
+call varoff
+mov [rbp-140], eax
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-140]
+call emitnum
+mov esi, 4194424+f_brk
+call emitstr
+mov esi, 4194424+f_nl
+call emitstr
+ret
+ex3num:
+call numval
+mov [rbp-140], eax
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, [rbp-140]
+call emitnum
+mov esi, 4194424+f_nl
+call emitstr
+ret
+
+; chkdep: refuse nesting deeper than the register table
+chkdep:
+mov ecx, 6
+cmp eax, ecx
+jb chkok2
+jmp.l fail
+chkok2:
+ret
+
+; emitreg: the name of the register for depth eax
+emitreg:
+add eax, eax
+add eax, eax
+mov ecx, 4194424+regnames
+add eax, ecx
+mov [rbp-144], eax
+mov eax, 0
+mov [rbp-148], eax
+ergl:
+mov eax, [rbp-148]
+mov ecx, 3
+cmp eax, ecx
+jz ergd
+mov eax, [rbp-144]
+mov ecx, [rbp-148]
+add eax, ecx
+movzx eax, byte [rax]
+call emitc
+mov eax, [rbp-148]
+inc eax
+mov [rbp-148], eax
+jmp ergl
+ergd:
+ret
+
+; emitop: combine, left at the depth in [rbp-128], right at depth+1
+emitop:
+mov eax, [rbp-132]
+cmp eax, 43
+jz eopadd
+cmp eax, 45
+jz eopsub
+mov esi, 4194424+f_imul
+jmp eopgo
+eopadd:
+mov esi, 4194424+f_add
+jmp eopgo
+eopsub:
+mov esi, 4194424+f_sub
+eopgo:
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, [rbp-128]
+inc eax
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+ret
+
 ; ---- the symbol table -----------------------------------------------------
 ; Eight variables, eight bytes of name each, at rbp-16000. A variable's slot is
 ; [rbp-8*(index+1)]. The name being scanned lives at rbp-16064.
@@ -969,7 +1109,6 @@ jz.l swline
 mov eax, [rbp+12]       ; a lone slash: step back, it is not whitespace
 dec eax
 mov [rbp+12], eax
-mov [rbp+8], eax
 ret
 sww:
 mov eax, 1
@@ -1354,6 +1493,52 @@ f_asub:
 db 10
 db "sub eax, ecx"
 db 10
+db 0
+f_mov:
+db "mov "
+db 0
+f_cev:
+db ", [rbp-"
+db 0
+f_brk:
+db "]"
+db 0
+f_sep:
+db ", "
+db 0
+f_add:
+db "add "
+db 0
+f_sub:
+db "sub "
+db 0
+f_imul:
+db "imul "
+db 0
+f_edi:
+db "mov edi, eax"
+db 10
+db "mov eax, 60"
+db 10
+db "syscall"
+db 10
+db 0
+f_zero:
+db "mov eax, 0"
+db 10
+db 0
+regnames:
+db "eax"
+db 0
+db "ecx"
+db 0
+db "edx"
+db 0
+db "esi"
+db 0
+db "edi"
+db 0
+db "r8d"
 db 0
 f_w1:
 db "mov eax, 1"

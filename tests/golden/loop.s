@@ -21,8 +21,9 @@ sub eax, ecx
 mov [rbp-8], eax
 jmp.l L1
 L1e:
+mov eax, 0
+mov edi, eax
 mov eax, 60
-mov edi, 0
 syscall
 m1:
 db "."
