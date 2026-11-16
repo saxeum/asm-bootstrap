@@ -3627,3 +3627,15 @@ a call cannot appear in another call's argument list (`bump(m)` is a helper inst
 
 `make test-program` reports `calc: 8/8 results and 2/2 refusals, signed values included`.
 `make from-c` builds the same source with `cc1` + `asm2` and runs the same table. Issued as #5.
+
+## Wave: sort.c -- the whole input, an offset table, and unsigned comparisons
+
+`tests/programs/sort.c` reads up to 200000 bytes once, stores 32-bit line offsets and lengths in a
+4096-entry table inside the same buffer, insertion-sorts (stable), and writes each line with a
+newline. It refuses a full buffer (200000 bytes), more than 4095 lines, and reports `sort: error`.
+
+The first sort was wrong for three lines: `lcmp` returned `0 - 1` for "less", and the subset's
+comparisons are unsigned, so `-1 > 0` was true and insertion sort shifted in the wrong direction.
+It now returns 1 only for "greater"; equal and less are 0, which is all stable insertion sort needs.
+`make test-program` reports `sort: 6/6 inputs ordered and 2/2 refusals`; `make from-c` builds and
+runs the same table with `cc1` + `asm2`. Issued as #6.
