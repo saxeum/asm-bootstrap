@@ -89,7 +89,7 @@ is the log, failures included; `docs/continue-here.md` is where a session starts
 
 Past the bootstrap. The canonical `asm1` is now the **C assembler** built from `src/asm1.c`; it
 reaches its own fixpoint, reproduces `asm1` on the whole corpus, and is demonstrably better than what
-built it — 8 byte-level cases where `asm0a` answers wrongly and 36 syntax pairs it cannot parse.
+built it — 9 byte-level cases where `asm0a` answers wrongly and 36 syntax pairs it cannot parse.
 `src/asm1.s` is frozen history and the witness; `make bootstrap-check` says **NOT APPLICABLE** out
 loud rather than passing quietly.
 
@@ -121,8 +121,9 @@ express against `gcc -O0 -funsigned-char`:
 - `int` is **64-bit**; there is no `sizeof`, no `struct`, no global, no `&&`/`||`, no `else if`, no
   `for`, `break` or `switch`.
 - `read` and `write` are two-argument builtins (`read(buf, n)`, `write(buf, n)`); `exit(n)` stops.
-- Functions take up to four `int` arguments, have 32 variables, a 260000-byte frame, and the input is
-  capped at 200000 bytes; constants go to 16 777 215.
+- Functions take up to four `int` arguments, have 32 variables, a 260000-byte frame and
+  arrays up to 255000 bytes; the compiler reads at most 200000 bytes of source, and constants go to
+  16 777 215. A program may cap its own input smaller (60000 in lisp, 200000 in sort).
 - `<=` and `>=` are normalised to `<`/`>` with an adjusted bound, so `x <= 255` and `x >= 0` are
   refused; write `x < 256` instead.
 - A string is an address; `db` literals are zero-terminated; a bare array name is not a value (use
@@ -179,7 +180,7 @@ that produces an executable, so every assembler gate applies to the compiler's o
 begins with a `;` comment saying what it is — a comment to the assembler, a shell syntax error to
 anything that tries to run it directly.
 
-| stage | what it added | gate |
+| step | what it added | gate |
 |---|---|---|
 | 1 | `int x = N`, `x = x ± N`, `while (x)` | `twowrites` golden; `loop` compared by output with `tests/oracle/dots.s` |
 | 2 | `== != < > <= >=`, `if`/`else` — no new instruction, `jb`/`jz`/`jnz` plus an operand swap | same output as `tests/oracle/branch.s` |
@@ -194,22 +195,22 @@ anything that tries to run it directly.
 | 11 | `(expr)` grouping, `write(buf, n)`, `read(buf, n)`, and a term in a condition | `putn(1234)` prints 1234; `cat` copies stdin byte for byte |
 | 12 | `/`, `%`, character literals, 15-character names, `exit(n)` | `q=100/7; r=100%7; q*10+r` exits 142; `exit(3)` stops with 3 |
 | 13 | **the port** — the compiler written in the subset it compiles | `make test-port` 43/43 byte-identical; `make test-d2` self-hosted |
+| 14 | signed `< > <= >=`, signed `/` and `%` (`jl`/`jg`, `cqo` + `idiv`) | `tools/differential.sh` 5/5 vs `gcc -O0`; `calc` 10/10, including negative division |
 
 The subset, exactly: `int` scalars, `int a[N]` and `char a[N]` arrays, assignment (through `*p` and
 `a[i]`), `while`, `if`/`else`, `return`, six comparisons, `+ - * / %` with precedence, parentheses,
 `&`/`*` on a name, function definitions with up to four `int` arguments, calls, recursion,
 `read(buf, n)`, `write(buf, n)`, `exit(n)`, and string/char/number literals. Values are 64-bit; an
 `int` may hold an address and the compiler neither knows nor checks which.
-
 Limits: 32 variables per function, names up to 15 characters, four arguments, expression depth 6, a
-65 536-byte frame, arrays up to 64 000 bytes in total, and comparison bounds that are a literal,
-character or variable — `x <= 255` and `x >= 0` are refused because normalising them would need a
-bound outside 0..255.
+260000-byte frame, arrays up to 255000 bytes in total, 2048 labels, and comparison bounds that are a
+literal, character or variable — `x <= 255` and `x >= 0` are refused because normalising them would
+need a bound outside 0..255.
 
 Boundaries are refusals with no output, and all **36** are pinned in `make test-cc`: `int main()`
 without `void`, `void main`, an undeclared name, a duplicate declaration, a 33rd variable, a
 16-character name, an assignment inside a condition, `else if`, `x <= 255`, `x >= 0`, a bitwise `&`,
-an unterminated string or comment, a literal above 65535, `write(x)` with no string, `read` into a
+an unterminated string or comment, a literal above 16 777 215, `write(x)` with no string, `read` into a
 non-array or without a count, five arguments, a call inside an argument list (`f(f())`), `&5`, `*q`
 with `q` undeclared, `&nope`, a bare array or an array used as a value, `read(&s, 4)`, a nested
 subscript, an `int a[9000]` (72 000 bytes), a duplicate array, a `char` scalar, `char a[4]; a = 1;`,
@@ -254,14 +255,14 @@ caller. The old layout only worked while the first array was small and its indic
 
 `src/cc.c` is the compiler written in the subset it compiles: scanner, symbol table, arrays,
 expressions with precedence, division, calls, recursion, conditions, literals, `read`, `write` and
-`exit`. It keeps its world in one `char mem[31500]`, because a pointer subscript in this dialect is a
+`exit`. It keeps its world in one `char mem[210000]`, because a pointer subscript in this dialect is a
 byte subscript, and it validates in one pass and emits in a second.
 
 The proof has two halves, and both are run by `make check`:
 
 ```
 make test-port    43/43 goldens byte-identical to cc, and the port-built putn prints 4321
-make test-d2      THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 129752 bytes
+make test-d2      THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical, 140388 bytes
 ```
 
 `test-port` is the part that is not self-consistency: the port's output is compared with the dialect
