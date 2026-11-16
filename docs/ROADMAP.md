@@ -197,3 +197,76 @@ before and after.
 
 After that the seed could read the source again, so the build went back through `seed/asm1` as the
 invariant requires — no exception was needed, and `bootstrap-check` still has `asm0a` agree.
+
+## Being better than `asm0a`
+
+Parity was the right first goal: chasing it found nine silent truncations. It is not the destination.
+`asm0a` is a *bootstrap* — frozen, minimal, hand-written — and there is no reason `asm1` should stop
+at reproducing it. Two measurements frame the gap:
+
+```
+hello_num.s, 99 000 bytes      asm0a: exit 1      asm1: exit 1        both refuse
+hex/char/negative literals     asm0a: rejected    asm1: accepted      capability, 8 pairs
+input limit                    asm0a: 65 536       asm1: 24 000        asm1 is WORSE
+```
+
+The last line matters most, and it is not a subtlety: on large inputs `asm1` is currently the weaker
+tool. It also shows the shape of the work, because **`asm1` can become better without changing the
+syntax it is written in** — and while it stays inside `asm0a`'s dialect, the cross-check between two
+independent implementations survives.
+
+### Phase 1 — better behaviour, no handover
+
+`src/asm1.s` keeps using only forms `asm0a` parses, so `make bootstrap-check` still holds. The gains
+are in what the assembler *does*, not what it accepts:
+
+1. **No input size limit.** `asm0a` silently assumes ≤ 65 536 bytes; `asm1` currently assumes ≤ 24 000
+   and refuses above it. Fix: chunked reads, advancing the pointer by a constant per chunk so a
+   large source is read into a region the kernel maps as it goes. Gate: a source over 100 KB
+   assembles to a working binary; `asm0a` fails on the same input.
+2. **Say what is wrong, and where.** `asm0a` exits 1 in silence. `asm1` should print
+   `line 42: displacement 1000 does not fit in disp8`. This needs line tracking and decimal output —
+   real work in this dialect — and it is the single biggest usability difference.
+3. **Never truncate input, and never emit a prefix.** Already true (`fail` on a full read); keep it
+   true when reads become chunked.
+
+Gates for this phase are *behavioural*: the binary's exit status and its stderr, both hand-specified
+in the test. Nothing here needs an oracle derived from `asm0a`.
+
+### Phase 2 — better syntax, and the handover
+
+The first time `src/asm1.s` itself uses a form `asm0a` cannot parse, `make bootstrap-check` reports
+**NOT APPLICABLE** and `seed/asm1` becomes the only builder. That is the moment `asm1` is
+unambiguously better: the bootstrap can no longer reproduce the toolchain.
+
+4. **Expressions** — `label+4`, `end - start`. Needs a value model that can say "not known yet",
+   which is also what Stage 2 (`.data`) depends on, since section sizes are label differences.
+5. **Sections** — `.text`, `.data`, `entry`, two program headers, a writable data segment. `asm0a`
+   cannot express this at all, and `asm1`'s own fixed-address header template becomes unnecessary.
+6. **Registers and addressing** — `r8`–`r15` via REX.B/R/X, `[base+index*scale+disp32]`, `push`/`pop`,
+   `imul`, shifts, `and`/`or`/`test`.
+
+### The oracle problem, and how it is already solved
+
+Nothing above can be verified against `asm0a`, because `asm0a` rejects it. Three mechanisms, all of
+which already exist in miniature:
+
+- **Hand-computed bytes.** `mov eax, -1` is verified against `db 184, 255, 255, 255, 255` — bytes
+  written by hand, in a form `asm0a` can assemble. Generalises to any new encoding: the reference is
+  a `db` dump of the expected body.
+- **Behaviour.** Run the produced binary and assert its output and exit status, hand-specified. This
+  is the only oracle for features whose *effect* matters more than their encoding.
+- **Equivalence.** Two spellings that must produce identical bytes (already: `0x10` vs `16`). Any new
+  syntax gets a pair against an older spelling where one exists.
+
+`tests/superior/` should become its own suite: every case asserts that `asm1` succeeds where `asm0a`
+fails, with an independent expectation attached. It is the harness that replaces the `asm0a`
+cross-check, and it must exist **before** the cross-check is lost, not after.
+
+### What this means for the records
+
+Once `asm1` outgrows `asm0a`, `docs/provenance.tsv` can no longer name `asm0a` as a builder for new
+artifacts: it cannot build them. Provenance becomes a chain of `asm1` generations recorded in
+`docs/toolchain.tsv`, and the fixtures' role changes — `ref/` stops being "what asm0a must equal" and
+becomes "a hand-written program that any generation must still reproduce". The pinned sha, the
+branch decodes and the seed chain carry the rest.
