@@ -510,9 +510,27 @@ golden: `mov rdi, rax` → `mov rsi, rax` produces `calls exited 3/1, wanted 5/1
 - **No forward declarations**: a call to a function defined later still works, because the assembler
   resolves the label, but a call to one that does not exist fails at assembly time (`label`), not at
   compile time.
-- **An argument is one term, not an expression.** `f(3)` and `f(x)` work; `f(x - 1)` does not, and it is
-  refused. This started as a defect — a *variable* argument failed inside the recursive expression
-  parse, with the callee's name still in the name buffer at the lookup — and the fix was also the
-  better design: `callargs` calls `ex3` (one term) rather than `expr` (the whole parser). Recursion
-  needs `f(n - 1)`, so allowing an arbitrary expression as an argument is the next step, and the
-  recursion bug it exposes has to be fixed rather than avoided.
+- **An argument is terms joined by `+` and `-`**, not a general expression: `f(3)`, `f(x)`,
+  `f(x + 1)`, `f(n - 1)` work; `f(x * 2)` is refused. This began as a defect — a *variable* argument
+  failed inside the recursive expression parse, leaving the callee's name in the symbol buffer — and
+  the fix was a smaller parser (`argexpr`: terms at eax/ecx, no recursion) rather than a general one.
+  The nesting bug that caused it is recorded in `docs/WAVES.md` and is still unexplained beyond its
+  symptom.
+
+## Stage 6: recursion
+
+`return` is now allowed anywhere a statement is, and the epilogue (or the exit) is emitted in place,
+so control leaves the function at that point and anything after it is unreachable. With arguments
+that can be `n - 1`, a recursive function works:
+
+```c
+int f(int n, int acc)
+{
+	if (n == 0) { return acc; }
+	return f(n - 1, acc + 1);
+}
+int main(void) { return f(10, 0); }        /* exits 10: ten frames, an accumulator */
+```
+
+Gate 13 is behavioural and exact: **10**. A frame that is not restored, or an argument that is not
+recomputed per call, gives a wrong number or a crash, never 10.

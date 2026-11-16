@@ -1289,3 +1289,15 @@ calls `ex3`. Gated: `f(x)` with `x = 41` exits 42.
 Next, in order: allow an expression as an argument (which the nesting bug blocks, so it has to be
 fixed properly), then recursion (`f(n - 1)`), then `if` inside a function with a local that survives
 the call.
+
+## Compiler stage 6: recursion
+
+`return` anywhere a statement is, arguments as terms joined by `+`/`-`, and therefore a recursive
+function: `f(n, acc)` counting ten frames exits 10, gated. The argument parser is a small dedicated
+one (`argexpr`), not the general expression parser, because nesting the general one corrupts the
+symbol-name buffer — a bug whose symptom is understood and whose mechanism is not, recorded in
+`docs/WAVES.md`.
+
+What that blocks, and what comes next: **a call inside a larger expression** (`n * f(n - 1)`), which
+needs the nesting bug fixed for real. After that: pointers and arrays, which need `.data` and disp32
+(disp32 exists; `.data` does not), and a `crt`-ish runtime.

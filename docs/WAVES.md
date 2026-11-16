@@ -2294,3 +2294,28 @@ Two things this session taught, both already in `AGENTS.md` and both worth the r
 that survives reading is found by *probing state*, not by re-reading code (the buffer byte was 1, and
 that one number pointed straight at the cause); and the fix to "I called the wrong routine" is
 usually "call less", not "call it differently".
+
+## Recursion, and the nesting bug worked around honestly
+
+`return` is allowed anywhere a statement is (the epilogue or exit is emitted in place; anything after
+it is unreachable), and an argument may be terms joined by `+`/`-`, which is what `f(n - 1)` needs.
+
+```c
+int f(int n, int acc) { if (n == 0) { return acc; } return f(n - 1, acc + 1); }
+int main(void) { return f(10, 0); }        /* exits 10 */
+```
+
+Gate 13 is exact: **10**. Ten frames, an accumulator carried through the argument, a `return` inside
+an `if`. A frame that is not restored, or an argument not recomputed per call, gives a wrong number or
+a crash.
+
+The argument parser is deliberately *not* the full expression parser. `argexpr` walks terms at eax and
+ecx with no recursion, because calling `expr` from inside an expression broke the symbol-name buffer
+(the defect from the previous wave, still unexplained beyond its symptom: the callee's name was
+clobbered with a value of 1 while an argument's lookup ran). It is a second, smaller parser and it is
+the *right* shape for an argument — one register for the left term, one for the right, `+` and `-`
+only — but it exists partly because the general one could not be nested, and that debt is recorded
+rather than hidden: when a call needs to appear inside a larger expression (`n * f(n-1)`), the nesting
+bug has to be found and fixed.
+
+`cc` 5 734 → 5 851 → 5 836 bytes (relaxing `return` removed the depth check, which shrank it).

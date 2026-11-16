@@ -229,6 +229,43 @@ jmp eagl
 eagd:
 ret
 
+; argexpr: an argument expression -- terms joined by + and -, left to right.
+; Deliberately not the full expression parser: calling `expr` from inside an
+; expression broke the symbol-name buffer (docs/cc.md), so this walks terms at
+; the two registers eax/ecx without recursion. `*` is not accepted here.
+argexpr:
+mov eax, 0
+mov [rbp-128], eax
+call ex3                ; the first term, into eax
+argxl:
+call skipws
+call gcur
+cmp al, 43
+jz argxo
+cmp al, 45
+jnz argxd
+argxo:
+mov [rbp-132], eax      ; the operator
+mov eax, 1
+call bump
+mov eax, 1
+mov [rbp-128], eax      ; the right term goes into ecx
+call ex3
+mov eax, 0
+mov [rbp-128], eax
+mov eax, [rbp-132]
+cmp eax, 43
+jz argxa
+mov esi, 4194424+f_asub
+call emitstr
+jmp argxl
+argxa:
+mov esi, 4194424+f_aadd
+call emitstr
+jmp argxl
+argxd:
+ret
+
 ; callargs: the cursor is at '(' ; emits the arguments, then "call <name>".
 ; The name is saved across the arguments because an argument may itself be a
 ; call, and every ident reuses the same name buffer.
@@ -251,7 +288,7 @@ mov [rbp-208], eax
 cargloop:
 mov eax, 0
 mov [rbp-128], eax     ; an argument is one term, not an expression
-call ex3
+call argexpr           ; an argument: terms joined by + and -
 mov esi, 4194424+f_mov
 call emitstr
 mov eax, [rbp-168]
@@ -408,9 +445,9 @@ call want
 jmp.l bodloop
 
 streto:
-mov eax, [rbp+112]
-cmp eax, 1
-jnz.l fail              ; `return` is only allowed at function level
+; `return` is allowed anywhere a statement is: the epilogue (or the exit)
+; is emitted in place, so control leaves the function here and any code
+; after it is simply unreachable
 call expr
 mov esi, 4194424+f_semi
 call want
