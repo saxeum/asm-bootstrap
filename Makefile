@@ -10,6 +10,7 @@
 .DEFAULT_GOAL := all
 ASM0A := ./asm0a
 ASM1  := ./asm1
+SEED  := seed/asm1
 # src/<name>.s assembles to ref/<name>
 PAIRS := addr32 callret cmp32 cmp8 count10 dbnum inc8 jmp jz load loop movrr \
          r8 rel32 stack store
@@ -18,26 +19,30 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 test test-asm0a test-asm1 fixpoint demo check clean help
+.PHONY: all bootstrap asm1 test test-asm0a test-asm1 fixpoint bootstrap-check promote demo record verify-provenance which check clean help
 help:
-	@echo 'make            build asm1 from the hand-emitted asm0a'
+	@echo 'make            build asm1 from seed/asm1 (the promoted previous stage)'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
-	@echo 'make fixpoint   asm1(asm1.s) must equal asm0a(asm1.s), byte for byte'
+	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
+	@echo 'make bootstrap-check  asm0a and seed/asm1 must agree on src/asm1.s'
+	@echo 'make promote    replace seed/asm1 with the built asm1 (deliberate)'
 	@echo 'make demo       build count10 and run it'
 	@echo 'make record     rebuild and write the provenance ledger (a deliberate act)'
 	@echo 'make which FILE=f which assembler produced f (by content sha)'
-	@echo 'make check      pinned shas, branch decodes, provenance'
+	@echo 'make check      bootstrap, shas, branch decodes, provenance'
 	@echo 'make clean      remove generated binaries'
 all: asm1
 bootstrap:
 	@printf '  asm0a %s bytes  sha %s  (hand-written machine code; nothing to build)\n' \
 	  "$$(wc -c < $(ASM0A))" "$$(sha256sum $(ASM0A) | cut -c1-16)"
-asm1: src/asm1.s $(ASM0A)
-	@$(ASM0A) < src/asm1.s > $@
+# asm1 is built by the SEED, never by itself. seed/asm1 is the promoted previous
+# stage: a binary must never be its own reference, or a miscompilation survives
+# every generation with nothing to compare against.
+asm1: src/asm1.s $(SEED)
+	@$(SEED) < src/asm1.s > $@
 	@chmod +x $@
-	@printf '  asm1  %s bytes  sha %s  (built by asm0a from src/asm1.s)\n' \
-	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)"
-# ---- the fixtures, assembled by each assembler ------------------------------
+	@printf '  asm1  %s bytes  sha %s  (built by %s from src/asm1.s)\n' \
+	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(SEED)"
 test: test-asm0a asm1 test-asm1
 test-asm0a:
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
@@ -82,7 +87,7 @@ fixpoint: asm1
 	@$(ASM1) < src/asm1.s > asm1b
 	@chmod +x asm1b
 	@if cmp -s asm1 asm1b; then \
-	  printf '  fixpoint holds: asm0a(asm1.s) == asm1(asm1.s), %s bytes\n' "$$(wc -c < asm1)"; \
+	  printf '  fixpoint holds: asm1(asm1.s) == asm1, %s bytes\n' "$$(wc -c < asm1)"; \
 	else \
 	  echo '  FIXPOINT BROKEN: the second generation differs'; cmp -l asm1 asm1b | head -5; exit 1; \
 	fi
@@ -104,7 +109,7 @@ verify-provenance: asm1
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: asm1 verify-provenance
+check: asm1 fixpoint bootstrap-check verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -115,3 +120,38 @@ check: asm1 verify-provenance
 clean:
 	@rm -f asm1 asm1b count10
 	@echo '  removed asm1, asm1b, count10'
+
+# ---- bootstrap chain --------------------------------------------------------
+# Two builders exist while the dialect is still within asm0a's reach:
+#   asm0a      hand-written, frozen, and a completely independent implementation
+#   seed/asm1  the promoted previous stage
+# They must agree on src/asm1.s. That agreement stops being available the moment
+# src/asm1.s uses a form asm0a cannot parse (Stage 1 of docs/ROADMAP.md), so this
+# target reports "not applicable" rather than passing silently when that happens.
+bootstrap-check: asm1
+	@if $(ASM0A) < src/asm1.s > asm1.from-asm0a 2>/dev/null; then \
+	  if cmp -s asm1.from-asm0a asm1; then \
+	    echo "  bootstrap: asm0a and $(SEED) agree on src/asm1.s"; \
+	  else \
+	    echo "  BOOTSTRAP MISMATCH: asm0a and $(SEED) disagree on src/asm1.s"; \
+	    cmp -l asm1.from-asm0a asm1 | head -5; exit 1; \
+	  fi; \
+	else \
+	  echo "  bootstrap: asm0a can no longer parse the dialect -- NOT APPLICABLE,"; \
+	  echo "             $(SEED) is the only builder (expected from Stage 1 on)"; \
+	fi
+	@rm -f asm1.from-asm0a
+
+# Replacing the seed is an assertion that the new stage is good. It is never done
+# by a build step, because an automatic promote makes the chain unfalsifiable.
+promote: asm1 fixpoint
+	@old=$$(sha256sum $(SEED) | cut -d' ' -f1); \
+	 cp asm1 $(SEED) && chmod +x $(SEED); \
+	 new=$$(sha256sum $(SEED) | cut -d' ' -f1); \
+	 if [ "$$old" = "$$new" ]; then \
+	   echo "  seed/asm1 unchanged ($${new%%????????????????}); nothing to promote"; \
+	 else \
+	   printf 'asm1\t%s\t%s\t%s\tpromoted from src/asm1.s\n' "$$new" "$(SEED)" "$$old" >> docs/toolchain.tsv; \
+	   echo "  promoted seed/asm1: $${new%%????????????????} (was $${old%%????????????????})"; \
+	 fi
+	@./tools/provenance.sh record

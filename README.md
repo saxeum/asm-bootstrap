@@ -29,7 +29,9 @@ To prove the output is the *verified* object and not merely something that runs:
 ## Self-hosting: it assembles itself
 
 `src/asm1.s` is an assembler written **in the language it assembles**. `asm0a` — the hand-emitted
-bootstrap — builds it once; after that the only tool needed is the artifact itself.
+bootstrap — builds it once; after that the only tool needed is the artifact itself. From here on the
+supported build is `make`, which uses `seed/asm1`; that `asm0a` produces the same bytes is the
+cross-check `make bootstrap-check` asserts.
 
 ```bash
 ./asm0a < src/asm1.s > asm1
@@ -98,13 +100,57 @@ Unknown content exits non-zero rather than saying nothing.
 is the recorded one, that the ledger reproduces exactly, and that every pinned branch decodes as
 recorded. If `src/asm1.s` is edited and the ledger is not re-recorded, `make check` says so and
 names the command to fix it.
+
+## The bootstrap chain
+
+`asm0a` is frozen. From here on, `src/asm1.s` is built by **`seed/asm1`** — the promoted previous
+stage — and never by the binary it produces:
+
+```bash
+make
+```
+
+is this rule:
+
+```
+seed/asm1 < src/asm1.s > asm1        build the new stage with the previous one
+asm1      < src/asm1.s > asm1b       the new stage must reproduce itself
+cmp asm1 asm1b                       or the build is not trusted
+```
+
+A binary is never its own reference. If `asm1` were built by whatever `asm1` was lying around, a
+miscompilation would be preserved across generations with nothing to compare against — the failure
+mode the fixpoint alone cannot exclude, which is why `ref/count10`, written by hand before any of
+this existed, is part of the gate too.
+
+```bash
+make promote
+```
+
+replaces `seed/asm1` and is the only thing that does. It is a deliberate act with a diff to read,
+because promoting asserts "this stage is good", and an automatic promote would make the chain
+unfalsifiable. `docs/toolchain.tsv` records every promotion: the stage's sha256, its builder, and
+that builder's sha256. The chain runs back to `asm0a`, the one link with no builder — recorded as
+`-`, because a blank would read like an omission rather than a fact.
+
+```bash
+make bootstrap-check
+```
+
+requires that `asm0a` and `seed/asm1` — two independent implementations — agree on `src/asm1.s`.
+That agreement disappears the moment `src/asm1.s` uses a form `asm0a` cannot parse, which is the
+first thing Stage 1 of `docs/ROADMAP.md` makes possible. When that happens the target says
+**NOT APPLICABLE** out loud and names the reason. It does not pass quietly: a check that cannot run
+is not a check that passed.
 ## State
 
 | | |
 |---|---|
 | bootstrap | `asm0a`, 3745 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD`, sha256 in `docs/SHAS` |
-| self-hosted | `asm1`, 4295 bytes, sha256 `250e02c9…`, built by `asm0a` from `src/asm1.s` (1146 lines) |
-| fixpoint | `asm0a(asm1.s) == asm1(asm1.s) == asm1(asm1.s)(asm1.s)`, all 4295 bytes, one sha256 |
+| self-hosted | `asm1`, 4295 bytes, sha256 `250e02c9…`, built by `seed/asm1` from `src/asm1.s` (1146 lines) |
+| seed | `seed/asm1`, 4295 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
+| builder | `asm1` is built by `seed/asm1`, never by itself; `make bootstrap-check` also has `asm0a` build it, and they must agree |
+| fixpoint | `asm1(asm1.s) == asm1`, 4295 bytes, one sha256, idempotent |
 | fixtures | 18, all byte-identical to hand-emitted references and behaviourally correct |
 | branches | 290 sites pinned in `docs/branches.tsv`, verified by decoding |
 | source language | `mov` in 8/32/64-bit widths, `movzx` from registers and memory, `lea`, `add`/`sub`/`cmp`/`xor`/`inc`/`dec`/`div`, `call`/`ret`, `jmp`/`jz`/`jnz`/`jb` with `rel8` and `.l` `rel32`, `syscall`, `db` with strings and escapes, labels, two passes, decimal immediates |

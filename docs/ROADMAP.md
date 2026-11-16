@@ -126,3 +126,16 @@ fixture corpus, which cannot detect it. Stage 1 before 3 because expressions are
 buffers and `.data` sizes expressible. Stage 2 before 5 because `asm0a.s` will want a data segment.
 Stages 3 and 4 can interleave; Stage 6 last because a generator is only worth writing once the
 language stops changing shape underneath it.
+
+## A note on the build rule, before Stage 0
+
+`asm0a` is frozen, and from now on `src/asm1.s` is built by `seed/asm1` — the promoted previous
+stage — not by the binary it produces. `make promote` replaces the seed and is the only thing that
+does; `make bootstrap-check` additionally requires `asm0a` and `seed/asm1`, two independent
+implementations, to agree on `src/asm1.s`.
+
+That check is the reason Stage 1 is the interesting one: hex literals, `.data` and `r8`–`r15` all
+make `src/asm1.s` unparseable by `asm0a`, at which point the cross-check between the two
+implementations ends and only the seed remains. `bootstrap-check` says so out loud rather than
+passing quietly, and after that point the safety net is `ref/` plus the fixture corpus, which is
+why Stage 0's rejection suite matters more afterwards, not less.

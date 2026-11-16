@@ -1,0 +1,3 @@
+stage	sha256	builder	builder_sha256	note
+asm0a	6271c5ee79034ffdc05ac6aa4081c3b1e28e9c6d22132c01ad30e3139f7b2adc	-	-	hand-written machine code; no source exists
+asm1	250e02c95d3adbb3e1b6a0a118678a1bef02e71e16f82bccd240e868929bb6f1	asm0a	6271c5ee79034ffdc05ac6aa4081c3b1e28e9c6d22132c01ad30e3139f7b2adc	promoted to seed/asm1
