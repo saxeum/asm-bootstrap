@@ -169,3 +169,49 @@ demands, and it is now recorded rather than assumed.
 Note what it does *not* prove: that the unmutated table is **right**. For that, the
 independence ladder above applies — execution (`ref/hello` prints), a decoder (`objdump`), an
 independent encoder (`as`), and eventually the fixpoint.
+
+## Audit of the existing references (before wave 2b)
+
+The concern raised by this document is *sufficiency*, not validity. This is the check that the
+existing references are at least **valid** — that no wave is standing on a bad floor.
+
+```
+$ for f in hello count10 fib jmp; do objdump -D -b binary -m i386:x86-64 \
+      --start-address=120 ref/$f; done
+```
+
+| ref | independent decode | execution |
+|---|---|---|
+| `ref/hello` | 8 instructions as designed (`mov eax,1` … `xor edi,edi` … `syscall`) | prints `Hello, World!` |
+| `ref/count10` | loop as designed, from `mov bl,1` through `lea 0x1(%rsp),%rsi` | prints `1 2 3 4 5 6 7 8 9 10` |
+| `ref/fib` | fail block at `0x78`, entry `0x9a` (`cmpq $0x2,(%rsp)`) — matches the documented entry, not `0x78` | `fib 10` → 55, `fib 93` → 12200160415121876738, no arg → exit 2 |
+| `ref/jmp` | `jmp 0x84` skipping `mov $0x63,%edi`; lands on `mov $0x7,%edi` | exit 7 (99 would mean the jump was dropped) |
+
+And the assembler still agrees with the validated references:
+
+```
+$ ./asm0a < src/hello_num.s | cmp - ref/hello && echo identical
+identical
+$ ./asm0a < src/exit42.s | cmp - /tmp/e42.expected && echo identical
+identical
+```
+
+**Coverage of instruction *forms* by execution.** Every form in the corpus has been executed
+at least once: all of `hello` runs; all of `count10`'s loop runs; `fib`'s fail block runs when
+invoked with no argument and its main path runs otherwise; `ref/jmp` never executes
+`mov edi,99` (it is jumped over), but that is the same form as `mov edi,7`, which does run.
+So the corpus validates *forms* by execution even where it does not validate every instance.
+
+**Verdict: no restart required.** The references are valid — decoded by an independent
+disassembler and confirmed by running them. What this document rejects is the stronger claim
+that they make the assembler *correct*, and that rejection stands unchanged.
+
+Residual risks that continue with us, and where each is addressed:
+
+| risk | status |
+|---|---|
+| non-canonical but valid encodings | accepted: byte-identity is our convention, not correctness |
+| forms not yet exercised | each new form gets a fixture **and** a behavioral assertion |
+| shared-authorship bias on new forms | `ref/jmp` is built so bytes and behaviour disagree (7 vs 99) |
+| `asm0a` error paths coarse (`mov eax,` → `mov eax,0`, exit 0) | recorded as a defect; fixed with 2b's operand handling |
+| ELF header judged by one kernel on one machine | accepted for now; `readelf` is the second opinion |
