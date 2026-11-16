@@ -1030,3 +1030,25 @@ pointer, `rbx` counter, `eax`/`ecx`/`edx` scratch, `rbp` label-table base.
 
 Estimated at 600–800 instructions. Nothing in the design requires a form this assembler cannot
 emit, which is the property that makes self-hosting possible at all.
+
+## asm1.s — skeleton landed, plan written
+
+`src/cat.s` (24 lines) is asm1's I/O shell with the parsing removed: read stdin into the stack,
+loop with a moving pointer, emit one byte per iteration, exit. It assembles to 189 bytes with
+`asm0a` and round-trips its input exactly (`"abc\ndef\n"` → identical bytes out, exit 0).
+
+`docs/asm1-plan.md` has the concrete design, and two things in it are worth calling out because
+they are design constraints, not discoveries:
+
+- **`disp8` is signed, so the largest usable offset is 120, not 127.** The input buffer starts at
+  `rsp+120` and the label table has to fit below it — that single number fixes the whole layout.
+- **Two register conflicts have to be designed around.** `rdi` cannot hold the label table because
+  `write` needs it for the fd, so the table base goes in `rbp`; and `rsi` cannot double as the
+  output buffer because it is the input pointer, so every emitted byte saves and restores `rsi`
+  around its own syscall.
+
+The second one is the reason an assembler in this dialect is plausible at all: by emitting one byte
+per syscall it gives up speed and removes the output buffer, its fill, its flush and the off-by-one
+at flush. 600–800 instructions is the estimate; the build order keeps it runnable at every step,
+and step 5 changes the oracle from "matches a hand-emitted fixture" to "two independent
+implementations agree".
