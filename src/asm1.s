@@ -381,7 +381,7 @@ cmp al, 101             ; 'e' => register source, not a number
 jz.l pmovrr
 cmp al, 114             ; 'r'
 jz.l pmovrr
-call num32
+call numlit
 mov [rbp+36], ecx
 mov eax, [rbp+32]
 mov edx, 184
@@ -402,7 +402,7 @@ call skipsp
 movzx eax, byte [rbx]
 cmp al, 34              ; '"' => a string literal
 jz.l pdbstr
-call num32
+call numlit
 mov edx, 256
 call chklim
 mov eax, ecx
@@ -414,7 +414,7 @@ cmp al, 44
 jnz.l pline
 lea rbx, [rbx+1]
 call skipsp
-call num32
+call numlit
 mov edx, 256
 call chklim
 mov eax, ecx
@@ -574,7 +574,7 @@ call r8
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
-call num32
+call numlit
 mov edx, 256
 call chklim
 mov [rbp+36], ecx       ; spill: emital's syscall destroys rcx
@@ -634,7 +634,7 @@ call r8
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
-call num32
+call numlit
 mov edx, 128
 call chklim
 mov [rbp+36], ecx
@@ -719,7 +719,7 @@ jz.l memend
 cmp al, 43              ; '+'
 jnz.l fail
 lea rbx, [rbx+1]
-call num32
+call numlit
 mov edx, 128
 call chklim
 mov [rbp+60], ecx
@@ -787,7 +787,7 @@ mov eax, 0
 mov [rbp+64], eax       ; C6 /0
 lea rbx, [rbx+1]
 call skipsp
-call num32
+call numlit
 mov edx, 256
 call chklim
 mov [rbp+36], ecx
@@ -985,7 +985,7 @@ call reg32
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
-call num32
+call numlit
 mov [rbp+36], ecx
 mov eax, [rbp+32]       ; modrm = C0 | (7<<3) | reg : the /digit IS the reg field
 mov edx, 56             ; 7 << 3
@@ -1178,4 +1178,59 @@ sub rax, rdx            ; compare through a copy and leave ecx intact
 jb.l chkok
 jmp.l fail
 chkok:
+ret
+
+numlit:                 ; value -> ecx ; decimal, 0xhex (lowercase a-f), 'c'
+movzx eax, byte [rbx]
+cmp al, 39              ; a character literal
+jz.l nl_chr
+cmp al, 48              ; '0'
+jnz.l nl_dec
+movzx eax, byte [rbx+1]
+cmp al, 120             ; 'x'
+jz.l nl_hex
+nl_dec:
+call num32
+jmp.l nl_done
+nl_chr:
+lea rbx, [rbx+1]
+movzx eax, byte [rbx]
+lea rbx, [rbx+1]
+movzx edx, byte [rbx]
+cmp dl, 39              ; closing quote
+jnz.l fail
+lea rbx, [rbx+1]
+mov ecx, eax
+jmp.l nl_done
+nl_hex:
+lea rbx, [rbx+2]        ; past "0x"
+xor ecx, ecx
+nl_hl:
+movzx edx, byte [rbx]
+mov eax, edx
+add al, 100             ; c - 48, in two steps: imm8 is signed
+add al, 108
+cmp al, 10
+jb.l nl_hd              ; 0..9
+mov eax, edx
+add al, 100
+add al, 69              ; c - 87
+cmp al, 16
+jb.l nl_hc
+jmp.l nl_hend           ; not a hex digit: the number ends
+nl_hc:
+cmp al, 10
+jb.l nl_hend            ; in 0..9 after the a-f mapping: not a hex digit
+nl_hd:
+mov edx, ecx
+add edx, edx
+add edx, edx
+add edx, edx
+add edx, edx            ; 16x
+add edx, eax
+mov ecx, edx
+lea rbx, [rbx+1]
+jmp.l nl_hl
+nl_hend:
+nl_done:
 ret

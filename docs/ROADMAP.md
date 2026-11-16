@@ -139,3 +139,28 @@ make `src/asm1.s` unparseable by `asm0a`, at which point the cross-check between
 implementations ends and only the seed remains. `bootstrap-check` says so out loud rather than
 passing quietly, and after that point the safety net is `ref/` plus the fixture corpus, which is
 why Stage 0's rejection suite matters more afterwards, not less.
+
+### Stage 1 progress: literals done, expressions open
+
+`asm1` now parses **hex literals** (`0x1f`, lowercase digits) and **character literals** (`'A'`),
+everywhere a number was accepted: immediates, `db` values, displacements.
+
+These are the first forms `asm1` accepts that `asm0a` cannot parse, so they needed an oracle that no
+reference binary could supply — nobody hand-emitted syntax that did not exist. The oracle is the old
+spelling of the same thing:
+
+    tests/capability/hex.cap.s       mov eax, 0x10      asm0a rejects
+    tests/capability/hex.ref.s       mov eax, 16        asm0a accepts
+
+`make test-capability` requires that `asm0a` reject the `.cap` spelling, accept the `.ref` spelling,
+and that `asm1` produce **identical bytes** for both. Two spellings, one encoding: if they ever
+differ, one of them is wrong. Four pairs so far (hex, char, a mask, a hex displacement).
+
+Still open in Stage 1: negative literals and **symbol arithmetic** (`filesz = end - start`). Both
+need a value model rather than a number parser — a symbol table whose entries can be subtracted —
+which is the part of Stage 1 that changes `asm1`'s architecture rather than extending it.
+
+Note what did *not* happen yet: `src/asm1.s` has not been rewritten to use hex, so `asm0a` can still
+parse it and `make bootstrap-check` still holds. That cross-check between two independent
+implementations is worth keeping for as long as possible; the handover will happen when the source
+starts using the new syntax, and it will be visible.

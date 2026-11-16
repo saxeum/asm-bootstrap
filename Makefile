@@ -19,11 +19,12 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject fixpoint bootstrap-check promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-capability fixpoint bootstrap-check promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1 (the promoted previous stage)'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
 	@echo 'make test-reject  sources that must be refused, with no output'
+	@echo 'make test-capability  new syntax vs the old spelling: same bytes'
 	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
 	@echo 'make bootstrap-check  asm0a and seed/asm1 must agree on src/asm1.s'
 	@echo 'make promote    replace seed/asm1 with the built asm1 (deliberate)'
@@ -44,7 +45,7 @@ asm1: src/asm1.s $(SEED)
 	@chmod +x $@
 	@printf '  asm1  %s bytes  sha %s  (built by %s from src/asm1.s)\n' \
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(SEED)"
-test: test-asm0a asm1 test-asm1 test-reject
+test: test-asm0a asm1 test-asm1 test-reject test-capability
 test-asm0a:
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(PAIRS); do \
@@ -110,7 +111,7 @@ verify-provenance: asm1
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: asm1 fixpoint bootstrap-check test-reject verify-provenance
+check: asm1 fixpoint bootstrap-check test-reject test-capability verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -177,4 +178,30 @@ test-reject: asm1
 	  fi; \
 	done; \
 	printf '  reject %s/%s refused by both, with no output\n' $$ok $(words $(REJECT)); \
+	exit $$fail
+
+# ---- capability divergence --------------------------------------------------
+# asm1 accepts syntax asm0a cannot parse: hex literals, character literals. That
+# divergence is the whole point of Stage 1 -- it is what lets src/asm1.s outgrow
+# the frozen bootstrap -- but it needs an oracle, and no reference binary exists
+# for syntax nobody hand-emitted.
+#
+# The oracle is the old spelling of the same thing. Every *.cap.s must be rejected
+# by asm0a, and asm1 must produce the SAME BYTES for it as for the equivalent
+# *.ref.s written in asm0a's dialect. Two spellings, one encoding: if they ever
+# differ, one of them is wrong.
+CAP := $(sort $(wildcard tests/capability/*.cap.s))
+
+test-capability: asm1
+	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	for f in $(CAP); do \
+	  b=$${f%.cap.s}; \
+	  $(ASM0A) < $$f > $$tmp/x 2>/dev/null && { echo "  $$f: asm0a ACCEPTS the new syntax (it should not)"; fail=1; continue; }; \
+	  $(ASM0A) < $$b.ref.s > $$tmp/y 2>/dev/null || { echo "  $$b.ref.s: asm0a rejects the old spelling"; fail=1; continue; }; \
+	  $(ASM1) < $$f > $$tmp/c 2>/dev/null || { echo "  $$f: asm1 rejects the new syntax"; fail=1; continue; }; \
+	  $(ASM1) < $$b.ref.s > $$tmp/r 2>/dev/null || { echo "  $$b.ref.s: asm1 rejects the old spelling"; fail=1; continue; }; \
+	  if cmp -s $$tmp/c $$tmp/r; then ok=$$((ok+1)); \
+	  else echo "  $$b: spellings disagree"; cmp -l $$tmp/c $$tmp/r | head -3; fail=1; fi; \
+	done; \
+	printf '  capability %s/%s pairs: asm1 accepts, asm0a refuses, bytes agree\n' $$ok $(words $(CAP)); \
 	exit $$fail
