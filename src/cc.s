@@ -2642,9 +2642,9 @@ db "push rbp"
 db 10
 db "mov rbp, rsp"
 db 10
-db "mov rcx, 16500"
+db "mov r10, 16500"
 db 10
-db "sub rsp, rcx"
+db "sub rsp, r10"
 db 10
 db 0
 f_arg1:

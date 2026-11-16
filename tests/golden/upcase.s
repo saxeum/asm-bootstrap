@@ -2,8 +2,8 @@
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov eax, 0
 mov edi, 0
 lea rsi, [rbp-400]

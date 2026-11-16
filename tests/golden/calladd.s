@@ -2,8 +2,8 @@
 add:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
 mov rax, [rbp-8]
@@ -15,8 +15,8 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov rcx, 2
 mov rdi, rcx
 mov rcx, 3

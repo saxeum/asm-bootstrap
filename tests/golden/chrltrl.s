@@ -2,8 +2,8 @@
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov rcx, 0
 mov [rbp-328], rcx
 mov rax, 65

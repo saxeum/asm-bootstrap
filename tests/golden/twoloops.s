@@ -2,8 +2,8 @@
 a:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov [rbp-8], rdi
 mov rax, 0
 mov [rbp-16], rax
@@ -27,8 +27,8 @@ ret
 b:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov [rbp-8], rdi
 mov rax, 0
 mov [rbp-16], rax
@@ -52,8 +52,8 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov rcx, 3
 mov rdi, rcx
 call a

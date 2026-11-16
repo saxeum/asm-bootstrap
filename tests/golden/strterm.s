@@ -2,8 +2,8 @@
 es:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
 mov [rbp-24], rdx
@@ -45,8 +45,8 @@ ret
 ec:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
 mov rcx, [rbp-16]
@@ -65,8 +65,8 @@ ret
 line:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
 mov [rbp-24], rdx
@@ -91,8 +91,8 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 16500
-sub rsp, rcx
+mov r10, 16500
+sub rsp, r10
 lea rax, [rbp-400]
 mov [rbp-16], rax
 mov rax, 0

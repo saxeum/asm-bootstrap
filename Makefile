@@ -592,6 +592,15 @@ test-cc: cc asm1
 	  printf 'abcd' > $$tmp/pe.want; \
 	  if [ $$g1 -eq 0 ] && cmp -s $$tmp/pe.out $$tmp/pe.want; then \
 	    printf '  cc    a pointer element as an argument, in a loop, prints abcd\n'; \
+	if $(CC) < tests/golden/fourargs.c > $$tmp/fa.s 2>/dev/null && cmp -s $$tmp/fa.s tests/golden/fourargs.s; then :; \
+	else echo "  fourargs.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/fourargs.s > $$tmp/fa 2>/dev/null; then \
+	  chmod +x $$tmp/fa; \
+	  if $$tmp/fa; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 10 ]; then \
+	    printf '  cc    four arguments: a+b+c+d is 10, and the 4th is not lost to the frame\n'; \
+	  else echo "  fourargs exited $$g1, wanted 10"; fail=1; fi; \
+	else echo "  asm1 refuses fourargs.s"; fail=1; fi; \
 	  else echo "  ptrelem wrote [$$(cat $$tmp/pe.out)]"; fail=1; fi; \
 	else echo "  asm1 refuses ptrelem.s"; fail=1; fi; \
 	  else echo "  strterm wrote [$$(cat $$tmp/st.out)]"; fail=1; fi; \
@@ -727,11 +736,16 @@ test-selfhost: asm1 cc
 	  if $(ASM1) < $(WORK)/cc1.s > $(WORK)/cc1 2>$(WORK)/asm1.err; then \
 	    chmod +x $(WORK)/cc1; \
 	    if $(WORK)/cc1 > $(WORK)/cc1.out 2>$(WORK)/cc1.run.err; then \
-	      if cmp -s $(WORK)/cc1.out tests/selfhost/slice1.expected; then \
-	        printf '  selfhost: slices 1-2 -- src/cc.c compiled and assembled emits the expected text\n'; \
+	      if cmp -s $(WORK)/cc1.out tests/selfhost/slice3.expected; then \
+	        printf '  selfhost: slices 1-3 -- src/cc.c compiled and assembled emits the expected text\n'; \
+	        $(ASM1) < $(WORK)/cc1.out > $(WORK)/prog 2>$(WORK)/prog.err; \
+	        chmod +x $(WORK)/prog; \
+	        if [ "$$($(WORK)/prog)" = "Hello, World!" ]; then \
+	          printf '  selfhost: and the emitted program RUNS: it prints Hello, World!\n'; \
+	        else echo '  selfhost: the emitted program did not print Hello, World!'; exit 1; fi; \
 	      else \
 	        echo '  selfhost: the emitted text differs from tests/selfhost/slice1.expected:'; \
-	        diff tests/selfhost/slice1.expected $(WORK)/cc1.out | head -8; exit 1; \
+	        diff tests/selfhost/slice3.expected $(WORK)/cc1.out | head -8; exit 1; \
 	      fi; \
 	    else echo "  selfhost: $(WORK)/cc1 failed at run time"; head -3 $(WORK)/cc1.run.err; exit 1; fi; \
 	  else echo '  selfhost: asm1 refuses the dialect text cc emitted for src/cc.c'; head -3 $(WORK)/asm1.err; exit 1; fi; \

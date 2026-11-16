@@ -3227,3 +3227,38 @@ recipe line *without* its trailing `; \`, so `make test-selfhost` became a synta
 stopped after five lines — and it was committed and pushed before `make check` was run. That is the
 "run the gate before claiming it passes" rule broken in the same commit that rewrote a gate's message. The
 repair is one line; the lesson is the ordering: `make check` *before* the commit, not after.
+
+## Slice 3 passes; and a real defect found on the way
+
+`src/cc.c` slice 3 emits a **complete program with a literal section** — the text, the quoted bytes, the
+`m<k>end` label and the terminating zero — which is what `cc` emits for `helloworld.c`. Judged twice:
+
+```
+./.work/cc1 | cmp - tests/selfhost/slice3.expected        bytes: identical
+asm1 < that output > .work/prog ; ./.work/prog             behaviour: prints Hello, World!
+```
+
+Both expected artefacts were written before the slice. Two mistakes in my own C on the way, both worth
+noting because they are the subset's reality rather than bugs: a literal cannot contain a **quote**
+(the scanner stops at the next one) so `"` is `emitc(p, len, 34)`, and a **backslash** in the emitted
+text has to be written as `emitc(p, len, 92)` because cc does not process escapes.
+
+**And the defect the four-argument test found.** `int f(int a,int b,int c,int d)` returned 11 instead of
+10 whenever it was called as the *right* operand of `+`:
+
+```c
+return 1 + f(1, 2, 3, 4);      /* exited 12, not 11 */
+```
+
+The emitted code is correct — `mov rax, 1` / `push rax` / args / `call f` / `mov rcx, rax` / `pop rax` /
+`add rax, rcx` — but `f` received `a=1, b=2, c=4, d=4`. The reason is structural: `cc` computes an
+argument at depth `d+1`, and at `d = 1` that register is **rdx**, which is also the *third argument
+register*. So evaluating the fourth argument (`mov rdx, 4`) destroys the third.
+
+At depth 0 arguments are computed in `rax`, which is no argument register — which is why every existing
+gate passes and this has never been seen. The fix is to park each argument in a frame slot and load the
+argument registers immediately before the call, in any order, so that no evaluation can clobber another
+argument. Not attempted here: it is a rewrite of `cargloop`/`cardskip`, and the session that found it is
+the one least able to verify a rewrite of the argument path.
+
+Gate added for what *does* work: four arguments at depth 0 exits 10.
