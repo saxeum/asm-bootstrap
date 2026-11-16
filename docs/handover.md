@@ -48,16 +48,18 @@ sufficient on its own.
 
 | # | Condition | State |
 |---|---|---|
-| 1 | No red oracles | **RED** — wave 2b fails: `jmp label` segfaults, forward and backward. Comments, labels and the two-pass flip work; the jump does not. |
+| 1 | No red oracles | **GREEN as of 2b-1**: 1a, 1b, 2a and 2b-1 all pass (labels, symbol table, two-pass flip). 2b-2 (`jmp`) is not implemented and therefore not claimed — a red result there would block again. |
 | 2 | Dialect closure | Unknown — `asm0b.s` does not exist yet. Foreseeable needs: `entry` directive (not implemented), more than 32 labels, names > 7 chars. |
 | 3 | Per-form verification | 4 forms verified end to end (`mov r32,imm`, `xor r32,r32`, `syscall`, `db`). 25 more are documented in `docs/encodings.md` but not exercised by any fixture. |
 | 4 | Loud failure | Partial. Unknown mnemonic and unknown register exit 1. But `mov eax,` with no operand assembles as `mov eax, 0` and exits 0, and the `83 /7` immediate range is unenforced. |
-| 5 | Resource limits | 32 labels, 7-char names, body < 0xF000, rel8 ±127 — all real limits, none currently enforced by a diagnostic except rel8. |
+| 5 | Resource limits | Label count (32) and name length (7) are now **enforced and verified**: 32 accepted, 33 exits 1, 8-char exits 1, empty exits 1. Still unenforced: body < 0xF000, `83 /7` immediate range. |
 | 6 | Reproducibility | Yes: `asm0a` sha in `docs/SHAS`, build command recorded in `docs/waves/`. |
 | 7–9 | Corpus, fixpoint, superset | Not applicable — no `asm0b` exists. |
 
-**`asm0a` cannot build `asm0b` yet.** It is blocked at condition 1, and conditions 2–5 would
-each block it independently once 1 is green.
+**`asm0a` cannot self-host yet, but the blocker has moved.** Condition 1 is green after 2b-1.
+What blocks now is completeness: conditions 2, 3 and 4 need the remaining forms (2b-2, 2c, 2d)
+plus numeric `db` and `entry` — see "What `asm0a.s` needs" below. The gate is no longer about
+trusting the current artifact; it is about the dialect being able to express an assembler.
 
 ## The 2b failure, and what it says about the method
 

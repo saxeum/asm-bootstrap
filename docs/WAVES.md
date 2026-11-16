@@ -173,3 +173,59 @@ distinguishes "jump emitted" from "jump ignored", which a passing exit status al
 - **`jmp name`** → `EB rel8` with `rel8 = target_off - (here_off + 2)`, failing if it does not
   fit. Backward and forward both work because pass 1 already filled the table.
 - **Registers**: `r8d` label count, `r9d` pass flag.
+
+## Wave 2b-1 — PASS: labels, label table, two passes. No jumps.
+
+Split from 2b because the single 441-byte block produced six displacement/REX defects
+(`docs/handover.md`). 2b-1 adds only the symbol table and the pass flip, so the only new
+failure mode is the table itself.
+
+Layout (segment offsets; code starts at 0x98, data first):
+
+- **labscan 0x2FB** — the new loop top. Detection has to come before dispatch because `skip:`
+  and `syscall` both begin with `s`: scan from `rbx` for `:` before space or newline; a colon
+  means a definition, otherwise jump to the existing dispatch at 0xD3.
+- **islabel 0x339** — length 1..7, then record `(offset, name8)` into a 32-entry table at
+  `rsp+0x1F800` (4-byte offset, then 8 zero-padded name bytes). **In pass 2 it skips the
+  record** (`r9d` is the pass flag), so entries are not duplicated and the 32-entry limit is
+  a real limit rather than half of one.
+- **eos 0x3B2** — end of source. First time: `r15 = r14`, `rbx = r12`, `r9d = 1`, re-parse.
+  Second time: `done`.
+- Retargeted: loop top → `jmp labscan`; `adv` and `eol4` → `jmp labscan`; `eol3`'s
+  end-of-source → `jae eos`.
+
+Artifact: `asm0a`, 1092 bytes, sha `1b54ea9a098588600b055ced0b102f8cb835af2cea99f56d028196e7447f218a`, entry `0x400110`, filesz `0x444`.
+
+Gate, all verified:
+
+```
+exit42                        byte-identical
+hello_num                     byte-identical
+labels emit no bytes          "mov eax,60 / syscall" == "start: mov eax,60 / between: syscall / end:"
+7-char label                  accepted
+8-char label                  exit 1
+empty label                   exit 1
+32 labels                     accepted
+33 labels                     exit 1
+jmp                           still exit 1 (2b-2, not implemented — correctly not claimed)
+```
+
+### Process result worth recording
+
+For the first time in this project **all 15 branch targets were correct on first emission**,
+because each one was decoded with objdump and compared against the intended label offset
+*before* anything was run:
+
+```
+  ok   0x376 -> 0x42a    ok   0x3be -> 0x2b3    ok   0x425 -> 0x14b
+  ok   0x385 -> 0x425    ok   0x3c7 -> 0x2b3    ok   0x42d -> 0x257
+  ok   0x391 -> 0x3b1    ok   0x3d0 -> 0x41a    ok   0x43f -> 0x373
+  ...
+```
+
+15/15, against six defects in the same class in the previous attempt.
+
+One defect did slip through, and it was a **repeat** of an earlier mistake: `mov r11,rcx`
+written `4c 89 cb`, which is `mov rbx,r9` — the destination `r11` needs REX.B. Caught by
+decoding the instruction, not by re-checking the arithmetic. The lesson stands: arithmetic is
+verified by decoding, never by re-reading.
