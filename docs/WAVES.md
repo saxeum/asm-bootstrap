@@ -940,3 +940,49 @@ experiment:
 (short path) and reassemble a `.l` source. If it then "succeeds" with a 2-byte jump, the long op
 blocks are being reached and the defect is in `found_long`/`notfound_long`. If it still fails,
 the shim never branched and the defect is in the `[rbx+3]` test.
+
+## Wave 2d-12 — PASS: rel32 branches (`jmp.l`, `jz.l`, `jnz.l`, `jb.l`)
+
+Artifact: `asm0a`, 3520 bytes, sha `a8205ae93f12efcfd81693fab04d3f9cc918cdf95c8ed467037940d67dfb6ba1`, filesz `0xdc0`.
+
+**The last blocker for `asm1.s` is gone.** A `.l` suffix selects the rel32 form; the short form
+is unchanged, so every existing fixture still reproduces byte for byte.
+
+### Gate
+
+```
+jmp.l  -> e9 fb ff ff ff        (rel32 to offset 0)
+jnz.l  -> 0f 85 fa ff ff ff
+jz.l   -> 0f 84 fa ff ff ff
+jb.l   -> 0f 82 fa ff ff ff
+jmp    -> eb fe                 short form unchanged
+jz     -> 74 fe                 short form unchanged
+src/rel32.s -> byte-identical to ref/rel32 (154 B), exits 3
+corpus 16/16; branch checker 269/269; selftest refuses the three known-bad sites
+```
+
+### The four defects, and what found each
+
+1. **`foundchk` tested bit 9 instead of bit 8** — so `jnz.l` took the short path and emitted a
+   *working-looking* `75 fe`. Found by comparing emitted bytes against the intended form.
+2. **`jz.l`/`jb.l` put the `.` at index 2, not 3** — those mnemonics are two characters, so the
+   suffix test at `[rbx+3]` looked at `l`, never matched, and fell through to the short block.
+   Found by the discriminator below, after the first two fixes.
+3. **`found_long` clobbered `rsi`** with the displacement, so `rbx` was never advanced past the
+   label name and `eolv` rejected the leftover. Fixed with `mov rbx,rsi` first, exactly as the
+   short path's fix-up does.
+4. **`foundchk`'s `jne` targeted `found_long+3`**, skipping the `mov rbx,rsi` that fix 3 had just
+   added — because I bumped the displacement when prepending 3 bytes to a block whose start had
+   not moved. Found by re-deriving the target from the decode rather than from the edit.
+
+### What actually made this wave work
+
+Not insight — **procedure**. The dispatcher retargets went in one at a time, each decoded and
+followed by a corpus run (7/7 correct), after two earlier attempts had failed by batching them.
+And when the `.l` forms still failed, the single experiment recorded in the previous entry
+(force `foundchk` to the short path) split the problem in one run: `jmp.l` then assembled as
+`eb fe`, which proved the long op blocks were reached and put the defect inside `found_long`
+rather than the shims.
+
+Both habits are now in the log as the reason this landed: **one patch, decode, corpus** and
+**one discriminating experiment instead of another round of patching**.

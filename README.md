@@ -30,10 +30,10 @@ To prove the output is the *verified* object and not merely something that runs:
 
 | | |
 |---|---|
-| artifact | `asm0a`, 3229 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
+| artifact | `asm0a`, 3520 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
 | identity | sha256 in `docs/SHAS` |
-| fixtures | 15, all byte-identical to hand-emitted references and behaviourally correct |
-| branches | 247 sites pinned in `docs/branches.tsv`, all verified by decoding |
+| fixtures | 16, all byte-identical to hand-emitted references and behaviourally correct |
+| branches | 269 sites pinned in `docs/branches.tsv`, all verified by decoding |
 | source language | 8-, 32- and 64-bit operands, memory operands, labels, two passes, decimal immediates |
 
 `src/count10.s` — the largest oracle — assembles to exactly `ref/count10` (188 bytes) and the
@@ -61,7 +61,7 @@ is always `0x400078 + code offset`, which means data must follow code).
 | moves | `mov r32,imm32` · `mov r8,imm8` · `mov r32,r32` · `movzx r32,r8` |
 | memory | `mov r32,[mem]` · `mov [mem],r32` · `mov [mem],r8` · `mov byte [mem],imm8` · `lea r32\|r64,[mem]` |
 | ALU | `add r8,imm8` · `cmp r8,imm8` · `cmp r32,imm32` · `inc`/`dec r8` and `r32` · `div r8` · `sub r64,r64` · `xor r32,r32` |
-| control | `jmp` · `jz` · `jnz` · `jb` — **rel8 only, ±127 bytes** |
+| control | `jmp` · `jz` · `jnz` · `jb` (rel8) and `jmp.l` · `jz.l` · `jnz.l` · `jb.l` (rel32) |
 | other | `syscall` · `db "…"` · `db n,n,n` |
 
 Addressing is `[base]` or `[base+disp8]`; base may be any 32- or 64-bit register. Immediates
@@ -69,8 +69,6 @@ are **decimal only**.
 
 ## Known limits (open, not hidden)
 
-- **No rel32 branches.** A jump beyond ±127 bytes fails rather than wrapping. This is the last
-  blocker for writing the assembler *in its own dialect*.
 - **Parses are validated.** A leftover the parser did not consume now fails instead of being
   skipped: `mov eax, 0x10`, `add al, -1` and `db 0x48` exit 1 rather than assembling to `0`, and
   `mov bl, 256` is range-checked. Trailing `;` comments and trailing spaces are accepted. Hex and

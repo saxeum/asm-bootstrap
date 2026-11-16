@@ -12,6 +12,7 @@ output for the same source is byte-identical to one of these.
 | `jmp`     | 139 B | `f1efca3a…b0fd1de` |  wave 2b: a forward jump, exits 7 not 99
 | `loop`    | 140 B | `5ca623d6…` |  wave 2c: inc/dec/jnz, exits 10 (iteration count)
 | `cmp32`   | 147 B | `111ae1e6…` |  wave 2d-10: `cmp r32,imm32` + jz, exits 7 |
+| `rel32`   | 154 B | `006f0d45…` |  wave 2d-12: `jmp.l` + `jnz.l`, exits 3 |
 | `movrr`   | 134 B | `633ee8eb…` |  wave 2d-9: `mov r32,r32`, exits 7 |
 | `store`   | 138 B | `5129e1e0…` |  wave 2d-8: `mov [mem],r32` + load, exits 7 |
 | `load`    | 138 B | `24e4f4c8…` |  wave 2d-7: `mov r32,[mem]`, exits 7 |

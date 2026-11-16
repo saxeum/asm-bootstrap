@@ -65,6 +65,8 @@ extension, never inferred from entry order.
 | `imul r64, r/m64, imm8` (wave 3) | — | `6B` | — | not yet implemented |
 | `jmp rel8` | `EB cb` | `EB` | — | `JMP Jbs` |
 | `jz`/`jnz`/`jb` rel8 | `74`/`75`/`72 cb` | — | — | `JZ`/`JNZ`/`JB Jbs` |
+| `jmp rel32` (`.l`) | `E9 cd` | `E9` | — | `JMP Jvds` |
+| `jcc rel32` (`.l`) | `0F 8x cd` | `8x` under `0F` | — | `Jcc Jvds` |
 | `syscall` | `0F 05` | `05` (0F) | — | `SYSCALL` (mode=e) |
 
 Checked against the reference one more time when this table was rewritten:
