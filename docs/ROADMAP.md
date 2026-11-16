@@ -993,3 +993,44 @@ Every row but the last is one mechanism or one handler. In this order, each test
 Not on that path, and still the strongest statement this project can make: **`src/asm0a.s`**, so that
 `asm1 < src/asm0a.s | cmp - asm0a` explains the frozen 3745 bytes. It is archaeology, not capability —
 it belongs after the compiler has something to run, or in a session of its own.
+
+## REX.W landed: the width comes from the operand names, not the opcode
+
+```
+add rax, rbx   -> 48 01 d8        (was: line 1: rejected)
+mov rax, rbx   -> 48 89 d8        (was: 89 d8, i.e. mov eax, ebx)
+and rax, rbx   -> 48 21 d8        (was: 21 d8)
+cmp rax, rbx   -> 48 39 d8        (was: 39 d8)
+sub eax, ecx   -> 29 c8           (was: 48 29 c8, i.e. sub rax, rcx)
+add eax, rbx   -> line 1: rejected
+push eax       -> line 1: rejected
+```
+
+`asm1` 6 679 → **6 947**, and this is the first item on the compiler's list: a compiler does pointer
+arithmetic in 64 bits, and until now four of the six reg-reg families silently emitted the 32-bit
+encoding for 64-bit operands while two refused them. The one that mattered most was `and`/`or`/`test`/
+`cmp`, which share a handler that had no width check at all — the same class of defect as `asm0a`'s
+`and`-as-`add`, in this assembler, found by writing the rule down.
+
+**One concept:** `reg32` records the width of the register it parsed in a byte slot; a handler with
+two register operands compares the widths and **refuses a mix**; any handler emits `0x48` iff that
+width is 64-bit, before the opcode. `push`/`pop` refuse 32-bit names outright, because `50` pushes
+eight bytes whatever the source says.
+
+**And the direction of the evidence was reversed for once:** `asm0a` emitted the *correct* `29 c8` for
+`sub eax, ecx` while `asm1` emitted `48 29 c8`. The frozen bootstrap had the better answer. That is
+worth stating plainly, because the project's habit is to assume the newer stage is the better one:
+`docs/encodings.md` says it, and it was found by writing down what width *means*, not by testing
+`sub`.
+
+Held by `tests/superior/width64.s` — 15 lines, one hand-computed expectation each, `.hex` carrying
+its own arithmetic as comments — and by `tests/reject/width-mix.s`, which requires both assemblers to
+refuse a mixed-width pair with no output. `make test-coverage` grew 17 rows for the 64-bit shapes,
+which is exactly the direction that gate was built to force: a form with no test is a red gate.
+
+### What is left of this item
+
+`r8`–`r15`. The width machinery is in place; the extended codes need `REX.R`/`REX.X`/`REX.B` and a
+3-bit mask on every code before it is shifted into a ModRM or SIB byte — one pass over the same
+handlers, and `r13` needs the `mod = 00` exception that `rbp` already has. Until then `mov r8, rax`
+is a rejection, not a wrong answer, and the compiler work that needs 16 registers waits.

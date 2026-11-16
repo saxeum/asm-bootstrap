@@ -234,8 +234,6 @@ cmp dl, 104
 jz.l d_sh
 cmp dl, 97
 jz.l d_sa
-mov eax, 72
-mov [rbp+44], eax
 mov eax, 41
 mov [rbp+48], eax
 jmp.l prr
@@ -473,6 +471,8 @@ cmp al, 32
 jz.l pmov8
 call reg32
 mov [rbp+32], edx
+movzx eax, byte [rbp+9]
+mov [rbp+10], al
 lea rbx, [rbx+1]
 call skipsp
 movzx eax, byte [rbx]
@@ -484,6 +484,12 @@ cmp al, 114
 jz.l pmovrr
 call expr
 mov [rbp+36], ecx
+movzx eax, byte [rbp+10]
+cmp eax, 0
+jz pmovi_n
+mov eax, 72
+call emital
+pmovi_n:
 mov eax, [rbp+32]
 mov edx, 184
 add eax, edx
@@ -584,10 +590,15 @@ jmp.l ndigit
 reg32:
 movzx eax, byte [rbx]
 cmp al, 101
-jz.l regok
+jz.l r32e
 cmp al, 114
 jnz.l fail
-regok:
+mov eax, 1
+jmp.l r32w
+r32e:
+mov eax, 0
+r32w:
+mov [rbp+9], al
 movzx edx, byte [rbx+1]
 movzx ecx, byte [rbx+2]
 add ecx, ecx
@@ -627,7 +638,7 @@ jmp.l fail
 regret:
 lea rbx, [rbx+3]
 ret
-
+ret
 r8:
 movzx edx, byte [rbx]
 movzx ecx, byte [rbx+1]
@@ -715,6 +726,15 @@ jmp.l pline
 pmovrr:
 call reg32
 mov [rbp+36], edx
+movzx eax, byte [rbp+9]
+movzx ecx, byte [rbp+10]
+cmp eax, ecx
+jnz.l fail
+cmp eax, 0
+jz pmvnr
+mov eax, 72
+call emital
+pmvnr:
 mov eax, 137
 call emital
 mov eax, [rbp+36]
@@ -727,7 +747,6 @@ mov edx, 192
 add eax, edx
 call emital
 jmp.l pline
-
 p8i:
 lea rbx, [rbx+4]
 call r8
@@ -782,20 +801,25 @@ call emital
 jmp.l pline
 
 prr:
-movzx eax, byte [rbx+4]
-call prrck
 lea rbx, [rbx+4]
 call reg32
 mov [rbp+32], edx
+movzx eax, byte [rbp+9]
+mov [rbp+10], al
 lea rbx, [rbx+1]
 call skipsp
-movzx eax, byte [rbx]
-call prrck
 call reg32
 mov [rbp+36], edx
-mov eax, [rbp+44]
-cmp al, 0
-jz.l prr_nr
+; both operands must be the same width. 32-bit and 64-bit are different
+; instructions, and picking one of them is how 64-bit code silently becomes
+; 32-bit: this is the check that replaced prrck's "no 64-bit here".
+movzx eax, byte [rbp+9]
+movzx ecx, byte [rbp+10]
+cmp eax, ecx
+jnz.l fail
+cmp eax, 0
+jz prr_nr
+mov eax, 72
 call emital
 prr_nr:
 mov eax, [rbp+48]
@@ -809,6 +833,7 @@ add eax, edx
 mov edx, 192
 add eax, edx
 call emital
+jmp.l pline
 jmp.l pline
 
 memop:
@@ -946,11 +971,16 @@ jmp.l pline
 pms32:
 call reg32
 mov [rbp+64], edx
+movzx eax, byte [rbp+9]
+cmp eax, 0
+jz pms32_n
+mov eax, 72
+call emital
+pms32_n:
 mov eax, 137
 call emital
 call emitmem
 jmp.l pline
-
 pmbyte:
 lea rbx, [rbx+5]
 call memop
@@ -973,11 +1003,16 @@ pmovld:
 call memop
 mov eax, [rbp+32]
 mov [rbp+64], eax
+movzx eax, byte [rbp+10]
+cmp eax, 0
+jz pmld_n
+mov eax, 72
+call emital
+pmld_n:
 mov eax, 139
 call emital
 call emitmem
 jmp.l pline
-
 plea:
 lea rbx, [rbx+4]
 movzx eax, byte [rbx]
@@ -1148,15 +1183,22 @@ add eax, edx
 mov edx, 192
 add eax, edx
 mov [rbp+36], eax
+movzx eax, byte [rbp+9]
+cmp eax, 0
+jz pu32_n
+mov eax, 72
+call emital
+pu32_n:
 mov eax, [rbp+44]
 call emital
 mov eax, [rbp+36]
 call emital
 jmp.l pline
-
 pc32:
 call reg32
 mov [rbp+32], edx
+movzx eax, byte [rbp+9]
+mov [rbp+10], al
 lea rbx, [rbx+1]
 call skipsp
 movzx eax, byte [rbx]
@@ -1166,6 +1208,12 @@ cmp al, 114
 jz.l pc32rr
 call expr
 mov [rbp+36], ecx
+movzx eax, byte [rbp+10]
+cmp eax, 0
+jz pc32ni
+mov eax, 72
+call emital
+pc32ni:
 mov eax, [rbp+32]
 mov edx, [rbp+48]
 add eax, edx
@@ -1188,6 +1236,15 @@ jmp.l pline
 pc32rr:
 call reg32
 mov [rbp+36], edx
+movzx eax, byte [rbp+9]
+movzx ecx, byte [rbp+10]
+cmp eax, ecx
+jnz.l fail
+cmp eax, 0
+jz pc32nr
+mov eax, 72
+call emital
+pc32nr:
 mov eax, [rbp+36]
 add eax, eax
 add eax, eax
@@ -1201,6 +1258,7 @@ mov eax, [rbp+52]
 call emital
 mov eax, [rbp+40]
 call emital
+jmp.l pline
 jmp.l pline
 fail:
 call msg
@@ -1728,6 +1786,8 @@ ret
 psh:
 lea rbx, [rbx+4]
 call reg32
+movzx eax, byte [rbp+9]
+mov [rbp+10], al
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
@@ -1741,6 +1801,12 @@ add eax, edx
 mov edx, 192
 add eax, edx
 mov [rbp+40], eax
+movzx eax, byte [rbp+10]
+cmp eax, 0
+jz psh_n
+mov eax, 72
+call emital
+psh_n:
 mov eax, 193
 call emital
 mov eax, [rbp+40]
@@ -1750,6 +1816,9 @@ call emital
 jmp.l pline
 ppsh:
 call reg32
+movzx ecx, byte [rbp+9]
+cmp ecx, 0
+jz.l fail
 mov eax, [rbp+44]
 add eax, edx
 call emital
@@ -1758,10 +1827,21 @@ pimul:
 lea rbx, [rbx+5]
 call reg32
 mov [rbp+32], edx
+movzx eax, byte [rbp+9]
+mov [rbp+10], al
 lea rbx, [rbx+1]
 call skipsp
 call reg32
 mov [rbp+36], edx
+movzx eax, byte [rbp+9]
+movzx ecx, byte [rbp+10]
+cmp eax, ecx
+jnz.l fail
+cmp eax, 0
+jz pim_n
+mov eax, 72
+call emital
+pim_n:
 mov eax, 15
 call emital
 mov eax, 175
@@ -1776,7 +1856,6 @@ mov edx, 192
 add eax, edx
 call emital
 jmp.l pline
-
 d_n:
 cmp al, 110
 jnz.l fail
@@ -1797,14 +1876,3 @@ mov eax, 3
 mov [rbp+48], eax
 jmp.l pu32
 
-prrck:
-cmp al, 114
-jnz.l prrc_ok
-mov ecx, [rbp+44]
-cmp ecx, 0
-jnz.l prrc_ok
-mov eax, 4
-mov [rbp+2], al
-jmp.l fail
-prrc_ok:
-ret

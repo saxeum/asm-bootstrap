@@ -91,3 +91,22 @@ q: entry q
 # corpus but not claimed here (the inventory was incomplete, not the corpus)
 q: jb.l q
 q: jnz.l q
+
+# --- 64-bit forms: the width comes from the operand names, not the opcode ---
+add rax, rbx
+sub eax, ecx
+sub rax, rcx
+mov rax, rbx
+mov rax, 1
+mov rax, [rbx]
+mov [rbx], rax
+and rax, rbx
+cmp rax, 1
+cmp rax, rbx
+inc rax
+neg rax
+shl rax, 1
+imul rax, rbx
+push rax
+pop rax
+lea rax, [rbx]

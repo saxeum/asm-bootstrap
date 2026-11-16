@@ -175,17 +175,17 @@ Each prints `identical`, and `milestone-fixpoint` produces 4295 bytes with sha25
 | | |
 |---|---|
 | bootstrap | `asm0a`, 3745 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD`, sha256 in `docs/SHAS` |
-| self-hosted | `asm1`, 6679 bytes, sha256 `d2bb52b219f485ac…`, built by `seed/asm1` from `src/asm1.s` (1810 lines, 24198 bytes) |
-| seed | `seed/asm1`, 6679 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
+| self-hosted | `asm1`, 6947 bytes, sha256 `3c932ea1cfc5b897…`, built by `seed/asm1` from `src/asm1.s` (1878 lines, 25422 bytes) |
+| seed | `seed/asm1`, 6947 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
 | builder | `asm1` is built by `seed/asm1`, never by itself. Since the source needs more than 128 labels, `asm0a` can no longer parse it: `make bootstrap-check` reports NOT APPLICABLE |
-| fixpoint | `asm1(asm1.s) == asm1`, 6679 bytes, one sha256, idempotent |
+| fixpoint | `asm1(asm1.s) == asm1`, 6947 bytes, one sha256, idempotent |
 | fixtures | 18, all byte-identical to hand-emitted references and behaviourally correct |
-| rejections | 11 sources refused by both assemblers with no output, and 5 exact messages: line number *and* reason |
+| rejections | 12 sources refused by both assemblers with no output, and 5 exact messages: line number *and* reason |
 | capability | 29 pairs where asm1 accepts syntax asm0a cannot parse; both spellings must agree byte for byte |
-| coverage | 60 claimed forms, each required to appear in a test input (`make test-coverage`) — the gate that says which paths nothing has ever executed |
-| superior | three cases where asm1 is right and asm0a is not (`and`-as-`add`, `[rbp]` disp 0, a negative disp), each against a hand-computed body; plus a 99 KB source and a chosen `entry` point, both of which must RUN |
+| coverage | 77 claimed forms, each required to appear in a test input (`make test-coverage`) — the gate that says which paths nothing has ever executed |
+| superior | four cases where asm1 is right and asm0a is not (`and`-as-`add`, `[rbp]` disp 0, a negative disp, 64-bit vs 32-bit width), each against a hand-computed body; plus a 99 KB source and a chosen `entry` point, both of which must RUN |
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1`, because a system disassembler is forbidden |
-| source language | `mov` 8/32-bit (64-bit `mov` is refused pending REX.W), `movzx` from registers and memory, `lea`, `add`/`sub`/`cmp`/`xor`/`and`/`or`/`test`/`inc`/`dec`/`div`/`neg`/`not` in immediate and register forms, `shl`/`shr`/`sar`, `push`/`pop`, `imul`, `call`/`ret`, branches rel8 and `.l` rel32, `[base]` and `[base+index]`, `syscall`, `db` with strings, labels, expressions, `entry`, two-pass assembly with validation, hex/char/negative literals |
+| source language | `mov`, `add`, `sub`, `cmp`, `and`, `or`, `test`, `xor`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `imul` in 8-bit (where it exists), 32-bit and 64-bit forms — the width comes from the operand names, and a mixed pair is refused; registers `rax`…`rdi` (`r8`–`r15` not yet), `movzx` from registers and memory, `lea`, `div`, `push`/`pop`, `call`/`ret`, branches rel8 and `.l` rel32, `[base]` and `[base+index]`, `syscall`, `db` with strings, labels, expressions, `entry`, two-pass assembly with validation, hex/char/negative literals |
 
 `src/asm1.s` assembles every fixture, including `src/count10.s` → exactly `ref/count10`.
 

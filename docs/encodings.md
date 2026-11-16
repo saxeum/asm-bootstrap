@@ -197,19 +197,54 @@ disagree here, and `make test-superior` records which side is right.
 
 When `r8`–`r15` land, `r13` needs the same test: base code 13 with `mod = 00` is RIP-relative too.
 
-## Known defect: `sub r32, r32` is encoded as 64-bit
+## REX.W: the width comes from the operand names
 
-`sub` is the one ALU form whose opcode sets `REX.W` (`48 29 /r`), so the width comes from the
-encoding rather than from the operand names, and nothing checks that the two agree:
+The reg-reg ALU forms had no notion of width. `add`/`xor` *refused* 64-bit operands (a check that
+looked like safety), while `mov`, `cmp`, `and`, `or`, `test` and `imul` **silently emitted the 32-bit
+encoding** for 64-bit operands, and `sub` emitted `REX.W` unconditionally, so `sub eax, ecx` was
+byte-identical to `sub rax, rcx`. Four of those six were wrong answers that assembled cleanly:
 
 ```
-sub eax, ecx      -> 48 29 c8       byte-identical to `sub rax, rcx`
+before                                     after
+add rax, rbx   -> line 1: rejected         48 01 d8
+xor rax, rax   -> line 1: rejected         48 31 c0
+mov rax, rbx   -> 89 d8   (mov eax, ebx)   48 89 d8
+and rax, rbx   -> 21 d8   (and eax, ebx)   48 21 d8
+cmp rax, rbx   -> 39 d8   (cmp eax, ebx)   48 39 d8
+test rax, rbx  -> 85 d8                    48 85 d8
+sub eax, ecx   -> 48 29 c8 (sub rax, rcx)  29 c8
 ```
 
-For a 32-bit operand that is a wrong answer of the same class as `asm0a`'s `and`-as-`add`: correct
-while the upper halves are zero, silently wrong when they are not.
+**The rule now:** `reg32` records the width of the register it parsed (byte `[rbp+9]`, 0 = 32-bit,
+1 = 64-bit); handlers that take two registers compare the two widths and **refuse a mix**, and every
+handler emits `0x48` iff the width is 64-bit — before the opcode, never after. One concept, one
+byte, one place to look.
 
-**Status: not fixed, and deliberately not pinned.** The fix is not a check but the REX mechanism
-itself — take the width from the operand names, emit `REX.W` only for the 64-bit form, refuse a mix.
-That is the next task in `docs/ROADMAP.md`, and pinning `48 29 c8` now would turn a wrong answer into
-a recorded expectation. Until then: **`sub` is 64-bit, whatever the source says.**
+| form | 32-bit | 64-bit |
+|---|---|---|
+| `add`/`sub`/`and`/`or`/`test`/`cmp` r,r | `01`/`29`/`21`/`09`/`85`/`39` `/r` | `48` + same |
+| `add`/`and`/`or`/`test`/`cmp` r,imm32 | `81` or `F7` `/digit` | `48` + same |
+| `mov r,r` / `mov [mem],r` / `mov r,[mem]` | `89`/`89`/`8B` `/r` | `48` + same |
+| `mov r,imm32` | `B8+rd` | `48 B8+rd` |
+| `inc`/`dec`/`neg`/`not` | `FF`/`F7` `/digit` | `48` + same |
+| `shl`/`shr`/`sar r,imm8` | `C1` `/digit ib` | `48` + same |
+| `imul r,r` | `0F AF /r` | `48 0F AF /r` |
+| `push`/`pop` | **refused** (`50`/`58` push 8 bytes, so a 32-bit name is a mistake) | `50+rd`/`58+rd` |
+
+`push eax` is now a rejection rather than a silent 8-byte push, and `add eax, rbx` is a rejection
+rather than a guess. Held by `tests/superior/width64.s`, whose `.hex` carries a hand-computed
+expectation per line, and by `tests/reject/width-mix.s`.
+
+Two notes worth keeping:
+
+- **`asm0a` was right about `sub`.** It emitted `29 c8` for `sub eax, ecx` where `asm1` emitted
+  `48 29 c8`. This is the reverse of the usual direction — the frozen bootstrap, which is not a
+  correctness reference, had the better answer, and it was found by writing the width rule down
+  rather than by testing `sub` specifically. Agreement is evidence about the two implementations,
+  not a proof; here the older one won.
+- `movzx rax, cl` still emits the 32-bit form (`0f b6 c1`). That is *correct* for a byte source —
+  32-bit `movzx` zero-extends into the full register — so no `REX.W` is needed and none is emitted.
+
+Not done yet: `r8`–`r15`. The width is in place, but the extended-register codes (REX.R/X/B and the
+3-bit masking of every code) are the next step; until then `mov r8, rax` is a rejection, not a wrong
+answer.

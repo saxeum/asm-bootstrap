@@ -329,7 +329,7 @@ test-superior: asm1
 	  b=$${s%.s}; \
 	  $(ASM1) < $$s > $$tmp/a 2>/dev/null || { echo "  asm1 cannot assemble $$s"; fail=1; continue; }; \
 	  got=$$(xxd -s 120 -p $$tmp/a | tr -d ' \n'); \
-	  want=$$(tr -d ' \n' < $$b.hex); \
+	  want=$$(sed 's/#.*//' $$b.hex | tr -d ' \t\n'); \
 	  if [ "$$got" != "$$want" ]; then \
 	    echo "  $$b: asm1 emits [$$got], hand-computed [$$want]"; fail=1; continue; fi; \
 	  if $(ASM0A) < $$s > $$tmp/z 2>/dev/null && [ "$$(xxd -s 120 -p $$tmp/z | tr -d ' \n')" = "$$want" ]; then \

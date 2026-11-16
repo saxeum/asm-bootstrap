@@ -1,0 +1,16 @@
+# hand-computed from the encoding: REX.W (0x48) only where the operands are 64-bit
+4801d8        # add rax, rbx    48 01 /r      reg=rbx rm=rax
+29c8          # sub eax, ecx    29 /r         no REX: both 32-bit
+4889c8        # mov rax, rcx    48 89 /r      reg=rcx rm=rax
+4821d8        # and rax, rbx    48 21 /r      reg=rbx rm=rax
+4881f801000000 # cmp rax, 1     48 81 /7 id   reg=rax digit 7
+48ffc0        # inc rax         48 FF /0
+48c1e001      # shl rax, 1      48 C1 /4 ib
+480fafd1      # imul rdx, rcx   48 0F AF /r   reg=rdx rm=rcx
+488b03        # mov rax, [rbx]  48 8B /r
+488903        # mov [rbx], rax  48 89 /r
+01d8          # add eax, ebx    01 /r         the 32-bit control
+8b03          # mov eax, [rbx]  8B /r         the 32-bit control
+48b801000000  # mov rax, 1      48 B8+rd id
+4839d8        # cmp rax, rbx    48 39 /r      reg=rbx rm=rax
+48f7d8        # neg rax         48 F7 /3

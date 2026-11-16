@@ -1826,3 +1826,47 @@ The same leftover `python3 -c 1` fragment ran twice more, in two shell commands 
 and touched nothing. Recorded for the same reason as the first: the defect is the invocation. The
 habit that produced it — a stray fragment in a command I was composing — is the thing to drop, and
 `make test-tools` cannot see it, because it greps files and this was a command line.
+
+## REX.W: six handlers, one concept, and the bootstrap was right
+
+The compiler needs 64-bit arithmetic. A probe of the reg-reg families showed the state was worse than
+the notes claimed:
+
+```
+add rax, rbx   -> line 1: rejected        xor rax, rax  -> rejected
+mov rax, rbx   -> 89 d8   (mov eax, ebx)
+and rax, rbx   -> 21 d8                   or rax, rbx   -> 09 d8
+cmp rax, rbx   -> 39 d8                   test rax, rbx -> 85 d8
+sub eax, ecx   -> 48 29 c8 (sub rax, rcx)
+```
+
+So: `add`/`xor` refused 64-bit operands, `mov`/`and`/`or`/`test`/`cmp` **silently encoded 32-bit**, and
+`sub` encoded 64-bit whatever the names said. Four wrong answers that assembled cleanly, in the class
+this project treats as the worst.
+
+The fix is one concept, `reg32` recording the width in a byte slot, and nine handler rewrites, each
+whole-block and each followed by a build, the 18 fixtures and the fixpoint:
+
+| handler | what changed |
+|---|---|
+| `reg32` | records 0/1 for 32/64-bit in `[rbp+9]`; `regok` removed |
+| `prr` (add/sub/xor) | saves the destination width to `[rbp+10]`, refuses a mixed pair, emits `48` for 64-bit — `prrck` deleted, since safety is now a property of the rule rather than a special case |
+| `pc32` / `pc32rr` (and/or/test/cmp) | same, for both the immediate and the register form |
+| `pmov`, `pmovrr`, `pmovld`, `pms32` | `mov` in all four shapes |
+| `pu32`, `psh`, `pimul` | `inc/dec/neg/not`, shifts, `imul` |
+| `ppsh` | `push`/`pop` **refuse** a 32-bit name: `50` pushes eight bytes regardless |
+
+`asm1` 6 679 → 6 947. `r8`–`r15` are not in; the codes still come from an eight-register table, so
+`mov r8, rax` is a rejection rather than a wrong answer.
+
+### Two things worth carrying forward
+
+**The bootstrap was right and this assembler was wrong** about `sub eax, ecx`: `asm0a` emitted `29 c8`,
+`asm1` emitted `48 29 c8`. Every previous entry in this log runs the other way. It was not found by
+testing `sub` — it was found by asking what "width" means for a two-operand instruction and noticing
+that `sub`'s REX byte was a constant in the dispatcher. Writing the rule down found the defect; a test
+aimed at `sub` would have pinned `48 29 c8` as correct.
+
+**The coverage gate earned its keep in the same wave.** Adding 17 rows for the 64-bit shapes made the
+gate red for `mov rax, 1`, `cmp rax, rbx` and `neg rax` — forms I had just implemented and not yet
+tested. That is the gate doing the job it was built for, three hours after it was built.
