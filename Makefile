@@ -22,7 +22,7 @@ BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
 .PHONY: all bootstrap asm1 dis test test-asm0a test-asm1 test-dis test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
-	@echo 'make            build asm1 from seed/asm1 (the promoted previous stage)'
+	@echo 'make            build asm1 from seed/asm1, then the decoder (which needs it)'
 	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
 	@echo 'make test-reject  sources that must be refused, with no output'
@@ -37,7 +37,7 @@ help:
 	@echo 'make which FILE=f which assembler produced f (by content sha)'
 	@echo 'make check      bootstrap, shas, branch decodes, provenance'
 	@echo 'make clean      remove generated binaries'
-all: asm1
+all: asm1 dis
 
 # The branch decoder. It is built by asm1 from src/dis.s like any other program,
 # and it exists because the gate that checks docs/branches.tsv may not use
