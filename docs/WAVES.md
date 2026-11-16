@@ -2319,3 +2319,28 @@ rather than hidden: when a call needs to appear inside a larger expression (`n *
 bug has to be found and fixed.
 
 `cc` 5 734 → 5 851 → 5 836 bytes (relaxing `return` removed the depth check, which shrank it).
+
+### Probing the nesting bug: what the journal showed, and what it did not
+
+Instrumenting `ident` (every stored character) and `want` (every wanted token) answered the "where"
+and not the "how". The journey for a call with a variable argument was `f`, `n`, `n`, then silence --
+the failure is inside the nested `expr`'s variable path, before the next token is even wanted. The
+name buffer held `01 00 00 00` where `n` should have been.
+
+Two findings that narrow it and one that closes a line of suspicion:
+
+- `[rbp-208]` and `[rbp-16064]` do not alias, both directions, measured with a two-line program. The
+  assembler's disp32 encoding is not the cause.
+- Every write near `rbp-16064` is a name store (`ident`, `defvar`, `callargs`), and each writes only
+  the bytes the name consists of.
+- The probe itself was wrong twice before it worked: it initialised its journal *before* `lea rbp,
+  [rsp]` (rbp is garbage there, so it segfaulted) and it read the cursor from `rbx`, which cc does
+  not use for that. A probe that crashes tells you about the probe.
+
+Since the mechanism resists reading, the constraint is now enforced: `expr` refuses to be nested and
+says `cc: internal: nested expression`. Checked by reintroducing `call expr` in `cargloop` on a
+scratch copy -- it refuses with that message and a line number in the source, where before it
+corrupted the buffer and mis-reported "not in the subset".
+
+`argexpr` (terms at eax/ecx, no recursion) stays. It is what the language offers for an argument, and
+it is also the shape the eventual fix will take.

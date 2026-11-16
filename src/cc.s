@@ -48,6 +48,7 @@ mov eax, 0
 mov [rbp+96], eax
 mov [rbp-108], eax      ; no variables declared yet
 mov [rbp-208], eax      ; not inside an argument list
+mov [rbp-212], eax      ; not inside an expression
 mov [rbp+112], eax
 mov [rbp+116], eax
 
@@ -473,11 +474,25 @@ ret
 ;   [rbp-128] current depth   [rbp-132] the operator being combined
 ;   [rbp-140] value/offset    [rbp-144..148] emitreg scratch
 expr:
+; An expression inside an expression is REFUSED, not attempted. Nesting the
+; parser corrupted the symbol-name buffer in a way that is still unexplained
+; (docs/cc.md): the value 1 appeared where a variable's name should have been,
+; and no amount of reading found the writer. A call argument therefore uses
+; argexpr (terms at eax/ecx, no recursion), and if anything ever nests expr
+; again this refuses with a line number instead of corrupting silently.
+mov eax, [rbp-212]
+cmp eax, 0
+jz exprok
+jmp.l failnest
+exprok:
+mov eax, 1
+mov [rbp-212], eax
 mov eax, 0
 mov [rbp-128], eax
 call ex1
+mov eax, 0
+mov [rbp-212], eax
 ret
-
 ex1:
 call ex2
 ex1l:
@@ -1572,6 +1587,16 @@ mov eax, 60
 mov edi, 1
 syscall
 
+failnest:
+mov eax, 1
+mov edi, 2
+mov esi, 4194424+f_nest
+mov edx, 32
+syscall
+mov eax, 60
+mov edi, 1
+syscall
+
 ; ---- fixed text. One db per item: a string on a db line ends that line, so a
 ; string and a number are never mixed. ----
 f_int:
@@ -1892,5 +1917,8 @@ db 10
 db 0
 f_bad:
 db "cc: not in the subset"
+db 10
+f_nest:
+db "cc: internal: nested expression"
 db 10
 db 0

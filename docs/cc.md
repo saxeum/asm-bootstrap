@@ -534,3 +534,26 @@ int main(void) { return f(10, 0); }        /* exits 10: ten frames, an accumulat
 
 Gate 13 is behavioural and exact: **10**. A frame that is not restored, or an argument that is not
 recomputed per call, gives a wrong number or a crash, never 10.
+
+### The nesting bug is refused, not solved
+
+An `expr` inside an `expr` now stops with `cc: internal: nested expression` (exit 1) instead of
+corrupting the symbol-name buffer. What is known, from a probe that journalled every identifier scan
+and every wanted token to stderr:
+
+- The journey for `int f(int n) { return n; } int main(void) { int x = 3; return f(x); }` was
+  `f`, `n` (the parameter), `n` (the body), then **nothing** — the next want, `;`, was never
+  reached, so the failure is inside the nested `expr`'s variable path, before `want`.
+- The name buffer held the four bytes `01 00 00 00` where `n` should have been, and `idfind`
+  returns −1 on a zero in the high half, so the refusal was reported as "not in the subset".
+- `[rbp−208]` and `[rbp−16064]` do **not** alias: a program that writes `1` at one and reads the
+  other sees `0` both ways round. So the assembler's displacement encoding is not the cause.
+- Nothing outside `ident` / `defvar` / `callargs` writes anywhere near `rbp−16064`, and each of
+  those writes only the bytes a stored name consists of.
+
+So the writer has not been found. The guard is the honest response: a constraint enforced loudly
+beats an unexplained corruption, and the day `n * f(n-1)` is attempted the compiler says
+`internal: nested expression` rather than emitting a wrong program or a plausible refusal.
+
+The real fix is presumably to keep the expression parser's state *per recursion level* instead of in
+fixed frame slots. `argexpr` shows the shape: two registers, no recursion, nothing shared.
