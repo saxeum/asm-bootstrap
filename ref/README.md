@@ -1,0 +1,20 @@
+# Frozen oracles
+
+These three binaries were written **by hand**, byte by byte, before any assembler existed.
+They are the standard every later wave is measured against: an assembler is correct when its
+output for the same source is byte-identical to one of these.
+
+| file | size | sha256 |
+|---|---|---|
+| `hello`   | 165 B | `4f386903…6552e1` |
+| `count10` | 188 B | `e61a23c9…94ec5bd9a` |
+| `fib`     | 334 B | `f61cea2c…2e10098` |
+
+Rules:
+
+- **Never regenerate them casually.** A binary whose bytes you did not write by hand cannot
+  judge an assembler. If one must be rebuilt, it is rebuilt from the recorded `printf` byte
+  emitters and checked against the sha above — anything else is a rewrite, not a repair.
+- They are checked by `sha256sum -c docs/SHAS`, run from the repository root.
+- `count10` and `fib` are oracles for waves that do not exist yet; they stay here unexamined
+  until the assembler can express them.

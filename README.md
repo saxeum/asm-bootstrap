@@ -33,7 +33,7 @@ unknown original author, the paper-tape two-pass design, and the line that leads
 ```bash
 sha256sum -c docs/SHAS                                 # every artifact matches its recorded sha
 
-./asm0a < src/hello_num.s | cmp - hello && echo ok      # wave 1b: byte-identical to hand bytes
+./asm0a < src/hello_num.s | cmp - ref/hello && echo ok  # wave 1b: byte-identical to hand bytes
 
 ./asm0a < src/exit42.s > /tmp/e && chmod +x /tmp/e      # wave 1a
 /tmp/e; echo $?                                        # 42
@@ -47,8 +47,8 @@ exposed.
 ## Layout
 
 ```
-asm0a            the wave-1 assembler (hand-emitted machine code, 833 bytes)
-hello count10 fib  wave-0 reference binaries — the oracles
+asm0a            the assembler (hand-emitted machine code, 883 bytes)
+ref/             frozen oracles: hello, count10, fib — written by hand, never regenerated
 src/*.s          sources: hello.s (symbolic), hello_num.s (numeric), exit42.s
 docs/WAVES.md    the log: what passed, what broke, why, and what is next
 docs/SHAS        the gate

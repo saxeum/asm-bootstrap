@@ -121,3 +121,14 @@ as its own phase: it changed where everything lives while changing nothing it pr
 Remaining limitation, unchanged: `mov eax,` with no operand assembles as `mov eax, 0` and
 exits 0. Number parsing needs an "at least one digit" flag, which arrives with wave 2b's
 operand handling.
+
+## Layout change: frozen oracles moved to ref/
+
+`hello`, `count10`, `fib` moved from the repository root to `ref/`, with `ref/README.md`
+stating the rule that matters: they were written by hand, so they may not be regenerated
+casually — a binary whose bytes you did not write cannot judge an assembler. `docs/SHAS`
+paths updated and re-checked.
+
+Commands quoted *above* this note were run when the files were at the root; they are left
+verbatim because the log is a record of what was executed, not a tutorial to be retconned.
+From here on the oracles are `ref/hello`, `ref/count10`, `ref/fib`.
