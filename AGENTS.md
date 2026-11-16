@@ -57,3 +57,27 @@ Repo-specific rules for `saxeum/asm-bootstrap`. Universal rules live in the glob
 | `docs/oracles.md` | what `ref/` does and does not prove |
 | `seed/README.md` | the bootstrap chain and why the seed is committed |
 | `docs/SHAS`, `docs/provenance.tsv`, `docs/toolchain.tsv`, `docs/branches.tsv` | the records |
+
+## When a build fails, triage before editing
+
+A self-hosting build has an inherent ambiguity: the same binary is both the tool and the subject, so
+a failure could be **your source edit** or **the seed you are building with**. Do not guess and do not
+start bisecting the source.
+
+```bash
+make triage
+```
+
+asks the two questions that settle it, both answered from the last commit — a state that passed every
+gate at the time it was made:
+
+1. **Can the committed seed build the committed source?** No ⇒ the seed is at fault, the last promote
+   was bad, and every earlier generation is recoverable with
+   `git show <rev>:seed/asm1`. Yes ⇒ the seed is sound and the difference is yours.
+2. **Can `asm0a` build the current source, and does it agree with the seed?** This is the only check
+   that is not self-referential. It works only while `src/asm1.s` stays inside `asm0a`'s dialect —
+   which is the practical reason to keep new syntax out of `asm1.s` until Phase 2 of the roadmap
+   forces the handover.
+
+A seed that reproduces itself proves only that it is stable, not that it is correct: a buggy stage can
+be perfectly self-reproducing. The independent builder is the only real arbiter.

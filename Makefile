@@ -19,7 +19,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-capability fixpoint bootstrap-check promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-capability fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1 (the promoted previous stage)'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
@@ -27,6 +27,7 @@ help:
 	@echo 'make test-capability  new syntax vs the old spelling: same bytes'
 	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
 	@echo 'make bootstrap-check  asm0a and seed/asm1 must agree on src/asm1.s'
+	@echo 'make triage     which is broken: your source edit, or the seed'
 	@echo 'make promote    replace seed/asm1 with the built asm1 (deliberate)'
 	@echo 'make demo       build count10 and run it'
 	@echo 'make record     rebuild and write the provenance ledger (a deliberate act)'
@@ -205,3 +206,10 @@ test-capability: asm1
 	done; \
 	printf '  capability %s/%s pairs: asm1 accepts, asm0a refuses, bytes agree\n' $$ok $(words $(CAP)); \
 	exit $$fail
+
+# ---- triage -----------------------------------------------------------------
+# A bootstrap cannot tell you whether a failed build is the source or the seed,
+# because the same binary is both the tool and the subject. Two facts settle it,
+# and both come from the last commit — a state that passed every gate when made.
+triage:
+	@./tools/triage.sh
