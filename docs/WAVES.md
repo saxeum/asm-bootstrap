@@ -3395,3 +3395,28 @@ gate is green. The three rules and the diagnostic belong to the repo either way.
 **What the next session should do, in one sentence:** build `docs/tools-diagnostic-cc.s.txt` with `asm1`,
 then bisect `docs/selfhost-slice4a-attempt.c.txt` by deleting functions from the top until the cursor
 moves — the first deletion that changes it localises the context.
+
+## The bisect, and the harness that measured the wrong file
+
+The file-level bisect ran, and its result cannot be trusted: the splitter that separates "functions" from
+"main" used `awk -F'\t'` over a source whose *indentation* is tabs, so `$2` lost a level and — worse —
+the reconstruction of "20 functions plus main" came out at **2 029 bytes of a 7 221-byte file**. Every
+"prefix compiles" result was therefore a statement about a fragment, not about the file, and the
+conclusion drawn from them ("main's body is not the trigger") is withdrawn before it reaches the roadmap.
+
+This is the sixth time this session that a measurement was true of the wrong subject: an awk that hit three
+gates, a `gsub` that renamed the wrong recipe line, a probe whose journal described a build the probe had
+broken, a revert that blamed the argspill for a buffer overflow, a `sed` that deleted 2 397 lines, and now
+a splitter that silently truncated the subject to 28% of itself. The tell is the same each time and it was
+visible each time: a number that did not fit (2 029 bytes), a count that fitted too well, a failure in a
+function the change could not reach.
+
+The rule that would have caught all six is one line earlier in `AGENTS.md` and keeps being read as advice
+rather than as a gate: **print the subject in the same breath as the result.** `2 029 of 7 221 bytes`
+would have stopped this one at the first line instead of the twentieth.
+
+Where that leaves D2: unchanged and honestly stated. The diagnostic `cc` works and localises refusals to a
+byte; the attempt's own failures need a correct way to split the file, which is four lines of shell
+(`head`/`tail` on line numbers from `grep -n '^int '`) rather than an awk that re-encodes the text.
+
+**The bisect is unfinished, and the next session starts by throwing away the splitter, not the question.**
