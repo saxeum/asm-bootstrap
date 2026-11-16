@@ -32,9 +32,10 @@ the forms we emit, which is the thing that has to stay in sync with the assemble
   operand *shape* (the `<a>`/`<t>` codes: `Z`=opcode+reg, `E`=modrm r/m, `G`=modrm reg,
   `I`=immediate, `J`=relative), and which *modes* an opcode is valid in.
 - **Cannot**: whether our ModRM/REX bits, displacement sizes and immediates are right. The
-  reference constrains the operand *shape*; the bit-level encodings still need `objdump` (an
-  independent decoder) and execution (the machine). See `docs/oracles.md` for why those are
-  different rungs.
+  reference constrains the operand *shape*; the bit-level encodings need execution (the machine)
+  and a hand-computed dump. A system disassembler is not available for this: invariant 10 of
+  `AGENTS.md` forbids it, so the decoder we may point at a byte sequence is our own
+  `src/dis.s`, and only for the branch forms. See `docs/oracles.md` for what each rung proves.
 
 ## Verified table
 
@@ -119,16 +120,19 @@ LOADALL
 
 What this standard buys, precisely: **opcode selection** (primary opcode, group `/digit`,
 alias, and the operand *shape* implied by `<a>`/`<t>`), plus **mode validity**. What it does not
-buy: any of our ModRM/REX/SIB/displacement bits, the ELF container, or the parser. It is rung 3
-of the ladder in `docs/oracles.md`, and it does not replace the decoder, the machine, or `as`.
+buy: any of our ModRM/REX/SIB/displacement bits, the ELF container, or the parser. It is one rung
+of the ladder in `docs/oracles.md`, and it does not replace the machine or a hand-computed dump.
 
 Concretely, four changes:
 
 1. **A new form's checklist is now six steps**, not five: (a) look up the reference entry and
-   record opcode + ext + operand shape in this file, (b) implement, (c) `objdump` the bytes
-   back, (d) a behavioural fixture whose *value* changes if the form is wrong, (e) byte-compare
+   record opcode + ext + operand shape in this file, (b) implement, (c) write down the expected
+   bytes yourself — a `db` dump — and compare, or for a branch form ask `./dis <site>` what the
+   bytes are, (d) a behavioural fixture whose *value* changes if the form is wrong, (e) byte-compare
    against a hand-emitted reference, (f) a mutation test where it is cheap. The lookup happens
    *before* implementation, so the encoder is written against an authority rather than recalled.
+   Step (c) used to say "`objdump` the bytes back"; that is forbidden now, which makes (c) human
+   work or ours — never a system tool's opinion.
 
 2. **A real implementation requirement surfaced: narrow-form selection.** Arithmetic and
    branch instructions have two widths, and the narrow one is only valid when the value fits:

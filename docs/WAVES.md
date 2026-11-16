@@ -213,8 +213,9 @@ jmp                           still exit 1 (2b-2, not implemented — correctly 
 ### Process result worth recording
 
 For the first time in this project **all 15 branch targets were correct on first emission**,
-because each one was decoded with objdump and compared against the intended label offset
-*before* anything was run:
+because each one was decoded and compared against the intended label offset *before* anything was
+run (with a system `objdump`: this was run before invariant 10 forbade it, and `src/dis.s` is what
+a session may use now):
 
 ```
   ok   0x376 -> 0x42a    ok   0x3be -> 0x2b3    ok   0x425 -> 0x14b
@@ -266,7 +267,8 @@ attempt did.
 All 21 branch targets in the new blocks were decoded with `objdump` and compared against the
 intended label offsets before running anything: 21/21. Combined with 2b-1's 15/15, that is 36
 consecutive hand-laid branches verified correct at emission, against six defects in the earlier
-single-block attempt. The decode-before-test step is now the standard, not an improvisation.
+single-block attempt. The decode-before-test step is now the standard, not an improvisation — and
+since `objdump` is forbidden, the tool for it is `src/dis.s` (`./dis <site> < binary`).
 
 ## Wave 2c — PASS: `inc`/`dec r32`, `jz`, `jnz`
 

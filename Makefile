@@ -20,12 +20,14 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 dis test test-asm0a test-asm1 test-dis test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 dis test test-asm0a test-asm1 test-dis test-tools test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1, then the decoder (which needs it)'
 	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
 	@echo 'make test-reject  sources that must be refused, with no output'
+	@echo 'make test-dis   decode cases: hand-written expectations, positive and negative'
+	@echo 'make test-tools  no compiler, assembler, disassembler or debugger is invoked'
 	@echo 'make test-capability  new syntax vs the old spelling: same bytes'
 	@echo 'make test-superior  inputs asm1 handles and asm0a cannot'
 	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
@@ -35,7 +37,7 @@ help:
 	@echo 'make demo       build count10 and run it'
 	@echo 'make record     rebuild and write the provenance ledger (a deliberate act)'
 	@echo 'make which FILE=f which assembler produced f (by content sha)'
-	@echo 'make check      bootstrap, shas, branch decodes, provenance'
+	@echo 'make check      forbidden tools, bootstrap, shas, branch decodes, provenance'
 	@echo 'make clean      remove generated binaries'
 all: asm1 dis
 
@@ -124,7 +126,7 @@ verify-provenance: asm1 dis
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: asm1 dis fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis verify-provenance
+check: test-tools asm1 dis fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -201,6 +203,45 @@ test-dis: dis
 	if [ $$n -lt 30 ]; then echo "  only $$n cases -- the suite has been emptied"; exit 1; fi; \
 	if [ $$ok -ne $$n ]; then echo "  dis: $$ok/$$n cases"; exit 1; fi; \
 	printf '  dis   %s/%s cases: decoded and refused as hand-written\n' $$ok $$n
+
+# ---- forbidden tools ---------------------------------------------------------
+# Invariant 10: no compiler, system assembler, disassembler, interpreter or
+# debugger in the creation OR diagnosis path. Its check used to be "by
+# inspection", and inspection failed twice: the branch gate shelled out to
+# objdump for weeks, and docs/oracles.md told the next session to do the same.
+# This is that inspection made executable -- every recipe line of this file and
+# every non-comment line of tools/*.sh, against a list of tool names.
+#
+# It is a tripwire, not a proof. `as` and `ld` are absent on purpose: two letters
+# that match inside shell code (this file already has a variable called `as`), so
+# they stay under inspection. Byte-comparison utilities -- cmp, od, xxd, sed, awk,
+# shell itself -- are not on the list: they read and compare the artifact, they do
+# not decode or translate it.
+#
+# The docs are deliberately not scanned. They have to be able to say "this was
+# done with objdump, and that is now forbidden", which is the record; what must
+# not survive is an invocation.
+FORBIDDEN := objdump|objcopy|readelf|gcc|g\+\+|clang|nasm|gas|gdb|lldb|strace|python|python3|perl|ruby|node
+test-tools:
+	@scan() { grep -v '^[[:space:]]*#' "$$1" | grep -nwE '$(FORBIDDEN)'; }; \
+	mscan() { awk '/^\t/' Makefile | grep -nwE '$(FORBIDDEN)'; }; \
+	fail=0; \
+	if [ -n "$$(mscan)" ]; then \
+	  echo '  FORBIDDEN TOOL invoked in a Makefile recipe:'; mscan | sed 's/^/    /'; fail=1; \
+	fi; \
+	for f in tools/*.sh; do \
+	  if [ -n "$$(scan $$f)" ]; then \
+	    echo "  FORBIDDEN TOOL invoked in $$f:"; scan $$f | sed 's/^/    /'; fail=1; \
+	  fi; \
+	done; \
+	tmp=$$(mktemp); trap 'rm -f $$tmp' EXIT; \
+	tool=$$(echo '$(FORBIDDEN)' | cut -d'|' -f1); \
+	printf '%s -d artifact\n' "$$tool" > $$tmp; \
+	if [ -z "$$(scan $$tmp)" ]; then \
+	  echo "  the forbidden-tool check cannot fail: '$$tool -d' was not caught"; fail=1; \
+	fi; \
+	[ $$fail -eq 0 ] && echo '  forbidden tools: none invoked in a Makefile recipe or tools/*.sh'; \
+	exit $$fail
 
 # ---- rejection parity -------------------------------------------------------
 # A positive suite cannot see a silently truncated encoding: a wrong byte is

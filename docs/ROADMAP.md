@@ -713,8 +713,9 @@ program headers.
 ## The next phase, measured rather than planned
 
 Before choosing, the question was asked in a form that could be answered: **what would rebuilding
-`asm0a` from source actually require?** `objdump` over `asm0a`'s own 3 745 bytes gives the instruction
-mix it uses, and comparing that against what `asm1` accepts gives the gap:
+`asm0a` from source actually require?** A disassembly of `asm0a`'s own 3 745 bytes (made with
+`objdump`, before invariant 10 forbade it — which is why the numbers below stay **provisional**)
+gives the instruction mix it uses, and comparing that against what `asm1` accepts gives the gap:
 
 ```
 mov 135   add 130   jmp 117   inc 107   cmp 101   je 67    call 37

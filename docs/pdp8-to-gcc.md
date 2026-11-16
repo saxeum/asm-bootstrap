@@ -237,9 +237,9 @@ Dangerous: everything that needs to be *true* rather than *plausible*. Concretel
 
 | Failure | How it looks | Defence |
 |---|---|---|
-| Hallucinated opcode/ModRM | assembles, runs, produces wrong numbers | differential test: `objdump -D -b binary` the output and compare mnemonics against the source |
+| Hallucinated opcode/ModRM | assembles, runs, produces wrong numbers | differential test: decode the output and compare mnemonics against the source — with `src/dis.s` for branch forms, and by hand for the rest, because a system disassembler is forbidden (`AGENTS.md` invariant 10) |
 | 32-bit truncation of a pointer | prints nothing, exits 0 | every pointer-form instruction tested at a real runtime address, and asserted on output bytes |
-| Header/entry mismatch | every run takes the error path | assert `readelf -h` entry *and* file size separately |
+| Header/entry mismatch | every run takes the error path | assert the four entry bytes at offset 24 with `od`, *and* file size separately — neither `readelf` nor any other ELF reader is allowed |
 | Regression in an earlier form | wave N silently breaks `count10` | accumulated corpus, byte-compared each wave |
 | "It worked" from exit status | silent success | assert on bytes, never on `$?` |
 

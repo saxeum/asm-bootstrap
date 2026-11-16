@@ -170,8 +170,10 @@ file = 120 + 0x220 = 664 bytes
 
 1. **`4D 39 EB` instead of `4C 39 EB`** at `cmp rbx, r13` (two sites). REX.B extends the *rm*
    field; `rbx` is not an extended register, and `r13` is in the *reg* field, so only REX.R
-   is set. With B=1 the instruction compared `r11` against `r13` — objdump said
-   `cmp %r13,%r11`, which is how it was caught.
+   is set. With B=1 the instruction compared `r11` against `r13` — a decode said
+   `cmp %r13,%r11`, which is how it was caught. (It was a system `objdump`, at a time when that
+   was allowed; `src/dis.s` is the decoder a session may use now, and it does not cover `4C 39 EB`,
+   so this defect class is caught by a hand-computed dump or by running the code.)
 2. **`mov [r15], al` is 3 bytes, not 4.** My offset table counted `REX opcode modrm` as four.
    Two of them made the table 2 bytes earlier than planned, so `TABLE` was at 0x188, not
    0x18A, and every later offset was wrong.

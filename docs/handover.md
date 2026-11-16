@@ -74,9 +74,10 @@ next. Every one was displacement or REX arithmetic:
 6. `sub rdx,r14` written `4d 29 f2` — REX.B for `rdx`, so `sub rdx,r10`.
 
 The pattern is not "six mistakes", it is **one mistake repeated**: hand-computing byte offsets
-across a 441-byte region with variable-length instructions. `objdump` caught every one, and
+across a 441-byte region with variable-length instructions. Decoding caught every one, and
 caught nothing before it was emitted — which is the general lesson: hand-laid code is verified
-by decoding it and executing it, never by re-reading the arithmetic.
+by decoding it and executing it, never by re-reading the arithmetic. (The decoder used then was
+a system `objdump`; that is forbidden now, and `src/dis.s` is what replaces it for branch forms.)
 
 Consequence: 2b gets **re-emitted from one coherent layout**, smallest-possible blocks, sizes
 asserted at every boundary, and every branch target checked against the label it should reach
@@ -188,10 +189,11 @@ displacements:
 | **2d** | split four ways. **2d-1 DONE** (8-bit register class, `mov r8,imm8`, `movzx r32,r8`). **2d-2 DONE** (`inc`/`dec r8`). **2d-3 DONE** (`cmp`/`add` on r8, `jb`, and the shared range-checked number parser). **2d-4 DONE** (memory operands with SIB/disp8, `lea`, `mov byte [mem],imm8`). **2d-5 DONE** (`div r8`, `sub r64,r64`) — `src/count10.s` reproduces `ref/count10` byte-for-byte. **numeric `db` DONE** (2d-6). **`mov r32,[mem]` DONE** (2d-7). **load/store DONE** (2d-7, 2d-8); `mov r32,r32` DONE (2d-9). The self-hosting blocker set has shrunk from eight forms to one and a half: `cmp r32,imm32` **DONE** (2d-10, after fixing a stack imbalance: a tail jump out of a called routine left rsp 8 bytes low, which shifted do_br's stack-relative scratch and label table). **rel32 branches DONE** (2d-12). **Nothing blocks `asm1.s`**, and its core problem — reading and branching on input without `movzx [mem]`, disp>127 or `mov r64,r64` — is proven in `src/window.s`: 4-byte windows + `cmp imm32`, moving pointers via `lea`, buffers addressed through `rsp`. `lea` covers pointer arithmetic and register moves; 4-byte loads plus a 32-bit compare cover mnemonic matching, so `movzx [mem]`, `mov r64,r64`, `add r32,*`, `test r32,r32` and `sub r32,imm` are no longer needed. Remaining for `asm0a.s`: `entry`, hex literals, extended registers r8d–r15d, `mov r64,imm32` (`C7 /0`), 64-bit `add/sub/cmp/test/inc/dec`, disp32 memory, and rel32 jumps — `asm0a`'s own code uses all of these. `test`/`imul` are for `fib` (wave 3) | `src/count10.s` → `ref/count10` (`e61a23c9…`), then `asm0a.s` self-hosts |
 
 And the process fix that matters more than the split: after emitting each block, **decode every
-branch in it with `objdump` and compare its target against the intended label offset**, as a
-mechanical check, before appending the next block. Six of six 2b defects were displacement or
-REX arithmetic that decoding would have caught immediately; none were caught by re-reading the
-hex.
+branch in it and compare its target against the intended label offset**, as a mechanical check,
+before appending the next block. Six of six 2b defects were displacement or REX arithmetic that
+decoding would have caught immediately; none were caught by re-reading the hex. The decoder for
+this is `src/dis.s` (`./dis <site> < binary`, one site per run); at the time it was written the
+only decoder available was a system `objdump`, which invariant 10 now forbids.
 
 ## Next: rel32 branches (the last item before `asm1.s`)
 

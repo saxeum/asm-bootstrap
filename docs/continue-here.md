@@ -24,10 +24,11 @@ records.
 make clean && make && make check
 ```
 
-`make check` must print, in order: fixpoint holds · bootstrap NOT APPLICABLE · 11/11 rejections ·
-5/5 exact messages · 28/28 capability pairs · 3/3 superior · **38/38 decoder cases** · 35 provenance
-records · SHAS match · `asm1.sha` match · and a real **`branch pins: 290/290`** line naming both the
-subject's sha and the decoder's. If any line is missing or red, stop and fix that first.
+`make check` must print, in order: **forbidden tools: none invoked** · fixpoint holds · bootstrap NOT
+APPLICABLE · 11/11 rejections · 5/5 exact messages · 28/28 capability pairs · 3/3 superior ·
+**38/38 decoder cases** · 35 provenance records · SHAS match · `asm1.sha` match · and a real
+**`branch pins: 290/290`** line naming both the subject's sha and the decoder's. If any line is
+missing or red, stop and fix that first.
 
 Two traps that have each cost a session:
 

@@ -55,36 +55,56 @@ This is not a new discovery: Weyuker's *On Testing Non-Testable Programs* (Compu
 cannot be specified independently of the program itself. An assembler's expected output is
 exactly that: the expected bytes are produced by the same understanding as the encoder.
 
-Four things break the circularity, in increasing independence:
+Things that break the circularity, in decreasing strength — and the list is shorter than it
+was, because invariant 10 of `AGENTS.md` forbids the tools that supplied the middle rungs. A
+tool that translates or decodes the artifact cannot judge it, however useful a second opinion
+it would be.
 
 1. **Execution.** The CPU does not care what I believe. `ref/hello` prints `Hello, World!`
    and `ref/jmp` exits 7 — so those bytes *mean* what we think they mean. Narrow caveat: only
    the executed path is validated, and a wrong encoding that happens to behave correctly
    would slip through. But this is the strongest independence available here, and it is why
    every reference is *run* before it is hashed, never merely hashed.
-2. **An independent decoder.** `objdump` says which instruction the bytes are, using someone
-   else's tables. It shares lineage with the CPU vendor's ISA, but not with my code.
-3. **An independent opcode authority.** `ref.x86asm.net`'s XML reference, queried by
-   `<opcd_ext>`, says which primary opcode and group extension belong to each mnemonic and
-   operand shape. Stronger than objdump for "is this the *canonical* opcode for this form".
-   All 29 forms we emit are checked against it in `docs/encodings.md`, 0 problems — including
-   the finding that our first query matched `LOADALL` rather than `SYSCALL` for `0F 05`
-   because that opcode is mode-dependent. Limitation: it constrains operand *shape*, not our
-   ModRM/REX/disp bits.
-4. **An independent encoder.** Assembling the same fixture with GNU `as` and comparing is the
-   strongest remaining check and does **not** violate the build rule — `as` never touches an
-   artifact, it only produces a second opinion in the verification path. Limitation: our
-   dialect differs from `as` syntax, so this is per-fixture and partly manual.
-5. **Self-hosting.** `asmN.s` assembled by `asmN` must equal `asmN`. Once wave 3 lands, this
-   is the cheapest strong signal, and it is exactly GCC's `stage2`/`stage3` comparison.
 
-Plus two cheap ones that make the *gates* honest rather than the oracle:
+2. **Hand-computed bytes.** `db 184, 255, 255, 255, 255` written *before* the encoder for
+   `mov eax, -1`, and the capability pairs that compare a new spelling against a hand-written
+   dump of the expected body. The expected bytes come from a person reading the encoding, not
+   from code in this repo. It does not scale and it is the only rung that is fully independent.
+
+3. **An opcode authority.** `ref.x86asm.net`'s XML reference, queried by `<opcd_ext>`, says
+   which primary opcode and group extension belong to each mnemonic and operand shape — the
+   canonical opcode for a form, with no vote from my code. All 29 forms we emit are checked
+   against it in `docs/encodings.md`, 0 problems, including the finding that our first query
+   matched `LOADALL` rather than `SYSCALL` for `0F 05` because that opcode is mode-dependent.
+   Limitation: it constrains operand *shape*, not our ModRM/REX/disp bits.
+
+4. **Our own decoder, `src/dis.s`.** For the branch forms it says what the bytes at an offset
+   are, and `make check` requires it to agree with all 290 recorded pins. It was written here,
+   so it is a *consistency* check between encoder and decoder, not an independent one — a
+   shared misunderstanding of `rel8` would hide in both. Its coverage is exactly `EB`, `E9`,
+   `E8`, `70`–`7F`, `0F 80`–`0F 8F`, and nothing else.
+
+5. **Self-hosting.** `asmN.s` assembled by `asmN` must equal `asmN`. The cheapest strong
+   signal, and it is exactly GCC's `stage2`/`stage3` comparison. It proves stability, not
+   correctness: a buggy stage can be perfectly self-reproducing.
+
+Two cheap ones that make the *gates* honest rather than the oracle:
 
 6. **Mutation testing.** Corrupt one byte of the encoder table and confirm the corpus fails.
-   A gate that cannot be made to fail is a format check wearing a gate's costume. We did this
-   once, for `docs/SHAS` (`hello: FAILED` after a one-byte flip), and not yet for the encoder.
+   A gate that cannot be made to fail is a format check wearing a gate's costume. Done for
+   `docs/SHAS` (a one-byte flip), for the branch gate (a corrupted pin and a corrupted
+   subject, both recorded in `docs/WAVES.md`), and for `make test-tools`.
+
 7. **Coverage assertion.** Every supported form must appear in at least one fixture. Without
    it, adding a form adds untested code that the corpus silently ignores.
+
+**Gone, and not coming back:** a system disassembler (`objdump`) and a system assembler
+(`as`). Earlier waves used both and this document ranked them above everything except
+execution; they are now forbidden by invariant 10, which is the same rule that made the branch
+gate legitimate again. The replacement for `objdump` is `src/dis.s`, which is rung 4 — weaker,
+and ours. The replacement for `as` is nothing: a second assembler would have to be written
+here, and writing it would not make it independent either.
+
 
 ## What the PDP-8 people (and their predecessors) used
 
@@ -111,7 +131,10 @@ Nobody had a proof. They had layered redundancy and the machine as final judge.
   reason an assembler's bugs surface as "the editor won't assemble".
 - **Differential testing across implementations.** PAL-X (Bob Bowering, PDP-10 → PDP-8) and
   AECL's PAL8 (CDC 6600 → PDP-8) had to agree with DEC's native assembler or they were
-  useless. That is our rung 3, done because cross-assembly made it necessary.
+  useless. That is the `asm0a`-against-`seed/asm1` cross-check this project had until the
+  handover, and it is evidence *about the two implementations*, not proof that either is right:
+  `asm0a` assembles `and` as `add` (`AGENTS.md`). The cross-check ended when `asm0a` could no
+  longer parse the source, which is why it is not on the ladder above any more.
 - **Self-hosting.** PAL-III was "hacked up … from PAL II"; later DEC assemblers were
   assembled by their predecessors. The bootstrap chain *is* the long-run oracle.
 - **Earlier still.** EDSAC's Initial Orders II was written in the notation it implemented and
@@ -139,8 +162,10 @@ Nobody had a proof. They had layered redundancy and the machine as final judge.
 2. The gate for each wave is: byte comparison **and** a runtime assertion **and** a
    demonstrated failure (mutation or negative test).
 3. `docs/SHAS` is checked from a clean tree; a wave is not "kept" until it passes.
-4. Independence is added deliberately where it is cheap: `objdump` on every new encoding,
-   GNU `as` as a second opinion where the syntax maps, and the fixpoint once wave 3 exists.
+4. Independence is added deliberately where it is *allowed*: execution, hand-computed dumps,
+   the opcode reference, `src/dis.s` for branch forms, and the fixpoint. Not a system
+   disassembler and not a system assembler — invariant 10 rules both out, which is why the
+   list above got shorter rather than longer.
 
 ## References
 
@@ -173,21 +198,37 @@ The gate has teeth: a mutation that produces a plausible, running, wrong binary 
 byte comparison at the first wrong byte. This is the check that "a gate must be able to fail"
 demands, and it is now recorded rather than assumed.
 
-Note what it does *not* prove: that the unmutated table is **right**. For that, the
-independence ladder above applies — execution (`ref/hello` prints), a decoder (`objdump`), an
-independent encoder (`as`), and eventually the fixpoint.
+Note what it does *not* prove: that the unmutated table is **right**. For that, the ladder
+above applies — execution (`ref/hello` prints), hand-computed dumps, the opcode reference,
+`src/dis.s` for branch forms, and the fixpoint. The two rungs that used to sit between them (a
+system disassembler and a system assembler) are gone: this project may not use them.
 
 ## Audit of the existing references (before wave 2b)
 
 The concern raised by this document is *sufficiency*, not validity. This is the check that the
 existing references are at least **valid** — that no wave is standing on a bad floor.
 
+**The `independent decode` column below was produced with `objdump`, in wave 2b, before
+invariant 10 forbade it. It is kept as a record of an audit that was made, and it is not
+reproducible: there is no site list for these files, so `src/dis.s` cannot be pointed at them,
+and nothing else here can decode a non-branch instruction.** The `execution` column is the one
+that can be re-run, and it is the stronger one:
+
 ```
-$ for f in hello count10 fib jmp; do objdump -D -b binary -m i386:x86-64 \
-      --start-address=120 ref/$f; done
+./ref/hello
 ```
 
-| ref | independent decode | execution |
+prints `Hello, World!`; `./ref/count10` prints `1` through `10`, one per line;
+
+```
+./ref/jmp
+```
+
+exits 7, where 99 would mean the jump had been dropped; and `./ref/fib` with no argument exits
+2 with `fib: need an integer 0..93` on stdout. Those four are the rungs this audit actually
+stands on.
+
+| ref | independent decode (objdump, wave 2b — historical, not re-runnable) | execution (re-runnable) |
 |---|---|---|
 | `ref/hello` | 8 instructions as designed (`mov eax,1` … `xor edi,edi` … `syscall`) | prints `Hello, World!` |
 | `ref/count10` | loop as designed, from `mov bl,1` through `lea 0x1(%rsp),%rsi` | prints `1 2 3 4 5 6 7 8 9 10` |
@@ -209,9 +250,9 @@ invoked with no argument and its main path runs otherwise; `ref/jmp` never execu
 `mov edi,99` (it is jumped over), but that is the same form as `mov edi,7`, which does run.
 So the corpus validates *forms* by execution even where it does not validate every instance.
 
-**Verdict: no restart required.** The references are valid — decoded by an independent
-disassembler and confirmed by running them. What this document rejects is the stronger claim
-that they make the assembler *correct*, and that rejection stands unchanged.
+**Verdict: no restart required.** The references are valid — each was confirmed by *running* it,
+which is the rung that remains open. What this document rejects is the stronger claim that they
+make the assembler *correct*, and that rejection stands unchanged.
 
 Residual risks that continue with us, and where each is addressed:
 
@@ -221,4 +262,4 @@ Residual risks that continue with us, and where each is addressed:
 | forms not yet exercised | each new form gets a fixture **and** a behavioral assertion |
 | shared-authorship bias on new forms | `ref/jmp` is built so bytes and behaviour disagree (7 vs 99) |
 | `asm0a` error paths coarse (`mov eax,` → `mov eax,0`, exit 0) | recorded as a defect; fixed with 2b's operand handling |
-| ELF header judged by one kernel on one machine | accepted for now; `readelf` is the second opinion |
+| ELF header judged by one kernel on one machine | accepted for now; the entry field is asserted as four bytes at offset 24 with `od`, which is the check that exists |
