@@ -183,6 +183,17 @@ jmp.l pu8
 d_a:
 cmp al, 97              ; 'a'  add r8,imm8: 80 /0, with the al special case
 jnz.l d_c
+movzx edx, byte [rbx+6]  ; delimiter third => the name was 2 chars: 8-bit
+cmp dl, 44
+jz.l padd8
+cmp dl, 32
+jz.l padd8
+mov eax, 0              ; add r32,r32: 01 /r
+mov [rbp+44], eax
+mov eax, 1
+mov [rbp+48], eax
+jmp.l prr
+padd8:
 mov eax, 128
 mov [rbp+44], eax
 mov eax, 0
