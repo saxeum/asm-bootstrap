@@ -1171,3 +1171,60 @@ When `asm0a` exits 1 it does not say which line. Truncating the source at every 
 appending stubs for any labels not yet defined localises the offending line in one loop — the
 stubs also collapse long jumps, which separates "bad form" from "out of range". That is what
 identified defect 3.
+
+## asm1.s step 3 blocked: the dialect has no arithmetic
+
+Step 3 is "recognise `syscall`, `mov r32,imm32` and `db`, emit them". Recognising is fine; *parsing
+the number* is not. `mov eax, 1` requires turning the digits `1` into the byte `0x01`, and that
+needs arithmetic the dialect does not have:
+
+```
+add eax, ecx            rejected
+add eax, 10             rejected     (only add r8,imm8 exists)
+imul eax, ecx, 10       rejected
+shl eax, 1              rejected
+lea eax, [eax+eax]      rejected     (no [base+index] form)
+test eax, eax           rejected
+mov [rsp+16], ebp       accepted     (-+ these work)
+mov eax, [rsp+16]       accepted
+inc eax / dec eax       accepted
+```
+
+`asm0a`'s own number parser is `imul $0xa,%ecx,%ecx` followed by `add %eax,%ecx` — two
+instructions it uses in its machine code and never exposes to its source language.
+
+### Why no trick gets around it
+
+`inc` alone cannot add two *values*: `10x` would need `x` added to itself nine times, and there is
+no form that reads two registers. Memory does not help either — there is no `add [mem],reg` and no
+indexed addressing, so `value` cannot be accumulated anywhere. A table of powers of ten does not
+help, because combining `10*d1` with `d2` is still an addition. The only escape would be a language
+where immediates are single digits, which cannot express `4000` — and `asm1.s` needs `4000`.
+
+**This is not a defect in `asm1.s`. It is the next item in the minimal dialect**, and it is the same
+discovery shape as wave 2d-13: the bootstrap keeps telling us exactly which forms it needs, one at a
+time.
+
+### The minimal form to add
+
+`add r32, r32` (`01 /r`). Smallest of the candidates, because `do_add` already exists for
+`add r8,imm8`: the change is a branch after the destination register is parsed — if the operand is a
+register, emit `01` then `modrm = 0xC0 | dst<<3 | src`; otherwise fall through to the existing
+`80 /0 ib` path. Then `10x` is four `add`s with two temporaries:
+
+```
+mov ecx, edx            ; x
+add ecx, edx            ; 2x
+add ecx, ecx            ; 4x
+add ecx, ecx            ; 8x
+add ecx, edx            ; 10x  -- wait: edx was clobbered? no: 2x+8x needs x*2 kept
+```
+
+Correctly: `ecx = edx` (x); `add edx, edx` (2x); `add ecx, ecx` (2x); `add ecx, ecx` (4x);
+`add ecx, ecx` (8x); `add ecx, edx` (10x) — three temporaries' worth of bookkeeping but only the
+one new form.
+
+`imul r32, r32, imm8` (`6B /r ib`) would do it in one instruction and is the alternative, at the
+cost of a new mnemonic in the dispatch chain rather than a new branch inside an existing handler.
+
+Status: **not yet landed.** Step 3 of `asm1.s` waits on it.

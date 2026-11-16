@@ -152,7 +152,9 @@ About 600–800 instructions. Build it in the order that keeps it runnable at ev
    identical to `sed 's/;.*//'` and 16/16 fixtures round-trip. See `docs/WAVES.md`. Blank lines are
    *kept*, not dropped: dropping them needs a "line has content" flag, and a flag cannot live in
    `rcx` across a syscall. Keeping them costs nothing — the parser ignores them.
-3. **emit one hard-coded instruction per matched mnemonic**: recognise `syscall`, `mov r32,imm`,
+3. **BLOCKED pending `add r32, r32` in `asm0a` — the dialect has no arithmetic, so no number can be
+   parsed.** See `docs/WAVES.md`, "asm1.s step 3 blocked". Once that lands: **emit one hard-coded
+   instruction per matched mnemonic**: recognise `syscall`, `mov r32,imm`,
    `db` and emit them. Testable: assemble a 3-line source and compare with `asm0a`'s output.
 4. **labels + pass 2**: assemble something with a forward jump.
 5. **the rest of the mnemonic set**, one at a time, each verified against `asm0a` on the same
@@ -162,3 +164,27 @@ About 600–800 instructions. Build it in the order that keeps it runnable at ev
 Step 5 is the point where the oracle changes: from then on, each new form is verified by
 `asm0a` and `asm1` agreeing byte for byte on the same source, which is a *differential test between
 two independent implementations* rather than against a hand-emitted fixture.
+
+
+## The minimal dialect, derived
+
+Every entry below was demanded by a concrete step of `asm1.s`, not guessed. That is the useful
+output of the bootstrap: the language shrinks to exactly what a self-hosting assembler needs.
+
+| form | why `asm1.s` needs it | status |
+|---|---|---|
+| `mov r32,[mem]`, `mov [mem],r32`, `mov r8,[mem]` via `movzx` | read and buffer input | have |
+| `movzx r32, byte [mem]` | scan text: find `'\n'`, `';'`, digits | **added, 2d-13** |
+| `movzx r32, r8` | digit → value (`sub al, 0x30` after) | have |
+| `cmp r8,imm8`, `cmp r32,imm32` | every dispatch decision | have |
+| `lea r32/r64,[base+disp8]` | moving pointers, table base | have |
+| `jmp`/`jz`/`jnz`/`jb` rel8 + `.l` rel32 | loops, and forward jumps beyond ±127 | have |
+| `mov [mem],r8` / `mov r32,[mem]` | pending byte, little-endian number | have |
+| `inc`/`dec r32` | counters, pointer advance | have |
+| **`add r32, r32`** | **decimal parsing: `value*10 + digit`** | **missing — next** |
+| `syscall`, `xor r32,r32`, `sub r64,r64` | I/O, exit, length arithmetic | have |
+| `div r8` | not needed yet; the plan assumes no division | spare |
+
+Not needed, and deliberately absent: `imul`, `shl`, `and`, `or`, `test`, indexed addressing, disp32
+memory, `mov r64,r64`. Each absence is a form `asm1.s` must be written without, which is why the
+register allocation is so tight: eight registers, and `rcx`/`r11` are unusable across a syscall.
