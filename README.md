@@ -55,6 +55,49 @@ chmod +x asm1b && ./asm1b < src/count10.s | cmp - ref/count10 && echo identical
 Three generations deep, it still reproduces the hand-emitted oracle exactly, and the binary it
 produces prints `1`…`10`.
 
+
+## Provenance: which assembler built this?
+
+`asm0a` is frozen, and from here on only `src/asm1.s` moves — so `asm1` changes, and an artifact is
+only meaningful together with *which build of which assembler* produced it. "asm1" identifies
+nothing once asm1 has been rebuilt, so every record is a sha256 pair.
+
+`docs/provenance.tsv` — one line per artifact per assembler:
+
+```
+addr32  734b5a48…  asm0a  6271c5ee…       artifact sha, assembler, assembler sha
+addr32  734b5a48…  asm1   250e02c9…
+```
+
+`docs/asm1.sha` pins the sha256 of the current `asm1`, so the build is identified as a *content*
+claim rather than by name.
+
+```bash
+make record
+```
+
+rebuilds everything and rewrites both files. It is the only thing that writes them — recording is an
+assertion that a change is intended, and a build step that absorbed drift silently is exactly how a
+stale record goes unnoticed.
+
+```bash
+make which FILE=count10
+```
+
+answers the question directly, by looking the file's content sha up in the ledger:
+
+```
+  count10  sha256 e61a23c9ef326d27...
+    built by asm0a (sha256 6271c5ee79034ffd) as count10
+    built by asm1 (sha256 250e02c95d3adbb3) as count10
+```
+
+Unknown content exits non-zero rather than saying nothing.
+
+`make check` now verifies four things, and each can fail: the pinned artifact shas, that this `asm1`
+is the recorded one, that the ledger reproduces exactly, and that every pinned branch decodes as
+recorded. If `src/asm1.s` is edited and the ledger is not re-recorded, `make check` says so and
+names the command to fix it.
 ## State
 
 | | |

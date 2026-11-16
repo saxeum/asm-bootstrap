@@ -7,49 +7,38 @@
 # The comparison is the point. A rule that only checked an exit status would
 # pass on an assembler that emitted garbage and returned 0, and would pass
 # hardest when the assembler was missing entirely.
-
 .DEFAULT_GOAL := all
-
 ASM0A := ./asm0a
 ASM1  := ./asm1
-
 # src/<name>.s assembles to ref/<name>
 PAIRS := addr32 callret cmp32 cmp8 count10 dbnum inc8 jmp jz load loop movrr \
          r8 rel32 stack store
-
 # src/hello_num.s assembles to the hand-written ref/hello
 HELLO := hello_num
-
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
-
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-
 .PHONY: all bootstrap asm1 test test-asm0a test-asm1 fixpoint demo check clean help
-
 help:
 	@echo 'make            build asm1 from the hand-emitted asm0a'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
 	@echo 'make fixpoint   asm1(asm1.s) must equal asm0a(asm1.s), byte for byte'
 	@echo 'make demo       build count10 and run it'
-	@echo 'make check      pinned shas and branch decodes'
+	@echo 'make record     rebuild and write the provenance ledger (a deliberate act)'
+	@echo 'make which FILE=f which assembler produced f (by content sha)'
+	@echo 'make check      pinned shas, branch decodes, provenance'
 	@echo 'make clean      remove generated binaries'
-
 all: asm1
-
 bootstrap:
 	@printf '  asm0a %s bytes  sha %s  (hand-written machine code; nothing to build)\n' \
 	  "$$(wc -c < $(ASM0A))" "$$(sha256sum $(ASM0A) | cut -c1-16)"
-
 asm1: src/asm1.s $(ASM0A)
 	@$(ASM0A) < src/asm1.s > $@
 	@chmod +x $@
 	@printf '  asm1  %s bytes  sha %s  (built by asm0a from src/asm1.s)\n' \
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)"
-
 # ---- the fixtures, assembled by each assembler ------------------------------
 test: test-asm0a asm1 test-asm1
-
 test-asm0a:
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(PAIRS); do \
@@ -69,7 +58,6 @@ test-asm0a:
 	done; \
 	printf '  asm0a  %s/%s oracles reproduced\n' $$ok $(TOTAL); \
 	exit $$fail
-
 test-asm1: asm1
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(PAIRS); do \
@@ -89,7 +77,6 @@ test-asm1: asm1
 	done; \
 	printf '  asm1   %s/%s oracles reproduced\n' $$ok $(TOTAL); \
 	exit $$fail
-
 # ---- the fixpoint -----------------------------------------------------------
 fixpoint: asm1
 	@$(ASM1) < src/asm1.s > asm1b
@@ -99,19 +86,32 @@ fixpoint: asm1
 	else \
 	  echo '  FIXPOINT BROKEN: the second generation differs'; cmp -l asm1 asm1b | head -5; exit 1; \
 	fi
-
 demo: asm1
 	@$(ASM0A) < src/count10.s > count10
 	@chmod +x count10
 	@printf '  count10 (built by asm0a): '; ./count10 | tr '\n' ' '; echo
 	@$(ASM1) < src/count10.s > count10
 	@printf '  count10 (built by asm1):  '; ./count10 | tr '\n' ' '; echo
-
-check:
-	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: all pinned artifacts match"
-	@./tools/check-branches.sh > /dev/null && echo "  branches: all pinned sites decode as recorded"
-	@./tools/check-branches.sh --selftest > /dev/null && echo "  branches: the checker rejects known-bad sites"
-
+# ---- provenance -------------------------------------------------------------
+# asm0a is frozen and only src/asm1.s moves, so every artifact is attributable to
+# a specific assembler binary by sha256. The ledger is written only by `record`:
+# recording asserts a change is intended, and a build step that absorbed drift
+# silently is exactly how a stale record would go unnoticed.
+record: asm1
+	@./tools/provenance.sh record
+verify-provenance: asm1
+	@./tools/provenance.sh verify
+which: asm1
+	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
+	@./tools/provenance.sh which $(FILE)
+check: asm1 verify-provenance
+	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
+	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
+	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
+	  || { echo "  asm1 DOES NOT MATCH docs/asm1.sha -- the assembler changed"; \
+	       echo "  if that is intended: make record"; exit 1; }
+	@./tools/check-branches.sh > /dev/null && echo "  branches: pinned sites decode as recorded"
+	@./tools/check-branches.sh --selftest > /dev/null && echo "  branches: checker rejects known-bad sites"
 clean:
 	@rm -f asm1 asm1b count10
 	@echo '  removed asm1, asm1b, count10'
