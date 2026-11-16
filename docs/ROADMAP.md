@@ -660,3 +660,26 @@ Three encoding details that a hand-computed dump forces you to get right, and al
 
 Remaining in item 6: `r8`–`r15` (REX.B/R/X across every emit site — the last machinery change) and
 scale factors `*2`/`*4`/`*8`.
+
+### A third stopped attempt: message *reasons*
+
+Tried to make the rejection message say *what* — `line 1: range` / `line 1: label` / `line 1:
+rejected` — by setting a reason code in `chklim` and in the symbol lookup, and branching in `msg`.
+It worked for two of three cases: `db nosuch` said `label`, `frobnicate` said `rejected`.
+
+Then `mov bl, 300` **exited 0**. A range check that stops rejecting out-of-range immediates is not a
+cosmetic failure, and it was introduced by inserting two lines into `chklim` at a computed offset —
+the insertion landed inside the flag-dependent sequence, so the `sub`/`jb` pair no longer decided
+anything.
+
+Reverted. `asm1` is 6 561 bytes, 18/18, fixpoint, and `mov bl, 300` is refused with a line number
+again.
+
+The score for this session's positional edits: five attempts, five failures, every one caught by a
+test within one command. The method that works is not in doubt — whole-block replacement anchored on
+a label — and this attempt used it for `msg` (which worked) and then abandoned it for `chklim`
+(which did not).
+
+Deferred with the rest: message reasons, `r8`–`r15` with REX, and scale factors. The reason codes need
+a slot that survives `putch` and `msg`, and every four-byte slot within `disp8` is already in use —
+worth solving once, deliberately, rather than by borrowing `[rbp+92]` from the branch opcode.
