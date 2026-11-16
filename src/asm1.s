@@ -55,6 +55,8 @@ mov eax, 0
 mov [rbp+16], eax
 mov [rbp+20], eax
 mov [rbp+80], eax
+mov ecx, 1
+mov [rbp+120], ecx
 lea rbx, [rbp+1]
 mov ecx, 300001
 sub rbx, rcx
@@ -355,6 +357,9 @@ psp:
 lea rbx, [rbx+1]
 jmp.l pline
 peol:
+mov eax, [rbp+120]
+inc eax
+mov [rbp+120], eax
 lea rbx, [rbx+1]
 jmp.l pline
 pcom:
@@ -364,6 +369,9 @@ jz.l pdone
 lea rbx, [rbx+1]
 cmp al, 10
 jnz.l pcom
+mov eax, [rbp+120]
+inc eax
+mov [rbp+120], eax
 jmp.l pline
 pdone:
 ret
@@ -881,12 +889,12 @@ movzx eax, byte [rbp+16]
 cmp al, 0
 jnz.l pline
 mov eax, [rbp+80]
-cmp eax, 128
+cmp eax, 256
 jb.l lok
 jmp.l fail
 lok:
 lea rcx, [rbp+1]
-mov esi, 2049
+mov esi, 3861
 sub rcx, rsi
 mov edx, [rbp+80]
 lget:
@@ -945,7 +953,7 @@ call emital
 jmp.l pline
 pbr1:
 lea rcx, [rbp+1]
-mov esi, 2049
+mov esi, 3861
 sub rcx, rsi
 mov edx, [rbp+80]
 lfind:
@@ -1028,12 +1036,13 @@ movzx eax, byte [rbp+39]
 call emital
 jmp.l pline
 fail:
+call msg
 mov eax, 60
 mov edi, 1
 syscall
 lku:
 lea rcx, [rbp+1]
-mov esi, 2049
+mov esi, 3861
 sub rcx, rsi
 mov edx, [rbp+80]
 lkul:
@@ -1272,4 +1281,93 @@ mov eax, 0
 sub rax, rcx
 mov ecx, eax
 nl_ret:
+ret
+
+putch:
+mov [rbp+124], al
+mov eax, 1
+mov edi, 2
+lea rsi, [rbp+124]
+mov edx, 1
+syscall
+ret
+
+msg:
+mov eax, 108
+call putch
+mov eax, 105
+call putch
+mov eax, 110
+call putch
+mov eax, 101
+call putch
+mov eax, 32
+call putch
+mov ecx, [rbp+120]
+mov bl, 10
+lea rdx, [rbp+100]
+mov esi, 5
+dgl:
+mov eax, ecx
+div bl
+movzx edi, ah
+mov [rdx], edi
+movzx ecx, al
+lea rdx, [rdx+4]
+dec esi
+jnz.l dgl
+mov eax, 0
+mov [rbp+88], eax
+mov eax, [rbp+116]
+call prd
+mov eax, [rbp+112]
+call prd
+mov eax, [rbp+108]
+call prd
+mov eax, [rbp+104]
+call prd
+mov eax, [rbp+100]
+call prd
+mov ecx, [rbp+88]
+cmp ecx, 0
+jnz.l mnex
+mov eax, 48
+call putch
+mnex:
+mov eax, 58
+call putch
+mov eax, 32
+call putch
+mov eax, 114
+call putch
+mov eax, 101
+call putch
+mov eax, 106
+call putch
+mov eax, 101
+call putch
+mov eax, 99
+call putch
+mov eax, 116
+call putch
+mov eax, 101
+call putch
+mov eax, 100
+call putch
+mov eax, 10
+call putch
+ret
+
+prd:
+cmp eax, 0
+jnz.l prp
+mov ecx, [rbp+88]
+cmp ecx, 0
+jz.l prx
+prp:
+mov esi, 1
+mov [rbp+88], esi
+add al, 48
+call putch
+prx:
 ret

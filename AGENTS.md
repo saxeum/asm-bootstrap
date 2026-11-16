@@ -100,3 +100,22 @@ in four ways that this repo mirrors (`docs/pdp8-to-gcc.md` has the sources):
 
 What none of it catches is a deliberately miscompiling tool (Thompson, 1984). When `src/asm1.s`
 outgrows `asm0a`, only 2–4 remain, which is exactly DEC's position.
+
+## The handover has happened
+
+`src/asm1.s` needs more labels than `asm0a`'s frozen limit allows, so **`asm0a` can no longer build
+the assembler** and `make bootstrap-check` reports NOT APPLICABLE. That is by design, and it removes
+the independent cross-check from this point on.
+
+What holds the toolchain up instead, in order of strength:
+
+1. `ref/` — hand-emitted binaries, written before the tool that reproduces them existed.
+2. `tests/reject` + `tests/capability` + `tests/superior` — refusals, new-syntax equivalence, and
+   inputs `asm0a` cannot handle, each with its own oracle.
+3. `make fixpoint` — the new stage reproduces itself.
+4. `seed/asm1` + `docs/toolchain.tsv` — the chain of promotions, every earlier generation recoverable
+   with `git show <rev>:seed/asm1`.
+
+A raising of a limit that a *builder* has to honour needs a bootstrap step: raise the limit, promote
+that intermediate, and only then write source exceeding the old limit. Reversed, nothing can build
+the result.

@@ -19,7 +19,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-reject-msg test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1 (the promoted previous stage)'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
@@ -47,7 +47,7 @@ asm1: src/asm1.s $(SEED)
 	@chmod +x $@
 	@printf '  asm1  %s bytes  sha %s  (built by %s from src/asm1.s)\n' \
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(SEED)"
-test: test-asm0a asm1 test-asm1 test-reject test-capability test-superior
+test: test-asm0a asm1 test-asm1 test-reject test-reject-msg test-capability test-superior
 test-asm0a:
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(PAIRS); do \
@@ -113,7 +113,7 @@ verify-provenance: asm1
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: asm1 fixpoint bootstrap-check test-reject test-capability test-superior verify-provenance
+check: asm1 fixpoint bootstrap-check test-reject test-reject-msg test-capability test-superior verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -239,3 +239,17 @@ test-superior: asm1
 	  echo "  the binary built from the big source exited $$got, wanted 42"; fail=1; \
 	fi; \
 	exit $$fail
+
+# asm1 says WHICH line it rejected; asm0a exits in silence. The reject suite has
+# always required zero stdout -- now it also requires the message, because a
+# refusal nobody can locate is only half a refusal.
+test-reject-msg: asm1
+	@fail=0; \
+	for f in tests/reject/*.s; do \
+	  err=$$($(ASM1) < $$f 2>&1 >/dev/null); \
+	  case "$$err" in \
+	    "line "*) : ;; \
+	    *) echo "  $$f: no line number in the message: '$$err'"; fail=1 ;; \
+	  esac; \
+	done; \
+	[ $$fail -eq 0 ] && echo "  messages: every rejection names its line"; exit $$fail

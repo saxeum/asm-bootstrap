@@ -305,3 +305,42 @@ Two self-inflicted defects, both from `sed` by line number:
 
 Both were caught by the fixture corpus within one command, which is the argument for running it after
 every structural edit rather than after the next one.
+
+### Phase 1, item 2 done — and the handover happened
+
+```
+$ printf 'mov bl, 300\n' | ./asm1
+line 1: rejected                      # asm0a: silence, exit 1
+
+$ printf 'mov eax, 1\nmov eax, [rbx+1000]\n' | ./asm1
+line 2: rejected
+```
+
+`asm1` 4 725 → **5 094 bytes**. It tracks the line number, prints it to stderr, and returns 1. The
+reject suite grew `make test-reject-msg`: every rejection must name its line, because a refusal
+nobody can locate is only half a refusal. (The text is still generic — "rejected" — and the next
+increment is to say *what*, per check.)
+
+How it is built, given no data section and no shifts: `div bl` repeatedly to extract decimal digits
+into five slots, then print from the most significant with leading zeros suppressed. ~120
+instructions, because the whole message is characters as immediates and the emit path is one byte per
+syscall.
+
+**And the handover arrived, a step earlier than planned and for an unplanned reason.** The message
+code pushed `src/asm1.s` from 128 to 133 labels — over `asm0a`'s frozen limit of 128. So:
+
+```
+make bootstrap-check
+  bootstrap: asm0a can no longer parse the dialect -- NOT APPLICABLE,
+             seed/asm1 is the only builder
+```
+
+It was reached in two deliberate steps, which is worth recording because it is the only safe order:
+first raise `asm1`'s own limit to 256 and move the label table to `rbp-3860`, promote *that* (it still
+has 128 labels, so both builders can make it), and only then write source that needs 133. Doing it in
+the other order leaves a source that nothing can build.
+
+From here there is no independent implementation to cross-check against. The safety net is now
+`ref/`, the reject suite, the capability pairs, the superiority suite, the seed chain and the pinned
+decodes — which is why those had to exist first. `docs/provenance.tsv` still records `asm0a` for the
+fixtures, because `asm0a` can still assemble those; it can no longer assemble the assembler.

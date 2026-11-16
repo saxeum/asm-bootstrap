@@ -147,10 +147,10 @@ is not a check that passed.
 | | |
 |---|---|
 | bootstrap | `asm0a`, 3745 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD`, sha256 in `docs/SHAS` |
-| self-hosted | `asm1`, 4725 bytes, sha256 `8b4328d5c5c511e9…`, built by `seed/asm1` from `src/asm1.s` (1263 lines, 17004 bytes) |
-| seed | `seed/asm1`, 4725 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
-| builder | `asm1` is built by `seed/asm1`, never by itself; `make bootstrap-check` also has `asm0a` build it, and they must agree |
-| fixpoint | `asm1(asm1.s) == asm1`, 4725 bytes, one sha256, idempotent |
+| self-hosted | `asm1`, 5094 bytes, sha256 `7a10451bab2966ea…`, built by `seed/asm1` from `src/asm1.s` (1263 lines, 17004 bytes) |
+| seed | `seed/asm1`, 5094 bytes, the promoted stage that builds the next one (sha256 in `docs/SHAS`) |
+| builder | `asm1` is built by `seed/asm1`, never by itself. Since the source needs more than 128 labels, `asm0a` can no longer parse it: `make bootstrap-check` reports NOT APPLICABLE |
+| fixpoint | `asm1(asm1.s) == asm1`, 5094 bytes, one sha256, idempotent |
 | fixtures | 18, all byte-identical to hand-emitted references and behaviourally correct |
 | rejections | 11 sources that must be refused by both assemblers, with no output (`tests/reject/`) |
 | capability | 8 pairs where asm1 accepts syntax asm0a cannot parse; both spellings must agree byte for byte |
