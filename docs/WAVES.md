@@ -769,3 +769,69 @@ arithmetic (which was correct) but to ask *what the failing line depends on*.
 
 That distinction is worth having written down, because the next wave — rel32 branches — is
 control-flow work, and the failure modes will look like this one rather than like the last ten.
+
+## Process wave — the decode checker, and three silent parses partially closed
+
+No instruction form was added. This wave was about mechanising the thing that produced the
+defects.
+
+### 1. `tools/check-branches.sh` + `docs/branches.tsv`
+
+235 branch sites in the artifact, each pinned to the target it verified against, each re-decoded
+and compared:
+
+```
+$ tools/check-branches.sh
+checking 235 pinned branch sites in asm0a
+  ok   0x142   jmp    -> 0x373    jmp    0x373
+  ...
+all pinned branches hold
+```
+
+and the gate that makes it a gate:
+
+```
+$ tools/check-branches.sh --selftest
+selftest: three known-bad sites from the log (asm0a) — all must FAIL
+selftest ok: the checker rejects known-bad sites
+```
+
+The three sites are `0x15e`, `0x5c5` and `0x1b6` — the ones actually patched at opcode+1 in
+waves 2d-5, 2d-6 and 2d-7. Before this, that class of error was caught by segfaults; now it is
+caught before anything runs.
+
+### 2. Silent parses: diagnosed, not yet landed
+
+Three parses were silent, all confirmed by running:
+
+```
+mov eax, 0x10  ->  b8 00 00 00 00   (parsed "0", stopped at 'x')
+add al, -1     ->  04 00            ('-' is not a digit, value 0)
+db 0x48        ->  00
+mov bl, 256    ->  b3 00            (no range check in do_mov8)
+```
+
+A validating end-of-line handler (`eolv`) was written and works: it skips spaces, accepts a
+trailing `;` comment (a feature that did not exist), and **fails** on any other leftover. With
+it in place `mov eax, 0x10`, `add al, -1` and `db 0x48` all exit 1 instead of assembling to 0.
+The `mov bl, 256` case was closed separately by routing `do_mov8` through a `cmp ecx,255` check.
+
+But it cannot land as-is, and that is the finding: **four handlers leave the parse cursor AT
+their last operand rather than past it**, relying on the old `eol3` to skip the remainder
+silently:
+
+| handler | leaves rbx at | fix |
+|---|---|---|
+| `do_xor` | second register name | `add rbx,3` before eol3 |
+| `regop` (inc/dec r32) | register name | `add rbx,3` |
+| `do_br` found path | label name | `mov rbx,rsi` |
+| `do_br` notfound path | label name | `mov rbx,rsi` |
+| `do_db` | the closing quote | `inc rbx` |
+
+With `eolv` active and none of those fixed, 10 of 15 fixtures broke — which is exactly what the
+corpus is for. Reverted to 2d-10 (`git checkout -- asm0a`), 15/15 green, and this is recorded as
+the next concrete task rather than a half-landed change.
+
+**The lesson:** making a silent failure loud is not a local change. Every parser that depended on
+the silence has to be enumerated first — and the enumeration came from the corpus failing, not
+from reading the code.

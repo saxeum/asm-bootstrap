@@ -1,74 +1,87 @@
 # asm-bootstrap
 
 An assembler built from nothing: hand-written machine code that assembles source into Linux
-ELF executables. **No compiler, no system assembler, no interpreter, no scripts** — each
-artifact is produced by bytes written by hand, and every wave is judged by whether it
-reproduces a previous artifact *byte for byte*.
+ELF executables. **No compiler, no system assembler, no interpreter** — every artifact was
+produced by bytes written by hand, and every wave is judged by whether it reproduces a
+previous artifact *byte for byte*.
 
-This is the PDP-8 bootstrap exercise done again, deliberately: hand-assemble a minimal
-assembler, let it assemble a better one, repeat. See
-[`docs/pdp8-to-gcc.md`](docs/pdp8-to-gcc.md) for the history that motivates it (PAL-III, its
-unknown original author, the paper-tape two-pass design, and the line that leads to `as` and
-`gcc`) and for the staged plan.
+The PDP-8 bootstrap done again deliberately: hand-assemble a minimal assembler, let it
+assemble a better one, repeat. `docs/pdp8-to-gcc.md` has the history and the line that leads
+to `as` and `gcc`; `docs/WAVES.md` is the log, including the failures.
 
-## Status
+## Use it
 
-| Wave | Artifact | Size | sha256 | Judge |
-|---|---|---|---|---|
-| 0 | `hello` | 165 B | `4f386903…6552e1` | hand-emitted; prints `Hello, World!` |
-| 0 | `count10` | 188 B | `e61a23c9…94ec5bd9a` | hand-emitted; prints `1`..`10` |
-| 0 | `fib` | 334 B | `f61cea2c…2e10098` | hand-emitted; `fib(0..93)` matches OEIS A000045 |
-| 1a | `asm0a` | 664 B | `255ac2e1…3aa5e60` | assembles `src/exit42.s`, byte-identical to hand-written |
-| 1b | `asm0a` | 833 B | `9192d28f…16fa7989` | assembles `src/hello_num.s` → **equals `hello`**, sha `4f386903…` |
-| 2a | `asm0a` | 883 B | `5f1ba8cf…71299fa7` | relayout: data first, bounds checks in every scan loop; both oracles unchanged |
-| 1c | — | — | — | labels + `entry` + two passes, so `src/hello.s` assembles |
-| 2 | — | — | — | relative jumps; `src/count10.s` → sha `e61a23c9…` |
-| 3 | — | — | — | fixpoint: `asmN.s` assembled by `asmN` equals `asmN` |
-
-`asm0a` currently understands `mov r32,imm`, `xor r32,r32`, `syscall`, `db "…"` (escapes
-`\n \t \" \\`), decimal immediates only. No labels, no jumps, no hex literals.
-
-## Verify it yourself
+`asm0a` reads source on **stdin** and writes the executable on **stdout**. It takes no
+arguments, so the shell supplies the filenames:
 
 ```bash
-sha256sum -c docs/SHAS                                 # every artifact matches its recorded sha
-
-./asm0a < src/hello_num.s | cmp - ref/hello && echo ok  # wave 1b: byte-identical to hand bytes
-
-./asm0a < src/exit42.s > /tmp/e && chmod +x /tmp/e      # wave 1a
-/tmp/e; echo $?                                        # 42
+./asm0a < src/count10.s > count10
+chmod +x count10        # required: asm0a cannot chmod a pipe
+./count10               # prints 1..10
 ```
 
-The oracle rule: an assembler is correct when its output is **byte-identical** to bytes
-written by hand. Exit status is never evidence — this project shipped a 186-byte program
-that printed nothing and exited 0, and found four defects in `asm0a` that only execution
-exposed.
+To prove the output is the *verified* object and not merely something that runs:
 
-## Layout
-
-```
-asm0a            the assembler (hand-emitted machine code, 883 bytes)
-ref/             frozen oracles: hello, count10, fib — written by hand, never regenerated
-src/*.s          sources: hello.s (symbolic), hello_num.s (numeric), exit42.s
-docs/WAVES.md    the log: what passed, what broke, why, and what is next
-docs/SHAS        the gate
-docs/wave1a-asm0a.md   annotated byte listing of asm0a + the four defects found
-docs/pdp8-to-gcc.md    PDP-8 assembler history, references, and the bootstrap plan
+```bash
+./asm0a < src/count10.s | cmp - ref/count10 && echo identical
 ```
 
-## Known defects (open, not hidden)
+## State
 
-- `mov eax,` with no operand assembles as `mov eax, 0` and exits 0 — number parsing needs an
-  "at least one digit" flag (arrives in 2b).
-- No overflow check on `mov` immediates.
-- No labels, no jumps yet (wave 2b).
-- Source is read from stdin; output goes to stdout, so the caller must `chmod +x`.
+| | |
+|---|---|
+| artifact | `asm0a`, 3125 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
+| identity | sha256 in `docs/SHAS` |
+| fixtures | 15, all byte-identical to hand-emitted references and behaviourally correct |
+| branches | 235 sites pinned in `docs/branches.tsv`, all verified by decoding |
+| source language | 8-, 32- and 64-bit operands, memory operands, labels, two passes, decimal immediates |
 
-Fixed in 2a: `db "unterminated` used to SIGSEGV, because the scan loop had no bound against
-the source end. Every scan loop now checks `rbx >= r13` first and exits 1.
+`src/count10.s` — the largest oracle — assembles to exactly `ref/count10` (188 bytes) and the
+result prints `1`…`10`.
 
-## Build rule
+## Verify
 
-`printf` writes literal bytes; nothing derives instructions from mnemonics except `asm0a`
-itself. No `as`, `ld`, `nasm`, `objcopy`, and no assembler written in another language —
-[`docs/pdp8-to-gcc.md`](docs/pdp8-to-gcc.md) explains why that is the whole point.
+```bash
+sha256sum -c docs/SHAS            # every artifact matches its recorded sha
+tools/check-branches.sh           # 235 pinned branch sites still decode to their targets
+tools/check-branches.sh --selftest # and the checker rejects three known-bad sites
+```
+
+`--selftest` is the important one: a checker that cannot fail is decoration. It is run against
+`0x15e`, `0x5c5` and `0x1b6` — three sites that were genuinely wrong in waves 2d-5/2d-6/2d-7 —
+and must report failure.
+
+## What the dialect accepts
+
+One instruction per line; labels; `;` comments; `entry` is **not** implemented (the entry point
+is always `0x400078 + code offset`, which means data must follow code).
+
+| category | forms |
+|---|---|
+| moves | `mov r32,imm32` · `mov r8,imm8` · `mov r32,r32` · `movzx r32,r8` |
+| memory | `mov r32,[mem]` · `mov [mem],r32` · `mov [mem],r8` · `mov byte [mem],imm8` · `lea r32\|r64,[mem]` |
+| ALU | `add r8,imm8` · `cmp r8,imm8` · `cmp r32,imm32` · `inc`/`dec r8` and `r32` · `div r8` · `sub r64,r64` · `xor r32,r32` |
+| control | `jmp` · `jz` · `jnz` · `jb` — **rel8 only, ±127 bytes** |
+| other | `syscall` · `db "…"` · `db n,n,n` |
+
+Addressing is `[base]` or `[base+disp8]`; base may be any 32- or 64-bit register. Immediates
+are **decimal only**.
+
+## Known limits (open, not hidden)
+
+- **No rel32 branches.** A jump beyond ±127 bytes fails rather than wrapping. This is the last
+  blocker for writing the assembler *in its own dialect*.
+- **Three parses are still silent**, and are the next target: `mov eax, 0x10`, `add al, -1` and
+  `db 0x48` assemble as `0`; `mov bl, 256` truncates to 0. A validating end-of-line handler is
+  written and works, but four handlers (`do_xor`, `regop`, `do_br` ×2) leave the parse cursor
+  *at* their last operand rather than past it, so they must be fixed before it can land.
+- **No `entry`**, so data must follow code and its addresses are decimal literals.
+- 32 labels maximum, 7-character names, no `test`/`imul` (needed for `fib`, not for
+  self-hosting).
+
+## Provenance
+
+`ref/` holds binaries written by hand **before** the assembler could read their source. They are
+never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.
+`docs/oracles.md` explains what those references do and do not prove, and why byte-identity with
+a hand-written reference is a floor rather than a proof.
