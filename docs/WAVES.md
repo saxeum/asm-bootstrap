@@ -3613,3 +3613,17 @@ inputs. The order is the one the request asked for: assembler (`src/asm1.c` → 
 (`src/cc.c` → `cc1`), then both rebuild each other, then the program. After the committed seeds
 (`seed/cc`, `seed/asm1`) no assembly-built compiler or assembler is invoked for the chain or for
 `wc`.
+
+## Wave: calc.c -- a parser, on the C-only chain
+
+`tests/programs/calc.c` is a recursive-descent calculator: `+ - * / %`, parentheses, unary minus,
+precedence, several expressions per run, and fixed `calc: error` refusals for syntax errors and
+division by zero. Values are kept in `-1000000..1000000`; because the subset's comparisons are
+unsigned, a negative value is detected by `v > 1000000`, and add/subtract/multiply/divide/remainder
+work on magnitudes and apply the sign afterwards. The first client of the parser found two things:
+the C subset refuses a bare array name as an argument (`pwa(mem, ...)` must be `pwa(&mem, ...)`), and
+a call cannot appear in another call's argument list (`bump(m)` is a helper instead of
+`pwa(m, 4096, gwa(m, 4096) + 1)`).
+
+`make test-program` reports `calc: 8/8 results and 2/2 refusals, signed values included`.
+`make from-c` builds the same source with `cc1` + `asm2` and runs the same table. Issued as #5.
