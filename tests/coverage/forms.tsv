@@ -1,0 +1,93 @@
+# forms.tsv -- every form this assembler claims to support, one probe per line.
+#
+# tools/coverage.sh requires each probe to assemble AND its shape (tools/shape.awk)
+# to appear in at least one test input. So this file is both the claim and the
+# to-do list: a row whose shape is in no test is a red gate, with a name.
+#
+# A row is a source line, not a shape, on purpose: it is assembled for real, so a
+# form that was removed or renamed fails here instead of leaving a stale claim.
+# A label may prefix the line (`q: jmp q`) so branches can be probed standalone.
+#
+# Not covered here, deliberately: values. `mov eax, 1` and `mov eax, 0x7fffffff`
+# are one shape; the literal forms are pinned by tests/capability/ instead.
+
+# --- mov -------------------------------------------------------------------
+mov eax, 1
+mov al, 1
+mov eax, ecx
+mov eax, [rbx]
+mov eax, [rbx+8]
+mov eax, [rbx-8]
+mov eax, [rbx+rcx]
+mov eax, [rbx+rcx+8]
+mov eax, [rsp]
+mov eax, [rbp]
+mov [rbx], eax
+mov [rbx], al
+mov byte [rbx], 1
+movzx eax, cl
+movzx eax, byte [rbx]
+
+# --- lea -------------------------------------------------------------------
+lea eax, [rbx]
+lea rax, [rbx]
+lea rax, [rbx+rcx]
+lea rax, [rsp+8]
+
+# --- add / sub / cmp -------------------------------------------------------
+add eax, ecx
+add al, 1
+sub rax, rcx
+cmp eax, 1
+cmp al, 1
+cmp eax, ecx
+
+# --- and / or / test / xor (immediate and register forms) ------------------
+and eax, 1
+and eax, ecx
+or eax, 1
+or eax, ecx
+test eax, 1
+test eax, ecx
+xor eax, ecx
+
+# --- unary -----------------------------------------------------------------
+inc eax
+inc al
+dec eax
+dec al
+neg eax
+not eax
+div bl
+imul eax, ecx
+
+# --- shifts ----------------------------------------------------------------
+shl eax, 1
+shr eax, 1
+sar eax, 1
+
+# --- stack -----------------------------------------------------------------
+push rax
+pop rax
+
+# --- control ---------------------------------------------------------------
+q: jmp q
+q: jmp.l q
+q: jz q
+q: jz.l q
+q: jnz q
+q: jb q
+q: call q
+ret
+syscall
+
+# --- directives ------------------------------------------------------------
+db 1
+db "x"
+q: db q
+q: entry q
+
+# --- added when the gate first ran: .l variants of jb and jnz were used by the
+# corpus but not claimed here (the inventory was incomplete, not the corpus)
+q: jb.l q
+q: jnz.l q

@@ -29,6 +29,7 @@ and `asm0a` can no longer build it). `docs/ROADMAP.md` is where it goes next.
 | 9 | **A positive test suite cannot detect truncation.** Invalid input must be *rejected with no output bytes* — a partial file is worse than none. `tests/reject/` is that suite. | `make test-reject` |
 | 10 | **No tool outside the rules in the creation OR diagnosis path**: no compiler, no system assembler, no **disassembler**, no interpreter, no scripting language, no debugger. Not for a build, not for a diagnosis, not "just this once". `objdump` is on this list: a disassembler is the tool this project replaces, so it cannot be the thing that verifies us. | `make test-tools` — a tripwire over every Makefile recipe and every non-comment line of `tools/*.sh`; it replaced "by inspection", which failed twice (the branch gate, and `docs/oracles.md` prescribing it). `as` and `ld` are matched by inspection, not by the grep: two letters that appear in shell code. A violation is **recorded, not dropped** — including one made in `docs/WAVES.md` with no effect |
 | 11 | **`asm1` must be demonstrably better than `asm0a`, not merely different.** Every capability pair and superiority case must be able to fail, and must fail loudly if its premise stops holding (`asm0a` starts accepting the syntax, or agrees when it should not). | `make test-capability`, `make test-superior` |
+| 12 | **A form that no test input reaches is not supported, it is hoped for.** Every form in `tests/coverage/forms.tsv` must be exercised by some test input, and every mnemonic a test uses must be claimed there. The gate is a lower bound on coverage and the inventory is a hand-written claim; neither is allowed to be inferred from the other. | `make test-coverage` (and it must fail when a case is removed — demonstrated) |
 
 ## Conventions that each came from a real defect
 
@@ -197,6 +198,7 @@ written down is that the tempting move on discovering one is to make `asm1` agre
 | decimal immediates only | hex, character, negative literals | `make test-capability` |
 | no expressions | `label`, `label+4`, `end - start` | `make test-capability` |
 | no `and` / `or` / `test`, no register forms of them | all present, immediate and register | `make test-capability` |
+| **`[rbp]` with displacement 0 emits `8b 05`** — RIP-relative, the displacement taken from the following bytes | `8b 45 00` | `make test-superior` (`tests/superior/rbp0`) |
 | fails in silence | `line N: rejected` on stderr | `make test-reject-msg` |
 
 **The one that matters most is the first.** It was found by a capability test refusing its own pair —

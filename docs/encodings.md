@@ -158,24 +158,58 @@ Honest scorecard so far: the check has confirmed 29 forms that were already righ
 *caught* nothing except my own query bug (LOADALL vs SYSCALL). Its value today is confirmation;
 its value later is that the table will roughly triple, and the `/digit` and width-rule errors it
 prevents are exactly the ones that produce plausible wrong bytes.
-
-## Known defect: `[rbp]` (and `[r13]`)
+## Fixed in `asm1`, frozen in `asm0a`: `[rbp]` (and `[r13]`)
 
 `emit_mem` sets `mod = 01` when the displacement is non-zero and `mod = 00` otherwise. That rule is
-correct for every base register except `rbp`/`r13`, where `mod = 00, rm = 101` does not mean
-`[rbp]` — it means **RIP-relative with a disp32**. Observed today:
+correct for every base register except `rbp`/`r13`, where `mod = 00, rm = 101` does not mean `[rbp]`
+— it means **RIP-relative with a disp32**:
 
 ```
-movzx eax, byte [rbp]     -> 0f b6 05          WRONG: 3 bytes, no disp32 emitted at all
+movzx eax, byte [rbp]     -> 0f b6 05          WRONG: 3 bytes; the next four bytes of the program
+                                               are read as the displacement
 movzx eax, byte [rbp+1]   -> 0f b6 45 01       correct
 ```
 
-`[rbp]` must encode as `mod = 01, rm = 101, disp8 = 00`. The defect has been latent because no
-fixture has ever used `rbp` as a base; `movzx r32,byte [mem]` made it reachable.
+`[rbp]` must encode as `mod = 01, rm = 101, disp8 = 00`.
 
-**Status: not fixed.** `memop2` is 14 bytes (`0x9fc`–`0xa09`) with its single `ret` at `0xa09`
-immediately followed by live code at `0xa0a`, so there is no room to append the check in place.
-The fix is a wrapper — `call 0x9fc`; if `r11d == 5` and `rdx == 0` then `mov edx, 0x100` (which
-makes the existing non-zero test take the `mod = 01` path and emits `dl = 0`) — with every
-`call memop2` site retargeted to it. Until then: **do not use `rbp` as a base with a zero
-displacement.**
+**`asm1`: fixed.** `emitmem` now chooses `mod = 01` when the displacement is non-zero, a SIB is
+present, **or the base is `rbp`**, and emits the disp byte under exactly that same condition. Both
+halves are needed: mod 01 without the zero byte leaves a two-byte instruction whose following byte
+is read as the displacement.
+
+| probe | before | after |
+|---|---|---|
+| `mov eax, [rbp]` | `8b 05` | `8b 45 00` |
+| `mov [rbp], eax` | `89 05` | `89 45 00` |
+| `lea rax, [rbp]` | `48 8d 05` | `48 8d 45 00` |
+| `movzx eax, byte [rbp]` | `0f b6 05` | `0f b6 45 00` |
+| `mov byte [rbp], 1` | `c6 05 01` | `c6 45 00 01` |
+| `mov eax, [rbp+1]` | `8b 45 01` | unchanged |
+| `mov eax, [rbx]` | `8b 03` | unchanged (mod 00, no byte) |
+| `mov eax, [rsp]` | `8b 04 24` | unchanged (mod 00 + SIB, no byte) |
+
+Held by `tests/superior/rbp0.s` with the hand-computed `8b4500`, which also fails if `asm0a` ever
+starts agreeing. That case could not exist before the coverage gate: **no test input in this repo had
+ever written `[rbp]` with a zero displacement**, so the entire corpus was blind to a wrong answer.
+
+The defect remains in `asm0a`, which is frozen and has to stay that way. The bootstrap and `asm1` now
+disagree here, and `make test-superior` records which side is right.
+
+When `r8`–`r15` land, `r13` needs the same test: base code 13 with `mod = 00` is RIP-relative too.
+
+## Known defect: `sub r32, r32` is encoded as 64-bit
+
+`sub` is the one ALU form whose opcode sets `REX.W` (`48 29 /r`), so the width comes from the
+encoding rather than from the operand names, and nothing checks that the two agree:
+
+```
+sub eax, ecx      -> 48 29 c8       byte-identical to `sub rax, rcx`
+```
+
+For a 32-bit operand that is a wrong answer of the same class as `asm0a`'s `and`-as-`add`: correct
+while the upper halves are zero, silently wrong when they are not.
+
+**Status: not fixed, and deliberately not pinned.** The fix is not a check but the REX mechanism
+itself — take the width from the operand names, emit `REX.W` only for the 64-bit form, refuse a mix.
+That is the next task in `docs/ROADMAP.md`, and pinning `48 29 c8` now would turn a wrong answer into
+a recorded expectation. Until then: **`sub` is 64-bit, whatever the source says.**

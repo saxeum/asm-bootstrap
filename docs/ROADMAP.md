@@ -898,3 +898,98 @@ consumes it.
    the missing condition codes `ja/jae/js/jg/jo`.
 3. **`src/asm0a.s`** — then `asm1 < src/asm0a.s | cmp - asm0a`.
 4. `.data` sections, scale factors, the self-testing generator.
+
+## The coverage gate: what the corpus actually reaches
+
+`make test-coverage` now exists, and its first run was not green. `tests/coverage/forms.tsv` claims 60
+forms; each probe must assemble **and** its normalised shape (`tools/shape.awk`) must appear in some
+test input. Shapes are what the encoder branches on — register class, and for a memory operand its
+base (rbp and rsp encode differently from everything else), whether a SIB is present, and whether a
+displacement is present, negative, or absent.
+
+```
+make test-coverage
+  coverage 60/60 forms exercised by a test, every corpus mnemonic claimed
+```
+
+The first run found three things, which is the argument for having it:
+
+```
+UNTESTED: 'mov eax, [rbx-8]'  (mov r32 mem:other:noindex:negdisp) appears in no test input
+UNTESTED: 'lea eax, [rbx]'    (lea r32 mem:other:noindex:nodisp)  appears in no test input
+UNCLAIMED: 'jb.l' / 'jnz.l'   used by the corpus, absent from the inventory
+```
+
+The other direction is checked too: a mnemonic a *test* uses must be claimed, so adding a case cannot
+widen what is supported without recording the claim. That is how `jb.l` and `jnz.l` were caught — the
+inventory was incomplete, not the corpus. `tests/reject` is excluded from that direction on purpose:
+`frobnicate` appears in a test in order to be refused, and demanding a claim for it would be demanding
+a lie.
+
+What it cannot do, stated in the script: prove the inventory complete. Shape is coarser than the code
+in places (two displacement values share one path) and finer in others, so it is a lower bound on
+coverage and an upper bound on the claim. It is made to fail in the gate itself (a probe with a shape
+no test reaches) and by removing a case: delete `tests/superior/negdisp.s` and the gate says
+`UNTESTED: 'mov eax, [rbx-8]'`.
+
+## The wrong answer it exposed: `[rbp]` with displacement 0
+
+No test input in this repository had ever written `[rbp]` with a zero displacement, so nothing could
+see that it encoded as `8b 05` — RIP-relative, with the next four bytes of the program read as the
+displacement. The fix is in `docs/encodings.md` with the before/after table; in short, `emitmem` now
+chooses `mod = 01` when the displacement is non-zero, a SIB is present, **or the base is `rbp`**, and
+emits the disp byte under the same condition.
+
+```
+tests/superior/rbp0.s   mov eax, [rbp]   hand-computed 8b4500
+  superior: tests/superior/rbp0 -> 8b4500, and asm0a does not
+```
+
+`asm0a` still gets it wrong and always will; the case fails if the two ever agree, which is the same
+shape of test as the `and`-as-`add` case.
+
+This wave also deleted the dead code that made the fix dangerous to attempt: `emitmem` had a second,
+shadowed copy of its tail (`emm1`…`em_done`, 7 duplicate labels) plus an unreachable `emmod1`. 52
+lines and 10 label definitions went, `asm1` 6820 → 6644, and the fix added 35 back (6679). The
+deletion was checked the way the rule says: 18/18 fixtures and the fixpoint *after* the deletion and
+before the fix.
+
+Still duplicated, and recorded rather than fixed: `chkok`, `trm`'s `termok`/`termnum`, and the
+unreachable `lblchk` block with its own `ls1`. They need a pass-1 duplicate-label check in `asm1` to
+force them out, which is a deliberate change of its own.
+
+## The goal has changed the order: a high-level language
+
+The destination is no longer "be better than `asm0a`" for its own sake. It is a **compiler**: a
+high-level language whose backend emits this dialect. That reprioritises everything, because a
+compiler's output needs things a bootstrap's does not, and three of them are hard blockers:
+
+| a compiler needs | today |
+|---|---|
+| **writable memory** — globals, string constants, a frame the program owns | **absent**: one `R+X` `PT_LOAD`, no `.data`, so every byte of the image is code |
+| **64-bit integer arithmetic** — pointers, sizes, addresses | `add rax, rbx` is *refused*; `sub eax, ecx` silently assembles 64-bit |
+| **more than 8 registers** | 8 |
+| **`[base+index*scale]`** — arrays, fields, `a[i]` | index without scale |
+| **displacements past 127** — frames and records over ~120 bytes | disp8 only |
+| signed comparisons `ja/jae/js/jg/jo` | absent (`jb`, `jz`, `jnz`, `jmp` only) |
+| `imul r32, r32, imm8` | absent |
+| a calling convention, and something that can check it | `call`/`ret`/`push`/`pop`; no ABI, no frame layout |
+
+Every row but the last is one mechanism or one handler. In this order, each testable on its own:
+
+1. **REX.W and `r8`–`r15`** — one mechanism: a REX byte computed from operand codes ≥ 8 and the
+   64-bit flag, emitted before the opcode, codes masked with `and`. It turns `add rax,rbx` from a
+   refusal into `48 01 c9`, gives 16 registers, and **fixes `sub eax, ecx`** in the same stroke
+   (the width comes from the operand names instead of from the opcode).
+2. **`.data`** — a second `PT_LOAD`, `R+W`, opt-in so no existing fixture changes. Without it a
+   compiled program cannot have a mutable global or a string it can build at runtime.
+3. **disp32 and `[base+index*scale]`** — one memory-operand change; both are needed for `a[i]` and
+   for frames larger than 127 bytes.
+4. **The compiler staples**: signed condition codes (`ja/jae/js/jg/jo`), `imul r32,r32,imm8`,
+   `cmp r,[mem]`, `test r,[mem]`. Each is a handler plus a hand-computed dump.
+5. **A calling convention**, written down and checked by a fixture that does a call with arguments
+   and a return value. An ABI nobody tests is a convention in a comment.
+
+Not on that path, and still the strongest statement this project can make: **`src/asm0a.s`**, so that
+`asm1 < src/asm0a.s | cmp - asm0a` explains the frozen 3745 bytes. It is archaeology, not capability —
+it belongs after the compiler has something to run, or in a session of its own.

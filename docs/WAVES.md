@@ -1769,3 +1769,60 @@ quietly drops its own violations has no standing to hunt anyone else's.
 
 The same wave replaced invariant 10's "by inspection" with `make test-tools`, so the next one is
 caught by a gate instead of by a reader.
+
+## Coverage measured, and the wrong answer it found
+
+`make test-coverage` is new: `tests/coverage/forms.tsv` claims 60 forms, `tools/shape.awk` normalises
+a source line to what the encoder actually branches on, and `tools/coverage.sh` requires every claim
+to appear in some test input — plus the other direction, that every mnemonic a test uses is claimed.
+
+Its first run was not green, and both kinds of gap it reported were real:
+
+```
+UNTESTED: 'mov eax, [rbx-8]'  (mov r32 mem:other:noindex:negdisp) appears in no test input
+UNTESTED: 'lea eax, [rbx]'    (lea r32 mem:other:noindex:nodisp)  appears in no test input
+UNCLAIMED: 'jb.l' / 'jnz.l'   used by the corpus, absent from the inventory
+```
+
+The two untested shapes got cases (`tests/superior/negdisp.s` with the hand-computed `8b43f8`, and the
+capability pair `lea-zerodisp`, where `[rbx+0x0]` must equal `[rbx]` — both `8d 03`). The two
+unclaimed mnemonics were an incomplete inventory, which is the direction the gate exists for: a test
+may not widen what is supported without a claim being recorded.
+
+`tests/reject` is excluded from the claim direction on purpose — `frobnicate` is in a test *in order
+to be refused* — and that exclusion is a sentence in the script rather than something a reader has to
+work out.
+
+### The defect the census exposed
+
+The same measurement showed that no test input in this repository had **ever** written `[rbp]` with a
+zero displacement. That is exactly the case `docs/encodings.md` had recorded as broken for months:
+
+```
+mov eax, [rbp]   -> 8b 05      RIP-relative: the next four bytes of the program are the displacement
+```
+
+So the corpus was blind to a wrong answer that was already written down. Fixed in `emitmem` — `mod =
+01` when the displacement is non-zero, a SIB is present, **or the base is `rbp`**, with the disp byte
+emitted under the same condition — and held by `tests/superior/rbp0.s`, which fails if `asm0a` ever
+agrees (it still gets it wrong; it is frozen).
+
+### The fix was only attemptable after deleting the duplicate
+
+`emitmem` carried a second, shadowed copy of its own tail: seven duplicate labels (`emm1`, `emm2`,
+`emsib`, `emsib0`, `emnd`, `emdsp`, `em_done`), plus an unreachable `emmod1` with its own `em_sib`.
+Editing "the block" would have hit one copy and left the other stale. Deleted first (52 lines, 10
+label definitions, `asm1` 6820 → 6644), with 18/18 fixtures and the fixpoint checked *after the
+deletion and before the fix* — that ordering is what makes the deletion provably behaviour-neutral.
+The fix then added 35 bytes back: `asm1` is 6679.
+
+Two things this session changed are not code: `tests/superior` is now file-based (`<name>.s` +
+hand-computed `<name>.hex`) instead of three inline `printf`s, so the oracle is visible and the
+coverage census can see the inputs; and the `and`-as-`add` case moved into it unchanged.
+
+### A second violation of my own
+
+The same leftover `python3 -c 1` fragment ran twice more, in two shell commands where it did nothing
+and touched nothing. Recorded for the same reason as the first: the defect is the invocation. The
+habit that produced it — a stray fragment in a command I was composing — is the thing to drop, and
+`make test-tools` cannot see it, because it greps files and this was a command line.

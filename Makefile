@@ -20,7 +20,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 dis test test-asm0a test-asm1 test-dis test-tools test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 dis test test-asm0a test-asm1 test-dis test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1, then the decoder (which needs it)'
 	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
@@ -28,6 +28,7 @@ help:
 	@echo 'make test-reject  sources that must be refused, with no output'
 	@echo 'make test-dis   decode cases: hand-written expectations, positive and negative'
 	@echo 'make test-tools  no compiler, assembler, disassembler or debugger is invoked'
+	@echo 'make test-coverage  every supported form is exercised by some test input'
 	@echo 'make test-capability  new syntax vs the old spelling: same bytes'
 	@echo 'make test-superior  inputs asm1 handles and asm0a cannot'
 	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
@@ -126,7 +127,7 @@ verify-provenance: asm1 dis
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: test-tools asm1 dis fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis verify-provenance
+check: test-tools asm1 dis test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -243,6 +244,14 @@ test-tools:
 	[ $$fail -eq 0 ] && echo '  forbidden tools: none invoked in a Makefile recipe or tools/*.sh'; \
 	exit $$fail
 
+# ---- coverage ---------------------------------------------------------------
+# The claim is tests/coverage/forms.tsv: one probe per supported form. Each must
+# assemble, and its normalised shape (tools/shape.awk) must appear in some test
+# input. A form nobody tests is a red gate with a name on it, which is the
+# difference between "we have 18 fixtures" and "we know what they reach".
+test-coverage: asm1
+	@./tools/coverage.sh
+
 # ---- rejection parity -------------------------------------------------------
 # A positive suite cannot see a silently truncated encoding: a wrong byte is
 # still a byte. These sources must be REFUSED -- non-zero exit and NO output --
@@ -299,11 +308,35 @@ triage:
 	@./tools/triage.sh
 
 # ---- superiority ------------------------------------------------------------
-# Cases where asm1 must succeed and asm0a must fail. There is no asm0a output to
-# compare against, so the oracle is behavioural: the binary the source produces
-# must run and exit with the value the source asks for.
+# Cases where asm1 is demonstrably RIGHT and asm0a is not: the input either
+# cannot be assembled by asm0a, or asm0a emits the wrong bytes for it. Two
+# kinds of case live here.
+#
+#   tests/superior/<name>.s     a source
+#   tests/superior/<name>.hex   the body bytes, HAND-COMPUTED from the encoding
+#                               (the file after the 120-byte header), not
+#                               captured from asm1
+#
+# asm1 must reproduce <name>.hex exactly, and asm0a must NOT -- if the two ever
+# agree, the case stopped discriminating and the test fails saying so.
+#
+# Plus two cases the hex cannot express: a 99 KB source (asm0a cannot read it)
+# and the `entry` directive (asserted through e_entry and by running it).
+SUP := $(sort $(wildcard tests/superior/*.s))
 test-superior: asm1
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; \
+	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
+	for s in $(SUP); do \
+	  b=$${s%.s}; \
+	  $(ASM1) < $$s > $$tmp/a 2>/dev/null || { echo "  asm1 cannot assemble $$s"; fail=1; continue; }; \
+	  got=$$(xxd -s 120 -p $$tmp/a | tr -d ' \n'); \
+	  want=$$(tr -d ' \n' < $$b.hex); \
+	  if [ "$$got" != "$$want" ]; then \
+	    echo "  $$b: asm1 emits [$$got], hand-computed [$$want]"; fail=1; continue; fi; \
+	  if $(ASM0A) < $$s > $$tmp/z 2>/dev/null && [ "$$(xxd -s 120 -p $$tmp/z | tr -d ' \n')" = "$$want" ]; then \
+	    echo "  asm0a now reproduces $$b: this case no longer discriminates"; fail=1; continue; fi; \
+	  ok=$$((ok+1)); printf '  superior: %s -> %s, and asm0a does not\n' "$$b" "$$want"; \
+	done; \
+	if [ $$fail -eq 0 ] && [ $$ok -lt 2 ]; then echo "  only $$ok byte-level cases: the suite has been emptied"; fail=1; fi; \
 	{ seq 1 9000 | sed 's/.*/mov eax, 1/'; \
 	  printf 'mov eax, 60\nmov edi, 42\nsyscall\n'; } > $$tmp/big.s; \
 	size=$$(wc -c < $$tmp/big.s); \
@@ -332,17 +365,6 @@ test-superior: asm1
 	    echo "  entry case: e_entry bytes $$entry, exit $$got (wanted 7c004000 / 42)"; fail=1; fi; \
 	else \
 	  echo "  asm1 cannot assemble the entry case"; fail=1; fi; \
-	printf 'and eax, ecx\n' > $$tmp/and.s; \
-	$(ASM1) < $$tmp/and.s > $$tmp/and1 2>/dev/null; \
-	body=$$(xxd -s 120 -p $$tmp/and1); \
-	if [ "$$body" = "21c8" ]; then \
-	  if $(ASM0A) < $$tmp/and.s > $$tmp/and0 2>/dev/null && cmp -s $$tmp/and1 $$tmp/and0; then \
-	    echo "  asm0a now agrees on 'and': this test no longer discriminates"; fail=1; \
-	  else \
-	    printf '  superior: and eax,ecx -> 21 c8 where asm0a emits 01 c8 (it reads "and" as "add")\n'; \
-	  fi; \
-	else \
-	  echo "  and eax,ecx emitted $$body, wanted 21c8"; fail=1; fi; \
 	exit $$fail
 
 test-reject-msg: asm1

@@ -868,12 +868,19 @@ emrm4:
 mov edx, 4
 emrm:
 add eax, edx
+; mod = 01 when a displacement byte follows. That is: disp != 0, or a SIB is
+; present, or the base is rbp -- because mod 00, rm 101 means RIP-relative,
+; not [rbp]. (r13 as a base will need the same test when r8-r15 land.)
 mov edx, [rbp+60]
 cmp edx, 0
 jnz.l emm1
 mov edx, [rbp+124]
 cmp edx, 0
-jz.l emm2
+jnz.l emm1
+mov edx, [rbp+56]
+cmp edx, 5
+jz.l emm1
+jmp.l emm2
 emm1:
 mov edx, 64
 add eax, edx
@@ -901,66 +908,22 @@ emsib0:
 mov eax, 36
 call emital
 emnd:
+; The disp byte is emitted under exactly the condition that chose mod 01:
+; disp != 0, or a SIB is present, or the base is rbp. Two expressions of one
+; rule, adjacent, held together by tests/superior/rbp0.s (rbp, disp 0) and by
+; every fixture that uses [base] with no displacement (mod 00, no byte).
 mov eax, [rbp+60]
 cmp eax, 0
 jnz.l emdsp
 mov eax, [rbp+124]
 cmp eax, 0
-jz.l em_done
-mov eax, 0
-emdsp:
-call emital
-em_done:
-ret
-emm1:
-mov edx, 64
-add eax, edx
-emm2:
-call emital
-mov edx, [rbp+56]
-cmp edx, 4
-jz.l emsib
-mov edx, [rbp+124]
-cmp edx, 0
-jz.l emnd
-emsib:
-mov eax, [rbp+124]
-cmp eax, 0
-jz.l emsib0
-dec eax
-add eax, eax
-add eax, eax
-add eax, eax
-mov edx, [rbp+56]
-add eax, edx
-call emital
-jmp.l emnd
-emsib0:
-mov eax, 36
-call emital
-emnd:
-mov eax, [rbp+60]
-cmp eax, 0
-jnz.l emdsp
-mov eax, [rbp+124]
-cmp eax, 0
-jz.l em_done
-mov eax, 0
-emdsp:
-call emital
-em_done:
-ret
-emmod1:
-call emital
+jnz.l emdz
 mov eax, [rbp+56]
-cmp al, 4
-jnz.l em_sib
-mov eax, 36
-call emital
-em_sib:
-mov eax, [rbp+60]
-cmp al, 0
-jz.l em_done
+cmp eax, 5
+jnz.l em_done
+emdz:
+mov eax, 0
+emdsp:
 call emital
 em_done:
 ret

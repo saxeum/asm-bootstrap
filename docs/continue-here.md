@@ -1,22 +1,26 @@
 # Continue here
 
-State of the project at the end of the session that gave the gate its own decoder. Written so a new
-session can start without re-deriving anything.
+State of the project at the end of the session that gave the gate its own decoder, fixed `[rbp]`, and
+added the coverage gate. Written so a new session can start without re-deriving anything.
+
+**The goal, since this session: a compiler.** A high-level language whose backend emits this dialect.
+That is what the roadmap is now ordered by; `docs/ROADMAP.md` has the requirement table and why
+`REX.W` + `r8`–`r15` is first.
 
 ## The numbers
 
 | | bytes | sha256 (16) | notes |
 |---|---|---|---|
 | `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
-| `asm1` | 6 820 | `2b4aada60da42df8` | built by `seed/asm1` from `src/asm1.s` |
-| `seed/asm1` | 6 820 | `2b4aada60da42df8` | the promoted stage; identical to `asm1` |
+| `asm1` | 6 679 | `d2bb52b219f485ac` | built by `seed/asm1` from `src/asm1.s` |
+| `seed/asm1` | 6 679 | `d2bb52b219f485ac` | the promoted stage; identical to `asm1` |
 | `dis` | 1 348 | `8c9bd9b356874875` | built by `asm1` from `src/dis.s` — our decoder |
-| `src/asm1.s` | 24 177 | — | 1 847 lines, 189 labels (limit 256) |
+| `src/asm1.s` | 24 198 | — | 1 810 lines, 180 labels (limit 256, 11 of them duplicated dead code) |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
 
-Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 11 reject sources · 28 capability
-pairs · 3 superiority cases · 5 exact messages · 37 decoder cases · 290 branch pins · 35 provenance
-records.
+Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 11 reject sources · **29 capability
+pairs** · **3 superiority cases** (byte-level) + 2 behavioural · 5 exact messages · 38 decoder cases ·
+**60 coverage forms** · 290 branch pins · 35 provenance records.
 
 ## Verify before touching anything
 
@@ -24,11 +28,12 @@ records.
 make clean && make && make check
 ```
 
-`make check` must print, in order: **forbidden tools: none invoked** · fixpoint holds · bootstrap NOT
-APPLICABLE · 11/11 rejections · 5/5 exact messages · 28/28 capability pairs · 3/3 superior ·
-**38/38 decoder cases** · 35 provenance records · SHAS match · `asm1.sha` match · and a real
-**`branch pins: 290/290`** line naming both the subject's sha and the decoder's. If any line is
-missing or red, stop and fix that first.
+`make check` must print, in order: **forbidden tools: none invoked** · **coverage 60/60 forms
+exercised** · fixpoint holds · bootstrap NOT APPLICABLE · 11/11 rejections · 5/5 exact messages ·
+29/29 capability pairs · 3/3 superiority cases (plus the 99 KB and `entry` cases) · 38/38 decoder
+cases · 35 provenance records · SHAS match · `asm1.sha` match · and a real **`branch pins: 290/290`**
+line naming both the subject's sha and the decoder's. If any line is missing or red, stop and fix
+that first.
 
 Two traps that have each cost a session:
 
@@ -39,48 +44,49 @@ Two traps that have each cost a session:
   After any change to `src/asm1.s`: `make promote` and `make record`, or `make check` fails on
   `docs/asm1.sha` and the ledger. Those failures are correct — each has caught an omission once.
 
-## What changed last: the branch gate is ours
+## What changed in the last two sessions
 
-`tools/check-branches.sh` no longer mentions `objdump`. It runs `./dis`, compares every one of the 290
-pins in `docs/branches.tsv` with `cmp`, and prints the sha of `asm0a` and of `dis` beside the count.
-It refuses to be quietly green: no decoder, no subject, or a table shorter than 290 sites fails; a
-deliberate mismatch must be reported; and any disagreeing pin fails the gate.
+**The branch gate is ours.** `tools/check-branches.sh` no longer mentions `objdump`. It runs `./dis`,
+compares all 290 pins in `docs/branches.tsv` with `cmp`, and prints the sha of `asm0a` and of `dis`
+beside the count. `src/dis.s` decodes `EB`, `E9`, `E8`, `70`–`7F`, `0F 80`–`0F 8F` and refuses
+everything else with one reason word on stderr (`offset`, `input`, `site`, `form`, `trunc`, `target`).
+The pins themselves were transcribed from objdump in earlier waves, so a green gate is an independent
+check *of the decoder* and no check of either encoder — stated in `AGENTS.md`, not just here.
 
-`src/dis.s` decodes exactly the branch forms the gate consumes (`EB`, `E9`, `E8`, `70`–`7F`,
-`0F 80`–`0F 8F`) and refuses everything else. A refusal is exit 1, nothing on stdout, and one reason
-word on stderr: `offset`, `input`, `site`, `form`, `trunc` or `target`. The last two are the truncation
-rule — an instruction must fit inside the input, and its target must be a byte in it.
+**A wrong answer fixed: `[rbp]` with displacement 0.** It encoded as `8b 05` (RIP-relative, the next
+four bytes read as the displacement) and **no test input had ever written it**, so nothing could see
+it. `emitmem` now takes `mod = 01` when the displacement is non-zero, a SIB is present, or the base is
+`rbp`, and emits the disp byte under the same condition. Held by `tests/superior/rbp0.s`
+(hand-computed `8b4500`). `asm0a` still gets it wrong — it is frozen — and the case fails if they ever
+agree. Details and the before/after table: `docs/encodings.md`.
 
-```
-./dis 0x142 < asm0a
-```
+**Coverage is now measurable.** `make test-coverage` (`tests/coverage/forms.tsv`, `tools/shape.awk`,
+`tools/coverage.sh`) requires every claimed form to be exercised by some test input, and every
+mnemonic a test uses to be claimed. First run: 2 untested forms and 2 unclaimed mnemonics. It is a
+lower bound, and it says so.
 
-prints `0x142 0x373 jmp`. `make test-dis` runs 38 hand-written cases from `tests/dis/cases.tsv`:
-26 that must decode (16 of them the jcc names, plus both directions of rel8 and rel32 and the `argv`
-spellings) and 12 that must be *refused*, each with the reason it must give — a refusal that names
-the wrong rule fails.
+**Dead code deleted from `emitmem`**: a shadowed second copy of its tail (7 duplicate labels) and an
+unreachable `emmod1`. 52 lines, 10 label definitions, `asm1` −176 bytes.
 
-**What is still provisional:** the instruction-mix table in `docs/ROADMAP.md`. `dis.s` covers branch
-forms, so it confirms the 290 branch sites and says nothing about `mov` (135), `add` (130), `inc`
-(107) or `cmp` (101). Do not describe that table as ours. No claim may say the decoder verifies
-anything but branches.
+## The next task: REX.W and `r8`–`r15`, one mechanism
 
-## The next task: `r8`–`r15` and REX.W, one mechanism
+`docs/ROADMAP.md` has the requirement table. The short version: this is the first item on the
+compiler's list and it is one mechanism — a REX byte computed from operand codes ≥ 8 and the 64-bit
+flag, emitted before the opcode, with the codes masked by `and`. It buys three things at once:
 
-`docs/ROADMAP.md` has the reasoning and the measurement. In short: `add rax, rbx` is *refused* today
-because the reg-reg ALU handler never emits REX.W, so 64-bit operands would silently assemble as
-32-bit (`sub rsi,rcx` works only because its opcode sets REX.W). The fix is one mechanism — compute a
-REX byte from operand codes ≥ 8 and the 64-bit flag, emit it before the opcode, mask the codes with
-`and` — and it buys both 16 registers and the 64-bit ALU forms at once.
+- `add rax, rbx`, `mov rax, rbx` stop being refused;
+- 16 registers instead of 8;
+- **`sub eax, ecx` stops assembling as 64-bit** (`docs/encodings.md` "known defect") because the width
+  comes from the operand names instead of from the opcode.
 
-Gate for it: capability pairs against hand-computed dumps (`add rbx,rcx` → `48 01 c9`, `add r8,r9` →
-`4d 01 c8`), the 18 fixtures byte-identical, fixpoint, and `make record` after. Ranges are checked in
-pass 1, so a new form needs its own out-of-range cases in `tests/reject/` — every form added so far
-has needed one.
+Gate: capability pairs against hand-computed dumps (`add rbx,rcx` → `48 01 c9`, `add r8,r9` →
+`4d 01 c8`, `sub eax,ecx` → `29 c8`), the 18 fixtures byte-identical, fixpoint, `make test-coverage`
+green, `make promote` + `make record`. Note that `docs/SHAS` pins `seed/asm1` and has to be re-pinned
+by hand after any promote — `make check` fails until it is.
 
-After that: the forms `asm0a` needs to be rebuilt (`add r64,imm8`, `cmp r8/[mem]`,
-`imul r32,r32,imm8`, the condition codes `ja/jae/js/jg/jo`), then `src/asm0a.s`, then
-`asm1 < src/asm0a.s | cmp - asm0a`.
+Then, in order: `.data` (a second `R+W` `PT_LOAD`, opt-in), disp32 + `[base+index*scale]`, the
+signed condition codes and `imul …,imm8`, a calling convention with a fixture that exercises it.
+`src/asm0a.s` is the strongest statement the project can make and is *not* on the compiler path.
 
 ## How to edit `src/asm1.s` (this is not optional)
 
@@ -106,12 +112,13 @@ Then **immediately**: `make` (check exit code and sha changed), fixtures 18/18, 
 ## Dialect limits that will bite
 
 - label names ≤ 7 characters; ≤ 256 labels; **duplicate labels assemble and the first wins**, so a
-  duplicate silently hides dead code. `src/asm1.s` carries 11 today, in four dead regions: a second
-  `chkok`, `trm`'s `termok`/`termnum`, the unreachable `lblchk` block with its own `ls1`, and the
-  second `emm1`…`em_done` tail of `emitmem`. All are dead (`lblchk` has no caller), and all are
-  harmless to the output — but the *assembler* accepting them is what hides the next one, which will
-  not be dead. The fix is a pass-1 duplicate check in `asm1`, which would fail on its own source until
-  those blocks are deleted: do it as one deliberate change with a `make promote` and `make record`.
+  duplicate silently hides dead code. `src/asm1.s` still carries 11, in three dead regions: a second
+  `chkok`, `trm`'s `termok`/`termnum`, and the unreachable `lblchk` block with its own `ls1`. (The
+  `emitmem` duplicate was deleted this session, which is why the fix there was safe to attempt — see
+  `docs/encodings.md`.) All three remaining are dead and harmless to the output, but the *assembler*
+  accepting them is what hides the next one, which will not be dead. The fix is a pass-1 duplicate
+  check in `asm1`, which would fail on its own source until those blocks are deleted: one deliberate
+  change, with `make promote` and `make record`.
 - every four-byte frame slot within `disp8` is in use in `asm1.s`: slots are `[rbp+8]`…`[rbp+124]`
   plus `[rbp+2]` (reason byte), `[rbp+4]`, `[rbp+12]` (expression scratch). Negative displacements
   work, so `[rbp-64]`…`[rbp-128]` are free — but `[rbp-8]` and below are the call stack.
@@ -137,8 +144,10 @@ Then **immediately**: `make` (check exit code and sha changed), fixtures 18/18, 
 | `AGENTS.md` | invariants with their checks, the decoder section, the defect table |
 | `docs/ROADMAP.md` | phases, what is done, what is deferred, and why in that order |
 | `docs/WAVES.md` | the log, failures included |
-| `docs/encodings.md` | chosen encodings and the known `[rbp]` disp-0 defect |
+| `docs/encodings.md` | chosen encodings, the fixed `[rbp]` defect, the open `sub r32` one |
 | `docs/oracles.md` | what `ref/` does and does not prove |
 | `seed/README.md` | the bootstrap chain |
 | `tests/dis/cases.tsv` | the decoder's hand-written expectations, positive and negative |
+| `tests/coverage/forms.tsv` | the claim of what is supported; every row must be exercised |
+| `tools/shape.awk` | how two source lines are decided to reach the same encoder path |
 | `docs/toolchain.tsv`, `docs/provenance.tsv`, `docs/SHAS`, `docs/branches.tsv` | the records |
