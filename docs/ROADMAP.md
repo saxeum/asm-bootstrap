@@ -1620,3 +1620,25 @@ Next for the port, in the order it will need them:
    exactly one.
 2. **A way to return a pointer** — `emit(char *s)` has no equivalent: a string is a buffer and a length.
 3. Routines ported one at a time, `putn` and the filter having shown the way.
+
+## The port: slice 1 written, one defect away from running
+
+`src/cc.c` is the output side of the compiler in the subset it compiles. It compiles and assembles; it
+does not yet reproduce `tests/selfhost/slice1.expected`, because the emitted text hits a defect in `cc`:
+
+**The block-id counter is saved and restored around a nested body, so sibling blocks share a label.**
+Reproduction, smallest form: one function with two sibling `while` loops emits two `L<n>` labels with
+the same `n`, and `asm1` refuses the file (`duplicate`). `src/cc.c` (four functions, each with a loop)
+is refused at `line 152`.
+
+The fix is to remove the save/restore in `stwhile` and `stif` so the counter only grows, and to raise
+the nine-block limit (the labels already go through `emitnum`, so 99 costs nothing). It was attempted
+twice with pattern edits and botched twice — the next attempt should change those two blocks with an
+edit whose `oldText` includes the surrounding lines, and check `git diff --stat` before building.
+
+Then: slice 2 (the literal section and the prologue/epilogue of a function), slice 3 (the symbol table),
+slice 4 (statements), slice 5 (expressions), and the acceptance test
+
+```
+cc < src/cc.c > cc1.s ; asm1 < cc1.s > cc1 ; cc1 < src/cc.c > cc2.s ; cmp cc1.s cc2.s
+```

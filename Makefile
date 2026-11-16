@@ -558,6 +558,15 @@ test-cc: cc asm1
 	  if $$tmp/cl; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 9 ]; then \
 	    printf '  cc    character literals: b[0] = a quote A quote compares, exits 9\n'; \
+	if $(CC) < tests/golden/strlit.c > $$tmp/sl.s 2>/dev/null && cmp -s $$tmp/sl.s tests/golden/strlit.s; then :; \
+	else echo "  strlit.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/strlit.s > $$tmp/sl 2>/dev/null; then \
+	  chmod +x $$tmp/sl; \
+	  if $$tmp/sl; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 2 ]; then \
+	    printf '  cc    a literal as a value: the length of (%chi%c) is 2\n' '"' '"'; \
+	  else echo "  strlit exited $$g1, wanted 2"; fail=1; fi; \
+	else echo "  asm1 refuses strlit.s"; fail=1; fi; \
 	  else echo "  chrltrl exited $$g1, wanted 9"; fail=1; fi; \
 	else echo "  asm1 refuses chrltrl.s"; fail=1; fi; \
 	  else echo "  putn wrote [$$(cat $$tmp/got9)], wanted [4321]"; fail=1; fi; \
@@ -628,12 +637,12 @@ test-cc: cc asm1
 	  else echo "  NOT REFUSED: [$$1] -> exit $$rc, $$(wc -c < $$tmp/bad.s) bytes"; fail=1; fi; \
 	}; \
 	refuse 'int main() {}'; \
-	refuse 'int main(void) { puts("x"); }'; \
+	refuse 'int main(void) { int x = 1; x = x & 2; }'; \
 	refuse 'int main(void) { write(x); }'; \
 	refuse 'int main(void) { write("unterminated); }'; \
 	refuse 'int main(void) { int x = 70000; }'; \
 	refuse 'void main(void) {}'; \
-	refuse 'int main(void) { write("a"); write("b"); write("c"); write("d"); write("e"); write("f"); write("g"); write("h"); write("i"); write("j"); }'; \
+	refuse 'int main(void) { char b[8]; int i = 0; b[i][0] = 1; }'; \
 	refuse '/* unterminated'; \
 	refuse 'int main(void) { x = 1; }'; \
 	refuse 'int main(void) { while (y) { } }'; \
@@ -657,7 +666,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { int a[4]; int y = a; }'; \
 	refuse 'int main(void) { char s[4]; int n = read(&s, 4); }'; \
 	refuse 'int main(void) { int a[4]; int b[4]; int y = a[b[0]]; }'; \
-	refuse 'int main(void) { int a[1024]; }'; \
+	refuse 'int main(void) { int a[3000]; }'; \
 	refuse 'int main(void) { int a[2]; int a[2]; }'; \
 	refuse 'int main(void) { char x = 65; }'; \
 	refuse 'int main(void) { char a[4]; a = 1; }'; \

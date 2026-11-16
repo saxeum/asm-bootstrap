@@ -2,7 +2,7 @@
 putn:
 push rbp
 mov rbp, rsp
-mov rcx, 8200
+mov rcx, 16500
 sub rsp, rcx
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -18,10 +18,10 @@ jz L1t
 jmp.l L1e
 L1t:
 mov rcx, 0
-mov [rbp-284], rcx
+mov [rbp-328], rcx
 mov rax, 48
 mov rcx, [rbp-16]
-mov rdx, [rbp-284]
+mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 mov rax, 1
@@ -44,7 +44,7 @@ div rcx
 mov rax, rax
 mov [rbp-40], rax
 mov rcx, [rbp-24]
-mov [rbp-284], rcx
+mov [rbp-328], rcx
 mov rax, 48
 mov rdx, [rbp-32]
 mov rsi, [rbp-40]
@@ -54,7 +54,7 @@ sub rdx, rsi
 mov rcx, rdx
 add rax, rcx
 mov rcx, [rbp-16]
-mov rdx, [rbp-284]
+mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 mov rax, [rbp-24]
@@ -84,20 +84,20 @@ add rax, rcx
 movzx rax, byte [rax]
 mov [rbp-64], rax
 mov rcx, [rbp-48]
-mov [rbp-284], rcx
+mov [rbp-328], rcx
 mov rax, [rbp-16]
 mov rcx, [rbp-56]
 add rax, rcx
 movzx rax, byte [rax]
 mov rcx, [rbp-16]
-mov rdx, [rbp-284]
+mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 mov rcx, [rbp-56]
-mov [rbp-284], rcx
+mov [rbp-328], rcx
 mov rax, [rbp-64]
 mov rcx, [rbp-16]
-mov rdx, [rbp-284]
+mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 mov rax, [rbp-48]
@@ -117,7 +117,7 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 8200
+mov rcx, 16500
 sub rsp, rcx
 mov rcx, 4321
 mov rdi, rcx
@@ -133,10 +133,10 @@ mov edi, 1
 syscall
 mov [rbp-24], rax
 mov rcx, 0
-mov [rbp-284], rcx
+mov [rbp-328], rcx
 mov rax, 10
 lea rcx, [rbp-264]
-mov rdx, [rbp-284]
+mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 mov rax, 1

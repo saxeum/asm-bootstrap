@@ -2,7 +2,7 @@
 f:
 push rbp
 mov rbp, rsp
-mov rcx, 8200
+mov rcx, 16500
 sub rsp, rcx
 mov [rbp-8], rdi
 mov rax, [rbp-8]
@@ -14,7 +14,7 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 8200
+mov rcx, 16500
 sub rsp, rcx
 mov rax, 1
 mov [rbp-16], rax
@@ -22,10 +22,10 @@ mov rcx, [rbp-16]
 add rcx, rcx
 add rcx, rcx
 add rcx, rcx
-mov [rbp-284], rcx
+mov [rbp-328], rcx
 mov rax, 41
 lea rcx, [rbp-264]
-mov rdx, [rbp-284]
+mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], rax
 lea rcx, [rbp-264]

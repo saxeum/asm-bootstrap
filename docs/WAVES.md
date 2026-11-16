@@ -3005,3 +3005,36 @@ load-bearing in the *editing* path all session, including the two splices that d
 lines. `awk` is a scripting language; the tripwire cannot match it because the tripwire is written in it.
 The distinction — generation versus editing — is now written down in `AGENTS.md` as a distinction, not an
 exemption.
+
+## The port starts, and hits a real defect immediately
+
+`src/cc.c` exists: slice 1 is the output side — `emitstr`, `emitc`, `putn`, `line` and a `main` that
+emits the dialect text for one fixed program — written in the subset, compiled by `cc`, assembled by
+`asm1`. The expected bytes (`tests/selfhost/slice1.expected`) were written before the code.
+
+Getting that far needed three things, each found by writing real C rather than by planning:
+
+- **string literals as values.** `emitstr(p, len, "mov rax, ")` was refused: `write("...")` existed but a
+  literal in an expression did not. It is the same literal table — the value is `4194424+m<k>` — and the
+  table's nine-entry limit had to go with it, since a port has dozens of literals (99 now, the labels
+  having used `emitnum` all along).
+- **`write` from a pointer.** The buffer is a pointer everywhere in a port; `write` demanded an array.
+- **two defects in `stsub`.** `p[i] = s[j]` stored through `s`: the base's index shared a slot with the
+  value's subscripts, and the parked index shared `-284`. Both moved to `-324`/`-328`, which then crashed
+  `cc` itself because its own frame reserved only 320 bytes — so *that* is 400 now. The evidence is a
+  three-line program that stored at the wrong address and then segfaulted.
+
+And then the port's first real program found a defect that no gate had reached: **`cc`'s block-id
+counter is saved and restored around a nested body**, so two *sibling* blocks inside one function get the
+same label. `src/cc.c` has four functions each with a loop, the emitted text contains two `L3t:` labels,
+and `asm1` refuses it (`line 152: duplicate`). The fix is to let the counter grow monotonically — and it
+was *not* made here: the attempt to make it deleted `call emitnum` and `inc eax` from the dispatcher
+twice in a row, and `git diff` caught both before a build. Untried-and-known is better than tried-and-
+guessed at the end of a long session.
+
+Three refusals became obsolete with the new limits and were replaced, not deleted: `puts("x")` is legal
+now (a literal as an argument), ten `write` calls fit in 99 literals, and `int a[1024]` fits the frame.
+The replacements are `x = x & 2` (no bitwise operators), `b[i][0]` (no nested subscripts) and
+`int a[3000]` (24 000 bytes past a 16 000 limit).
+
+`cc` 9 452 → 9 681 bytes. 39 checks, 36 refusals, 36 goldens.

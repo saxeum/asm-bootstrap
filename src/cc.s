@@ -38,7 +38,7 @@ start:
 pop rax
 pop rax                 ; argv[0], discarded: cc takes no arguments
 lea rbp, [rsp]
-mov ecx, 320
+mov ecx, 400
 sub rsp, rcx            ; reserve: every call pushes at rbp-8, -16, ... and the
                         ; state slots live at -100..-264. Without this, a call
                         ; chain deeper than twelve overwrites them.
@@ -502,13 +502,14 @@ call want
 jmp.l bodloop
 
 stsub:
-; `a[i] = v;` -- the scaled index is parked at -284 because `want` and `expr`
+; `a[i] = v;` -- the scaled index is parked at -328 and the base's index at -324,
+; both clear of the value's own subscripts, which use -268 to -288
 ; own every register; the address is built after the value is in rax. A char
 ; element takes no stride and stores one byte.
 mov eax, 1
 call bump               ; '['
 call findvar
-mov [rbp-268], eax
+mov [rbp-324], eax      ; the base, in a slot the value cannot touch
 call isarr
 mov [rbp-308], eax
 cmp eax, 0
@@ -545,7 +546,7 @@ mov [rbp-280], eax
 cmp eax, 0
 jnz stscl
 stsnosc:
-mov esi, 4194424+f_isav
+mov esi, 4194424+f_isav2
 call emitstr
 mov eax, 1
 call emitreg
@@ -571,7 +572,7 @@ mov eax, 1
 call emitreg
 mov esi, 4194424+f_cev
 call emitstr
-mov eax, [rbp-268]
+mov eax, [rbp-324]
 call varoff
 call emitnum
 mov esi, 4194424+f_le2
@@ -582,7 +583,7 @@ mov eax, 2
 call emitreg
 mov esi, 4194424+f_cev
 call emitstr
-mov eax, 284
+mov eax, 328
 call emitnum
 mov esi, 4194424+f_le2
 call emitstr
@@ -783,6 +784,8 @@ ret
 ex3:
 call skipws
 call gcur
+cmp al, 34
+jz.l ex3lit
 cmp al, 39
 jz.l ex3chr
 cmp al, 40
@@ -799,6 +802,8 @@ ex3var:
 call ident
 call skipws
 call gcur
+cmp al, 34
+jz.l ex3lit
 cmp al, 40
 jz ex3call
 cmp al, 91
@@ -979,7 +984,6 @@ call isarr
 mov [rbp-308], eax
 cmp eax, 0
 jnz ex3wrok
-jmp.l fail              ; write from something that is not an array
 ex3wrok:
 mov esi, 4194424+f_comma
 call want
@@ -1129,6 +1133,46 @@ mov esi, 4194424+f_rbrk
 call want
 mov eax, 0
 mov [rbp-236], eax
+ret
+
+ex3lit:
+; a string literal where a value is expected: its address. The literal is
+; recorded in the same table `write("...")` uses -- offset and length at
+; table+8n -- and its bytes are emitted at the end of the program under the
+; label m<n+1>, so the value is that label plus the text base 4194424.
+mov eax, 1
+call bump               ; the opening quote
+call litgo              ; scans to the closing quote
+mov esi, 4194424+f_quote
+call want
+mov eax, [rbp+20]
+add eax, eax
+add eax, eax
+add eax, eax
+mov [rbp+40], eax
+call ldtab
+mov ecx, [rbp+40]
+add rax, rcx
+mov edx, [rbp+32]
+mov [rax], edx
+mov edx, [rbp+36]
+mov [rax+4], edx
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_sep
+call emitstr
+mov esi, 4194424+f_wlab
+call emitstr
+mov eax, [rbp+20]
+inc eax
+call emitnum            ; the index, one or two digits
+mov esi, 4194424+f_nl
+call emitstr
+mov eax, [rbp+20]
+inc eax
+mov [rbp+20], eax
 ret
 
 ex3chr:
@@ -1522,7 +1566,7 @@ mov eax, [rbp-320]
 mov [rbp-260], eax      ; this array's offset from rbp
 mov edx, [rbp-256]
 add eax, edx
-cmp eax, 8000
+cmp eax, 16000
 jb defabfit
 jmp.l fail              ; does not fit in the frame
 defabfit:
@@ -1639,6 +1683,8 @@ mov eax, 0
 mov [rbp+124], eax
 call skipws
 call gcur
+cmp al, 34
+jz.l ex3lit
 cmp al, 60
 jz.l cnd_lt
 cmp al, 62
@@ -1653,6 +1699,8 @@ mov eax, 1
 call bump
 call skipws
 call gcur
+cmp al, 34
+jz.l ex3lit
 cmp al, 61
 jnz cnd_lt2
 mov eax, 1
@@ -1687,6 +1735,8 @@ mov eax, 1
 call bump
 call skipws
 call gcur
+cmp al, 34
+jz.l ex3lit
 cmp al, 61
 jnz cnd_gt2
 mov eax, 1
@@ -1721,6 +1771,8 @@ mov eax, 1
 call bump
 call skipws
 call gcur
+cmp al, 34
+jz.l ex3lit
 cmp al, 61
 jnz.l fail
 mov eax, 1
@@ -1734,6 +1786,8 @@ mov eax, 1
 call bump
 call skipws
 call gcur
+cmp al, 34
+jz.l ex3lit
 cmp al, 61
 jnz.l fail
 mov eax, 1
@@ -1753,6 +1807,8 @@ cndbnd:
 ; path until something needs them.
 call skipws
 call gcur
+cmp al, 34
+jz.l ex3lit
 cmp al, 39
 jz cndbchr
 cmp al, 48
@@ -2069,10 +2125,10 @@ call bump
 jmp.l litloop
 litdone:
 mov eax, [rbp+20]
-mov ecx, 9
+mov ecx, 99
 cmp eax, ecx
 jb litok
-jmp.l fail              ; more than nine literals: no room in the table
+jmp.l fail              ; more than 99 literals: no room in the table
 litok:
 ret
 ret
@@ -2403,6 +2459,8 @@ ret
 sign:
 call skipws
 call gcur
+cmp al, 34
+jz.l ex3lit
 cmp al, 43
 jz sigok
 cmp al, 45
@@ -2534,7 +2592,7 @@ db "push rbp"
 db 10
 db "mov rbp, rsp"
 db 10
-db "mov rcx, 8200"
+db "mov rcx, 16500"
 db 10
 db "sub rsp, rcx"
 db 10
@@ -2844,4 +2902,10 @@ db "mov edi, 1"
 db 10
 db "syscall"
 db 10
+db 0
+f_wlab:
+db "4194424+m"
+db 0
+f_isav2:
+db "mov [rbp-328], "
 db 0

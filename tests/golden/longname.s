@@ -2,7 +2,7 @@
 averylongname:
 push rbp
 mov rbp, rsp
-mov rcx, 8200
+mov rcx, 16500
 sub rsp, rcx
 mov [rbp-8], rdi
 mov rax, [rbp-8]
@@ -14,7 +14,7 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 8200
+mov rcx, 16500
 sub rsp, rcx
 mov rax, 41
 mov [rbp-8], rax
