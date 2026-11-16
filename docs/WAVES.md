@@ -512,3 +512,42 @@ not the mistake, is the problem.
 Second defect: `ddisp2` compared `al` to `'v'` for `div`, but `ddisp` had left `al` as
 `[rbx+1]` = `'i'`. One-byte fix (compare `'i'`, unique among `db`/`dec`/`div`) — but only
 after the trace showed the new block was being entered with the wrong character.
+
+## Wave 2d-6 — PASS: numeric `db` (byte lists) — first `asm0a.s` prerequisite
+
+Artifact: `asm0a`, 2835 bytes, sha `7ccf5723b5a1222c577c8c257623dc9d8db271e5a77ba3f0d981406f451e8c97`, entry `0x400110`, filesz `0xb13`.
+
+`db` now takes either a quoted string or a comma-separated list of decimal byte values in
+0..255, routing on the character after `db ` (`dbdisp`). `do_dbnum` accumulates each value,
+range-checks it, and emits it. The reason this exists at all: `asm0a`'s own ELF header template
+is mostly zero bytes, and a string literal cannot express `00`.
+
+### Gate
+
+```
+dbnum   byte-identical to ref/dbnum (154 B), prints "Hi\n"
+exit42 42 | hello_num "Hello, World!" | jmp 7 | loop 10 | jz 5 | r8 7 | inc8 3 | cmp8 12 |
+stack "H\n" | count10 1..10 — all byte-identical
+```
+
+`src/dbnum.s` writes three bytes it emitted itself from `db 72, 105, 10` — so the data path is
+observed through a `write` syscall, not merely compared.
+
+### Three defects, and the pattern is unmistakable
+
+1. **The `dbdisp` dispatch was patched at the wrong offset again** — 0x5C5 instead of 0x5BE,
+   corrupting the neighbouring `je do_dec`, whose `84` byte became `d8`. Fifth occurrence of
+   the same class: I computed a patch address from a remembered layout rather than decoding the
+   site first.
+2. **The byte loop skipped blanks after a number but not before the next one**, so `72, 105, 10`
+   emitted `72, 0` (the space parsed as 0). Fixed additively: the terminator now tests whether
+   it is sitting on a digit and re-enters the loop if so.
+3. **Two displacements in the new 15-byte block were miscalculated** and `jbe` landed
+   mid-instruction (`SIGILL`) — the same arithmetic error, caught by decoding.
+4. **The comma path jumped back to the digit loop rather than to the blank-skipper**, so the
+   space after each comma still parsed as 0 and the program printed `H\0i`.
+
+The recurring failure mode across four waves is now clear enough to state as a rule: *compute
+patch offsets only from a decode of the site, never from a remembered layout, and re-decode
+after writing.* Every one of these was found by decoding or by an observable output; none by
+re-reading the hex.
