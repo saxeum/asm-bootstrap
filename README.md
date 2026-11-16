@@ -142,6 +142,32 @@ That agreement disappears the moment `src/asm1.s` uses a form `asm0a` cannot par
 first thing Stage 1 of `docs/ROADMAP.md` makes possible. When that happens the target says
 **NOT APPLICABLE** out loud and names the reason. It does not pass quietly: a check that cannot run
 is not a check that passed.
+## Milestones
+
+Two tags mark the points where the project changed kind. Both carry the evidence in the tag message,
+so `git tag -n99` reads without the repository.
+
+| tag | commit | what it marks |
+|---|---|---|
+| `milestone-fixpoint` | `c2240bf` | `asm1` assembles itself: `X == X' == X''`, 4295 bytes, one sha256 |
+| `milestone-handover` | `c806e95` | `asm1` is better than `asm0a` — and `asm0a` can no longer build it |
+
+Rebuilding the fixpoint tag. There was no `Makefile` at that commit, so the path is the two commands
+the commit itself documents:
+
+```bash
+mkdir -p /tmp/fx && git archive milestone-fixpoint | tar -x -C /tmp/fx && cd /tmp/fx && ./asm0a < src/asm1.s > X && chmod +x X && ./X < src/asm1.s > Xp && cmp X Xp && echo identical
+```
+
+Rebuilding the handover tag, where `asm0a` is no longer a valid builder and `make` uses `seed/asm1`:
+
+```bash
+mkdir -p /tmp/ho && git archive milestone-handover | tar -x -C /tmp/ho && cd /tmp/ho && make > /dev/null && ./asm1 < src/asm1.s | cmp - asm1 && echo identical
+```
+
+Each prints `identical`, and `milestone-fixpoint` produces 4295 bytes with sha256 `250e02c9…` while
+`milestone-handover` produces 5094 bytes with sha256 `7a10451b…` — the values the tag messages claim.
+
 ## State
 
 | | |
