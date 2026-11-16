@@ -246,6 +246,10 @@ mov eax, [rdx]
 mov [rbp-200], eax
 mov eax, [rdx+4]
 mov [rbp-204], eax
+mov eax, [rdx+8]
+mov [rbp-216], eax
+mov eax, [rdx+12]
+mov [rbp-220], eax
 mov eax, 1
 call bump
 mov eax, 0
@@ -287,6 +291,10 @@ mov eax, [rbp-200]
 mov [rdx], eax
 mov eax, [rbp-204]
 mov [rdx+4], eax
+mov eax, [rbp-216]
+mov [rdx+8], eax
+mov eax, [rbp-220]
+mov [rdx+12], eax
 mov eax, 0
 mov [rbp-208], eax
 mov esi, 4194424+f_callk
@@ -1086,11 +1094,13 @@ ret
 ;   [rbp-108] variable count               [rbp-112] scratch
 ;   [rbp-116] [rbp-120] saved indices
 ident:
-; scan a name: letters, digits and '_', at most seven characters, not starting
+; scan a name: letters, digits and '_', at most fifteen characters, not starting
 ; with a digit. Leaves the padded name at rbp-16064 and its length in [rbp-100].
 mov eax, 0
 mov [rbp-16064], eax
 mov [rbp-16060], eax
+mov [rbp-16056], eax
+mov [rbp-16052], eax
 mov [rbp-100], eax
 call skipws
 idloop:
@@ -1116,9 +1126,9 @@ cmp ecx, 0
 jz.l fail               ; an identifier cannot start with a digit
 idok:
 mov ecx, [rbp-100]
-cmp ecx, 7
+cmp ecx, 16
 jb idstore
-jmp.l fail              ; longer than seven characters
+jmp.l fail              ; longer than fifteen characters
 idstore:
 lea rdx, [rbp-16064]
 add rdx, rcx
@@ -1146,7 +1156,8 @@ jz idfnone
 mov edx, eax
 add eax, eax
 add eax, eax
-add eax, eax            ; 8i
+add eax, eax
+add eax, eax            ; 16i
 lea rcx, [rbp-16000]
 add rcx, rax
 mov eax, [rcx]
@@ -1155,6 +1166,14 @@ cmp eax, edx
 jnz idfn
 mov eax, [rcx+4]
 mov edx, [rbp-16060]
+cmp eax, edx
+jnz idfn
+mov eax, [rcx+8]
+mov edx, [rbp-16056]
+cmp eax, edx
+jnz idfn
+mov eax, [rcx+12]
+mov edx, [rbp-16052]
 cmp eax, edx
 jnz idfn
 mov eax, [rbp-104]
@@ -1188,13 +1207,18 @@ defok:
 mov edx, eax
 add eax, eax
 add eax, eax
-add eax, eax            ; 8i
+add eax, eax
+add eax, eax            ; 16i
 lea rcx, [rbp-16000]
 add rcx, rax
 mov eax, [rbp-16064]
 mov [rcx], eax
 mov eax, [rbp-16060]
 mov [rcx+4], eax
+mov eax, [rbp-16056]
+mov [rcx+8], eax
+mov eax, [rbp-16052]
+mov [rcx+12], eax
 mov eax, [rbp-108]
 inc eax
 mov [rbp-108], eax
@@ -1243,11 +1267,14 @@ mov edx, eax
 add eax, eax
 add eax, eax
 add eax, eax
+add eax, eax            ; 16i
 lea rcx, [rbp-16000]
 add rcx, rax
 mov eax, 0
 mov [rcx], eax
-mov [rcx+4], eax        ; no name: this slot cannot be found
+mov [rcx+4], eax
+mov [rcx+8], eax
+mov [rcx+12], eax       ; no name: this slot cannot be found
 mov eax, [rbp-264]
 lea rcx, [rbp-14000]
 add rcx, rax
@@ -1262,12 +1289,17 @@ mov eax, [rbp-260]
 add eax, eax
 add eax, eax
 add eax, eax
+add eax, eax            ; 16i
 lea rcx, [rbp-16000]
 add rcx, rax
 mov eax, [rbp-16064]
 mov [rcx], eax
 mov eax, [rbp-16060]
 mov [rcx+4], eax
+mov eax, [rbp-16056]
+mov [rcx+8], eax
+mov eax, [rbp-16052]
+mov [rcx+12], eax
 mov eax, [rbp-260]
 lea rcx, [rbp-14000]
 add rcx, rax

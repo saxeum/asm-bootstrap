@@ -15,16 +15,16 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | | bytes | sha256 (16) | notes |
 |---|---|---|---|
 | `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
-| `asm1` | 7 838 | `23f9b8cb02eb5476` | built by `seed/asm1` from `src/asm1.s` |
+| `asm1` | 7 903 | `5db95315a741a858` | built by `seed/asm1` from `src/asm1.s` |
 | `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted stage; identical to `asm1` |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
 | `src/asm1.s` | 31 236 | — | 2 150 lines, 199 labels (limit 256), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
 | `cc` | 7 765 | `ad243b31bd2ac10c` | built by `asm1` from `src/cc.s` (2 369 lines) — C to dialect TEXT |
 
-Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **33 capability
+Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **34 capability
 pairs** · **6 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
-**97 coverage forms** · **cc: 21 checks, 31 refusals** · 290 branch pins · 36 provenance records.
+**97 coverage forms** · **cc: 22 checks, 31 refusals** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 

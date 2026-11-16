@@ -1326,32 +1326,41 @@ jb.l lok
 jmp.l fail
 lok:
 lea rcx, [rbp+1]
-mov esi, 3861
+mov esi, 8601             ; the label table now holds 20-byte entries
 sub rcx, rsi
 mov edx, [rbp+80]
 lget:
 cmp edx, 0
 jz.l lgoth
-lea rcx, [rcx+12]
+lea rcx, [rcx+20]
 dec edx
 jmp.l lget
 lgoth:
-mov eax, [rbp+72]
+mov eax, [rbp-8700]
 mov [rcx], eax
-mov eax, [rbp+76]
+mov eax, [rbp-8696]
 mov [rcx+4], eax
-mov eax, [rbp+20]
+mov eax, [rbp-8692]
 mov [rcx+8], eax
+mov eax, [rbp-8688]
+mov [rcx+12], eax
+mov eax, [rbp+20]
+mov [rcx+16], eax
 mov eax, [rbp+80]
 inc eax
 mov [rbp+80], eax
 jmp.l pline
 
 lcpy:
+; The name scratch lives at rbp-8700, sixteen bytes, zeroed first so a short
+; name compares equal only to itself. Fifteen characters plus that zero is the
+; limit: `cmp edx, 16` refuses the sixteenth.
 mov eax, 0
-mov [rbp+72], eax
-mov [rbp+76], eax
-lea rcx, [rbp+72]
+mov [rbp-8700], eax
+mov [rbp-8696], eax
+mov [rbp-8692], eax
+mov [rbp-8688], eax
+lea rcx, [rbp-8700]
 xor edx, edx
 lcpyl:
 movzx eax, byte [rbx]
@@ -1369,7 +1378,7 @@ cmp al, 10
 jz.l lcpyd
 cmp al, 0
 jz.l lcpyd
-cmp edx, 8
+cmp edx, 16
 jz.l fail
 mov [rcx], al
 lea rcx, [rcx+1]
@@ -1391,7 +1400,7 @@ call emital
 jmp.l pline
 pbr1:
 lea rcx, [rbp+1]
-mov esi, 3861
+mov esi, 8601             ; the label table now holds 20-byte entries
 sub rcx, rsi
 mov edx, [rbp+80]
 lfind:
@@ -1401,20 +1410,14 @@ mov eax, 2
 mov [rbp+2], al
 jmp.l fail
 lfok:
-mov eax, [rcx]
-mov esi, [rbp+72]
-xor eax, esi
-mov edi, [rcx+4]
-mov esi, [rbp+76]
-xor edi, esi
-add eax, edi
+call lcmp
 cmp eax, 0
 jz.l lbfnd
-lea rcx, [rcx+12]
+lea rcx, [rcx+20]
 dec edx
 jmp.l lfind
 lbfnd:
-mov eax, [rcx+8]
+mov eax, [rcx+16]
 mov edx, [rbp+20]
 mov esi, 2
 add edx, esi
@@ -1536,22 +1539,16 @@ mov edi, 1
 syscall
 lku:
 lea rcx, [rbp+1]
-mov esi, 3861
+mov esi, 8601             ; the label table now holds 20-byte entries
 sub rcx, rsi
 mov edx, [rbp+80]
 lkul:
 cmp edx, 0
 jz.l fail
-mov eax, [rcx]
-mov esi, [rbp+72]
-xor eax, esi
-mov edi, [rcx+4]
-mov esi, [rbp+76]
-xor edi, esi
-add eax, edi
+call lcmp
 cmp eax, 0
 jz.l lkux
-lea rcx, [rcx+12]
+lea rcx, [rcx+20]
 dec edx
 jmp.l lkul
 lkux:
@@ -1582,7 +1579,7 @@ cmp eax, 235
 jnz.l plng2
 mov esi, 5
 plng2:
-mov eax, [rcx+8]
+mov eax, [rcx+16]
 mov edx, [rbp+20]
 add edx, esi
 sub rax, rdx
@@ -1626,7 +1623,7 @@ call emital
 jmp.l pline
 pcal1:
 call lku
-mov eax, [rcx+8]
+mov eax, [rcx+16]
 mov edx, [rbp+20]
 mov esi, 5
 add edx, esi
@@ -1975,28 +1972,43 @@ call putch
 prx:
 ret
 
+lcmp:
+; Compare the label entry at rcx with the name scratch: result eax = 0 when the
+; sixteen-byte names are equal. rcx, rdx and rbx are preserved, so a caller's
+; walk and stride survive it; r8..r11 are this routine's own.
+lea r9, [rcx]
+lea r10, [rbp-8700]
+mov edi, 0
+mov r8, 4
+lcml:
+mov eax, [r9]
+mov r11, [r10]
+xor eax, r11d
+or edi, eax
+lea r9, [r9+4]
+lea r10, [r10+4]
+dec r8
+cmp r8, 0
+jnz lcml
+mov eax, edi
+ret
+
 lku0:
 lea rcx, [rbp+1]
-mov esi, 3861
+mov esi, 8601             ; the label table now holds 20-byte entries
 sub rcx, rsi
 mov edx, [rbp+80]
 lk0l:
 cmp edx, 0
 jz.l lk0z
-mov eax, [rcx]
-mov esi, [rbp+72]
-xor eax, esi
-mov edi, [rcx+4]
-mov esi, [rbp+76]
-xor edi, esi
-add eax, edi
+call lcmp
 cmp eax, 0
 jz.l lk0f
-lea rcx, [rcx+12]
+lea rcx, [rcx+20]
 dec edx
 jmp.l lk0l
 lk0f:
-mov eax, [rcx+8]
+mov eax, [rcx+16]
 mov edx, 1
 ret
 lk0z:

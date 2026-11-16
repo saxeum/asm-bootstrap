@@ -2512,3 +2512,31 @@ three forms (97 now, and it failed first on `add rax, 1`, which is exactly what 
 allocation loop lost an instruction: `mov edx, 7; add ecx, edx` became `add ecx, 7`.
 
 `asm1` 7 731 → 7 838 bytes, promoted, `docs/SHAS` re-pinned by hand, toolchain and provenance recorded.
+
+## Labels and identifiers: 7 → 15 characters, in two places
+
+`asm1`'s label limit was an 8-byte name field compared as two dwords; `cc`'s identifier limit was the
+same shape in its own table. Both were widened to sixteen bytes, and the assembler's change went
+through the bootstrap properly: widen, build with the old seed, `make promote`, and only then may the
+source use longer labels.
+
+What changed in `asm1`: the name scratch moved to `rbp-8700` (sixteen bytes, zeroed first so a short
+name only equals itself), entries went from 12 bytes to 20 with the table based at `rbp-8600`, and the
+three lookup loops share a `lcmp` that compares four dwords in r8..r11 so the caller's walk pointer
+and stride survive. `asm1`'s own labels are still short; that is a separate, optional cleanup now.
+
+What changed in `cc`: the name buffer to sixteen bytes, `ident`'s limit to 15, the table stride to 16,
+`idfind` to four dword comparisons, and the two copy sites plus the argument-save pair.
+
+Three defects, all mine, all found by the gates rather than by reading:
+
+- The awk that replaced the eight-line compare block also swallowed the `cmp eax, 0` that followed it,
+  so `jz` tested `lcmp`'s internal flags — every first label became a "duplicate".
+- The name scratch at `rbp-8400` sat *inside* the widened table (entry 10 onwards), so once a source
+  had ten labels the scratch was overwritten by label entries. It moved below the table base.
+- A test program containing `nop` looked like "two labels are now refused"; `nop` is not a mnemonic
+  here. The refusal I was chasing did not exist.
+
+A gate had to change with the feature: `int abcdefgh = 1;` is no longer refused, so the refusal is now
+seventeen characters. An obsolete refusal that still passes is worse than none, which is exactly what
+the "check a gate can fail" rule is for.

@@ -1382,3 +1382,18 @@ Next on the assembler side, in order of what `cc` needs:
 2. `.data` — a second read-write `PT_LOAD`, `filesz`/`memsz` from label differences, and a string table
    that lives in memory instead of being written straight out.
 3. `div r32` (`F7 /6`), so that `/` stops being a refusal.
+
+## Labels and identifiers: 15 characters
+
+`asm1`'s labels and `cc`'s identifiers are both 15 characters now. The assembler's widening went
+through the bootstrap in the required order (widen, build with the old seed, promote, then the source
+may use it), and `cc` followed with its own table, name buffer and comparisons.
+
+That was the last *size* limit blocking a self-compiling `cc`. What is left is capability, not width:
+
+1. **`.data`** — a mutable table that outlives a function, and string literals that live in memory
+   instead of being written straight out by `write`.
+2. **`div r32`** (`F7 /6`) so `/` stops being a refusal.
+3. Then the real thing: `src/cc.c`, compiled by `cc`, assembled by `asm1`, byte-identical to
+   `src/cc.s`'s product on the whole corpus. `cc` 7 888 bytes is a large but finite target, and every
+   construct it uses now exists in the subset it compiles — except `.data` and `/`.

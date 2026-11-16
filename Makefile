@@ -433,6 +433,15 @@ test-cc: cc asm1
 	  if $$tmp/cp; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 72 ]; then \
 	    printf '  cc    char a[9] takes two slots: a[8]=65 beside int b=7 exits 72\n'; \
+	if $(CC) < tests/golden/longname.c > $$tmp/ln.s 2>/dev/null && cmp -s $$tmp/ln.s tests/golden/longname.s; then :; \
+	else echo "  longname.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/longname.s > $$tmp/ln 2>/dev/null; then \
+	  chmod +x $$tmp/ln; \
+	  if $$tmp/ln; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 42 ]; then \
+	    printf '  cc    names longer than seven: averylongname(xyzlongname) exits 42\n'; \
+	  else echo "  longname exited $$g1, wanted 42"; fail=1; fi; \
+	else echo "  asm1 refuses longname.s -- the label limit is the compiler's limit"; fail=1; fi; \
 	  else echo "  charpack exited $$g1, wanted 72 -- the char array overran its slots"; fail=1; fi; \
 	else echo "  asm1 refuses charpack.s"; fail=1; fi; \
 	  else echo "  ntsum exited $$g1, wanted 10"; fail=1; fi; \
@@ -480,7 +489,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { int x = 255; if (x <= 255) { } }'; \
 	refuse 'int main(void) { y = 1; }'; \
 	refuse 'int main(void) { int x = 1; int x = 2; }'; \
-	refuse 'int main(void) { int abcdefgh = 1; }'; \
+	refuse 'int main(void) { int abcdefghijklmnopq = 1; }'; \
 	refuse 'int main(void) { int x = 4 / 2; }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(1, 2, 3, 4, 5); }'; \
 	refuse 'int main(void) { int p = &5; }'; \
