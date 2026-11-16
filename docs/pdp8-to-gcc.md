@@ -86,6 +86,47 @@ compiler that compiles it, and no source review will ever show it. The only defe
 auditable chain from something you can check by hand. Which is the real reason the plan in
 Part 2 is worth doing: it makes every byte attributable to one human-checkable step.
 
+### How the PDP-8 world answered "is the source or the assembler wrong?"
+
+This project hit the ambiguity directly: when a self-hosting build fails, the same binary is both
+the tool and the subject, so a failure could be the source or the assembler. The PDP-8 world did not
+solve it with a diagnostic. They arranged not to need one, four ways:
+
+**1. The assembler was never built by itself.** PAL-III was "hacked up … from PAL II" — a program for
+the **PDP-5**, a different machine. Later, cross-assemblers removed the question entirely: PAL-X
+(PDP-10 → PDP-8, Bob Bowering to Everett's and Witcraft's specs) and AECL PAL8 (CDC 6600 → PDP-8,
+D.B. Goulding). In every case the PDP-8 assembler was produced by an **independent implementation on
+a different machine**, which can be inspected, corrected and rerun on its own terms. That is exactly
+the role `asm0a` plays here, and it is why `make bootstrap-check` is worth keeping for as long as
+possible. The modern name for the practice is *diverse double-compiling* (Wheeler, 2005).
+
+**2. The medium verified itself.** PDP-8 programs were distributed on paper tape in formats whose
+loaders check every block as it is read (the BIN format ends each block with a checksum word). A tape
+that had been mis-assembled, mis-punched or mis-read was caught by the loader at load time — not by
+the assembler, and not by a person. Byte-comparison was built into the transport, which is the same
+move as this project's sha pins and `cmp`-based tests. *(Format details from DEC's tape-format
+descriptions; not re-verified against a manual for this document.)*
+
+**3. The listing was the record.** PAL-III's optional third pass produced a printed listing with
+addresses and emitted words beside the source lines. That is what a human compared when something
+looked wrong: the listing against the source, line by line, by hand. A listing is an artefact that
+can be filed, checked and argued about — the ancestor of `docs/branches.tsv` and the pinned decodes.
+
+**4. The frozen original stayed in the archive.** The tapes were kept and the manuals record which
+version produced which object tape. Nobody regenerated the cross-assembler "casually"; the chain was
+the evidence. This is precisely why `asm0a` is frozen here, and why `docs/toolchain.tsv` exists.
+
+What none of it solves is Thompson's point (*Reflections on Trusting Trust*, 1984): a tool that
+deliberately miscompiles can reproduce itself forever, and no amount of self-reproduction detects it.
+The PDP-8 answer is the only kind of answer available — a frozen, hand-checkable origin, an
+independent implementation to cross against, and media that carry their own checksums.
+
+For this project the practical consequence is that `make triage` answers *"which artefact is
+inconsistent with the recorded past"*. It cannot answer *"which artefact is correct"*. Correctness
+rests on the frozen hand-written `asm0a`, the hand-emitted `ref/` oracles, and — until Phase 2 of the
+roadmap — an independent builder that must agree. Once `src/asm1.s` outgrows `asm0a`, only the first
+two remain, which is exactly the position DEC was in.
+
 ### The line from PAL to `as` and `gcc` on Linux
 
 Be careful here: this is **design lineage and role lineage, not code lineage.** No line of

@@ -81,3 +81,22 @@ gate at the time it was made:
 
 A seed that reproduces itself proves only that it is stable, not that it is correct: a buggy stage can
 be perfectly self-reproducing. The independent builder is the only real arbiter.
+
+## The ambiguity is historical, and its answer is structural
+
+`make triage` says which artefact is *inconsistent with the recorded past*. It cannot say which is
+*correct*, and no tool can. The PDP-8 world did not solve that either; they arranged not to need it,
+in four ways that this repo mirrors (`docs/pdp8-to-gcc.md` has the sources):
+
+1. **The assembler was never built by itself** — PAL-III came from PAL-II on a different machine, and
+   PAL-X (PDP-10) and AECL PAL8 (CDC 6600) are cross-assemblers. That is `asm0a`'s role, and the
+   modern name is diverse double-compiling.
+2. **The medium verified itself** — PDP-8 object tapes carry per-block checksums that the loader
+   checks. That is `docs/SHAS` and every `cmp` in the Makefile.
+3. **The listing was the record** — a printed listing beside the source, compared by hand. That is
+   `docs/branches.tsv` and the pinned decodes.
+4. **The frozen original stayed in the archive** — `asm0a` is frozen and `docs/toolchain.tsv` records
+   which generation produced which binary.
+
+What none of it catches is a deliberately miscompiling tool (Thompson, 1984). When `src/asm1.s`
+outgrows `asm0a`, only 2–4 remain, which is exactly DEC's position.
