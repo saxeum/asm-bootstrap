@@ -387,3 +387,42 @@ exit42, hello_num, jmp, loop, jz, r8 — all byte-identical
 
 The pattern across 2d-1 and 2d-2 is consistent: every defect was found by decode-and-compare or
 by byte-identical comparison, and none by re-reading the hex.
+
+## Wave 2d-3 — PASS: `cmp r8,imm8`, `jb`, `add r8,imm8`
+
+Artifact: `asm0a`, 2155 bytes, sha `764cfff2b4c455575423d236fa6934371e522b4744d9b3aceccd8864aa7291d3`, entry `0x400110`, filesz `0x86b`.
+
+New: `num8`, the first *shared* operand parser — skip blanks, accumulate decimal, then
+**range-check into −128..127** and `fail` outside it. That check is the point: `80 /7` takes a
+sign-extended byte (`I bs` per `docs/encodings.md`), so `cmp bl, 200` must be refused rather
+than truncated into `cmp bl, -56`. Verified: `cmp bl, 200` → exit 1, `add al, 200` → exit 1.
+`do_cmp` emits `80 /7`, `do_add` emits `80 /0` — except for `al`, which uses the short `04 ib`
+form, because `ref/count10` contains `add al,'0'` as `04 30` and byte-identity is the standard.
+`jb` is one more entry in the existing `jdisp` chain (`72`, rel8, same handler as `jz`/`jnz`).
+
+### Gate
+
+```
+snapshot  asm0a exit  byte-identical  behaviour
+cmp8      0           yes             exit 12
+exit42 42 | hello_num prints | jmp 7 | loop 10 | jz 5 | r8 7 | inc8 3 — all identical
+```
+
+### The interesting failure: the reference was wrong
+
+`ref/cmp8` as I first hand-emitted it was **not** what the assembler produces: I wrote
+`jmp top` as `E9` with a rel32 (5 bytes) when this dialect's rule is `EB` rel8 (2 bytes). The
+assembler emitted the short form, 26 bytes of body against my 29, and the byte comparison failed.
+
+The behavioural check did *not* catch it — both forms compute the same thing and both exited
+the same value. Worse, my predicted value was also wrong: I said the loop runs 3 times and exits
+9; it runs 4 times and exits 12. The assembler was right on both counts.
+
+Two lessons worth keeping:
+
+1. **A hand-emitted reference is only an oracle after it has been compared, not just executed.**
+   Both binaries ran correctly; only the byte comparison revealed they disagreed.
+2. **When assembler and reference disagree, neither is presumed right.** Here the reference was
+   wrong. Had I "fixed" the assembler to match it, I would have introduced a second, longer
+   encoding for `jmp` that the dialect's own rule forbids — the exact class of silent
+   divergence `docs/handover.md` condition 3 exists to prevent.
