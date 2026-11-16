@@ -487,6 +487,15 @@ test-cc: cc asm1
 	  if $$tmp/cb; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 6 ]; then \
 	    printf '  cc    i <= n with a variable bound: 0..5 inclusive exits 6\n'; \
+	if $(CC) < tests/golden/bigarray.c > $$tmp/ba.s 2>/dev/null && cmp -s $$tmp/ba.s tests/golden/bigarray.s; then :; \
+	else echo "  bigarray.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/bigarray.s > $$tmp/ba 2>/dev/null; then \
+	  chmod +x $$tmp/ba; \
+	  if $$tmp/ba; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 65 ]; then \
+	    printf '  cc    a 200-byte buffer, written in a loop, exits 65\n'; \
+	  else echo "  bigarray exited $$g1, wanted 65 -- the array is outside the frame"; fail=1; fi; \
+	else echo "  asm1 refuses bigarray.s"; fail=1; fi; \
 	  else echo "  cmpbound exited $$g1, wanted 6 -- the bound adjustment is wrong"; fail=1; fi; \
 	else echo "  asm1 refuses cmpbound.s"; fail=1; fi; \
 	  else echo "  manyvars exited $$g1, wanted 21 -- the frame is too small for the slots"; fail=1; fi; \
@@ -569,7 +578,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { int a[4]; int y = a; }'; \
 	refuse 'int main(void) { char s[4]; int n = read(&s, 4); }'; \
 	refuse 'int main(void) { int a[4]; int b[4]; int y = a[b[0]]; }'; \
-	refuse 'int main(void) { int a[33]; }'; \
+	refuse 'int main(void) { int a[1024]; }'; \
 	refuse 'int main(void) { int a[2]; int a[2]; }'; \
 	refuse 'int main(void) { char x = 65; }'; \
 	refuse 'int main(void) { char a[4]; a = 1; }'; \

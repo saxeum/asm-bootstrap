@@ -2,7 +2,7 @@
 f:
 push rbp
 mov rbp, rsp
-mov rcx, 264
+mov rcx, 8200
 sub rsp, rcx
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -31,7 +31,7 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 264
+mov rcx, 8200
 sub rsp, rcx
 mov rcx, 10
 mov rdi, rcx

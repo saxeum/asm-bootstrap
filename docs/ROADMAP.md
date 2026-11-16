@@ -1516,3 +1516,18 @@ What is left is short and no longer about the language:
    needs no assembler change: allocate arrays from a byte counter and grow the frame.
 2. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus, with
    the dialect frozen as the witness.
+
+## Compiler: arrays are byte-allocated
+
+An array no longer consumes slots: it comes from a byte counter in an 8 200-byte frame, with its offset
+in a table beside the kinds. `char buf[200]` written in a loop exits 65; `int a[200]` works.
+
+Two limits stand between this and a compiler's input buffer, and the first is trivial:
+
+1. **Numeric literals are 0..255**, and `emitnum` cannot print four digits. `char b[1024]` is refused by
+   the literal parser, not by the frame. Both ends need widening together — the parse limit and the
+   printer — and the `return` range check (0..255, one byte) has to stay where it belongs rather than
+   living in the shared parser.
+2. The frame constant (8 200) caps an array at ~7.7 KB.
+
+Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.

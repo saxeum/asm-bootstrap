@@ -2,7 +2,7 @@
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 264
+mov rcx, 8200
 sub rsp, rcx
 mov rax, 0
 mov [rbp-8], rax

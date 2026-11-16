@@ -2,22 +2,22 @@
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 264
+mov rcx, 8200
 sub rsp, rcx
 mov rax, 7
-mov [rbp-24], rax
+mov [rbp-16], rax
 mov rcx, 8
 mov [rbp-284], rcx
 mov rax, 65
-lea rcx, [rbp-8]
+lea rcx, [rbp-264]
 mov rdx, [rbp-284]
 add rcx, rdx
 mov [rcx], al
-lea rax, [rbp-8]
+lea rax, [rbp-264]
 mov rcx, 8
 add rax, rcx
 movzx rax, byte [rax]
-mov rcx, [rbp-24]
+mov rcx, [rbp-16]
 add rax, rcx
 mov rdi, rax
 mov eax, 60

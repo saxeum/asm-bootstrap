@@ -53,6 +53,9 @@ mov [rbp+96], eax
 mov [rbp-108], eax      ; no variables declared yet
 mov [rbp-208], eax      ; not inside an argument list
 mov [rbp-236], eax      ; not inside a subscript
+mov eax, 264
+mov [rbp-320], eax      ; the first free byte above the scalar slots
+mov eax, 0
 mov eax, 1
 mov [rbp-292], eax      ; a call at depth 0 evaluates its arguments at depth 1
 mov eax, 0
@@ -1358,66 +1361,43 @@ mov [rcx], dl           ; a scalar is not an array: its subscript is a pointer
 ret
 
 ; ---- arrays ---------------------------------------------------------------
-; `int a[N];` allocates N consecutive slots and marks the name an array in a
-; byte-per-slot table at rbp-14000. The slots after the first have their name
-; zeroed, because ident never produces an empty name -- so they can never be
-; found, and a bare `a` is refused rather than quietly reading a[0].
-;   [rbp-256] count   [rbp-260] base index   [rbp-264] loop index
+; `int a[N];` and `char a[N];` are allocated from a byte counter that starts
+; above the scalar slots, so an array no longer competes with them: a function
+; can have thirty-two scalars *and* a four-kilobyte buffer. The frame is
+; FRAME bytes (see f_pro), the counter starts at 264 -- the scalar area -- and
+; an array that does not fit is refused rather than overrunning the frame.
+;   [rbp-320] next free byte   [-13800 + 4i] an array's offset   [-14000 + i] its kind
 defarr:
-; eax is a count of *elements*. A variable occupies whole eight-byte slots, so
-; convert to bytes first -- elements times the element size in [rbp-304], then
-; round up to slots: (n*f + 7) >> 3. No branch: an int array of n has n*8 bytes
-; and therefore n slots, a char array of n has n bytes and so ceil(n/8).
+; eax is a count of *elements*; the element size is in [rbp-304]. Bytes, then
+; round up to eight so that every object starts on a slot boundary.
 mov ecx, eax
 mov edx, [rbp-304]
 imul ecx, edx
-add ecx, 7              ; the dialect has this now, so one instruction replaces two
-shr ecx, 3
-mov eax, ecx
-mov [rbp-256], eax
+add ecx, 7
+and ecx, -8             ; an eight-byte multiple
+mov [rbp-256], ecx      ; the byte count
 call idfind
 cmp eax, -1
 jnz.l fail              ; already declared
 mov eax, [rbp-108]
-mov edx, [rbp-256]      ; the dialect has no `add r32, [mem]`
-add eax, edx
 cmp eax, 32
 jb defafit
-jmp.l fail              ; does not fit in the free slots
+jmp.l fail              ; no free symbol slot
 defafit:
-mov eax, [rbp-108]
-mov [rbp-260], eax
-mov [rbp-264], eax
-defazl:
-mov eax, [rbp-264]
-mov ecx, [rbp-108]
+mov eax, [rbp-320]
+mov [rbp-260], eax      ; this array's offset from rbp
 mov edx, [rbp-256]
-add ecx, edx
-cmp eax, ecx
-jz defazd
-mov edx, eax
-add eax, eax
-add eax, eax
-add eax, eax
-add eax, eax            ; 16i
-lea rcx, [rbp-16000]
-add rcx, rax
-mov eax, 0
-mov [rcx], eax
-mov [rcx+4], eax
-mov [rcx+8], eax
-mov [rcx+12], eax       ; no name: this slot cannot be found
-mov eax, [rbp-264]
-lea rcx, [rbp-14000]
-add rcx, rax
-mov eax, 0
-mov [rcx], al           ; and not an array itself
-mov eax, [rbp-264]
-inc eax
-mov [rbp-264], eax
-jmp defazl
-defazd:
+add eax, edx
+cmp eax, 8000
+jb defabfit
+jmp.l fail              ; does not fit in the frame
+defabfit:
+mov [rbp-320], eax
 mov eax, [rbp-260]
+mov [rbp-272], eax
+mov eax, [rbp-108]
+mov [rbp-268], eax
+mov edx, eax
 add eax, eax
 add eax, eax
 add eax, eax
@@ -1432,16 +1412,23 @@ mov eax, [rbp-16056]
 mov [rcx+8], eax
 mov eax, [rbp-16052]
 mov [rcx+12], eax
-mov eax, [rbp-260]
+mov eax, [rbp-268]
+mov edx, eax
+add eax, eax
+add eax, eax
+lea rcx, [rbp-13800]
+add rcx, rax
+mov eax, [rbp-272]
+mov [rcx], eax          ; the array's offset
+mov eax, [rbp-268]
 lea rcx, [rbp-14000]
 add rcx, rax
 mov eax, [rbp-304]
-mov [rcx], al           ; the element size is the kind: 8 int, 1 char
+mov [rcx], al           ; the element size is the kind
 mov eax, [rbp-108]
-mov edx, [rbp-256]
-add eax, edx
+inc eax
 mov [rbp-108], eax
-mov eax, [rbp-260]
+dec eax
 ret
 
 ; isarr: eax = index, result eax = 1 if that slot is an array
@@ -1453,7 +1440,26 @@ ret
 
 ; varoff: eax = index, result eax = the byte offset 8*(index+1)
 varoff:
+; eax = a variable index, result = its byte offset from rbp. A scalar sits at
+; 8*(i+1); an array's offset is in the table at -13800 because it comes from the
+; byte counter, not from the index.
 mov ecx, eax
+mov edx, eax
+add edx, edx
+add edx, edx
+lea rsi, [rbp-14000]
+add rsi, rcx
+movzx edx, byte [rsi]
+cmp edx, 0
+jz varoffsc
+mov edx, eax
+add edx, edx
+add edx, edx
+lea rsi, [rbp-13800]
+add rsi, rdx
+mov eax, [rsi]
+ret
+varoffsc:
 inc ecx
 add ecx, ecx
 add ecx, ecx
@@ -2377,7 +2383,7 @@ db "push rbp"
 db 10
 db "mov rbp, rsp"
 db 10
-db "mov rcx, 264"
+db "mov rcx, 8200"
 db 10
 db "sub rsp, rcx"
 db 10

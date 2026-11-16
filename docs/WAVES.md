@@ -2776,3 +2776,39 @@ Gate: `i <= n` with `n = 5` counting 0..5 inclusive exits **6** — the off-by-o
 exists to prevent.
 
 `cc` 8 745 → 8 837 bytes. 28 checks, 35 refusals, 26 goldens.
+
+## Arrays come from a byte counter, not from slots
+
+Until now an array consumed one *slot* per element, so a function's total array space was 32 slots — 256
+bytes. That was the last structural limit in the way of a compiler, whose input buffer is kilobytes.
+
+Arrays now allocate from a byte counter that starts above the scalar area, in an 8 200-byte frame:
+
+```
+frame:   sub rsp, 8200           (f_pro)
+counter: [rbp-320], starting at 264
+arrays:  offset = counter; counter += bytes rounded to 8; refused past 8000
+offset:  [rbp-13800 + 4i]        (scalars keep 8*(i+1))
+```
+
+An array no longer competes with scalars for slots, so a function can have thirty-two scalars *and* a
+buffer. The kind byte in the flags table still says 0 pointer / 1 char / 8 int, and `varoff` answers
+"the offset from rbp" for both kinds.
+
+Gates: `char buf[200]` written in a loop exits 65, and `int a[200]` — 1 600 bytes — works.
+
+Two limits remain, and the gate found the first one by refusing a 1 024-byte buffer:
+
+- **A numeric literal is 0..255.** `numval` refuses more than three digits, and `emitnum` cannot print
+  four — it has units, tens and hundreds digits and no more. So `char b[1024]` is refused by the
+  *literal*, not by the frame, and the refusal in the suite is now `int a[1024]`, which is honest about
+  which limit is being tested.
+- The frame is 8 200 bytes, so an array above ~7.7 KB is refused. Raising it is a constant; raising it
+  *safely* means knowing the stack depth, which recursion makes interesting.
+
+One defect on the way, and it is the kind that only a whole-program test catches: the counter's
+initialisation was inserted between two stores that shared `eax`, so `[rbp-236]` — "inside a
+subscript" — was initialised to 264 instead of 0, and **every** subscript was then refused. Four
+separate probes passed (declaration, `read()`, scalars, small arrays) before a single `p[0]` showed it.
+
+`cc` 8 837 → 8 858 bytes. 29 checks, 35 refusals, 27 goldens.
