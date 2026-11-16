@@ -61,6 +61,8 @@ and `asm0a` can no longer build it). `docs/ROADMAP.md` is where it goes next.
 
 ## Where the detail lives
 
+**Start a session with `docs/continue-here.md`** — state, verification commands, the open debt and the next task, in one page.
+
 | | |
 |---|---|
 | `docs/ROADMAP.md` | where this goes next, and the order it must happen in |
