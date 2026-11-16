@@ -127,6 +127,41 @@ Consequences for the gate:
   binaries from it; the interesting object becomes the source file, which is the thing a human
   can read.
 
+### What `asm0a.s` needs that `asm0a` does not yet have
+
+The self-hosting loop only closes if the dialect can express an assembler. Verified gaps, each
+with the observed failure:
+
+| Need | Why `asm0a.s` cannot do without it | Today |
+|---|---|---|
+| branch instructions | an assembler is loops and dispatch | **absent** (2b, red) |
+| `cmp`/`inc`/`dec`/`add`/`sub`, conditional jumps | counters, table walk, bounds checks | **absent** (2c) |
+| memory operands (`[rsp+d8]`, `[rdi+rcx]`), `movzx`, `div`, `lea`, `test`, `imul` | the parser, the symbol table, the number printer | **absent** (2d) |
+| **numeric `db`** | the ELF header template is mostly zero bytes, and `db` accepts only a quoted string | `db 0` → exit 1 |
+| **`entry label`** | with tables placed first (which fixes their addresses), code starts at 0x98, so the output needs `e_entry` = 0x400110. `asm0a` hardcodes 0x400078 in its template | `entry x` → exit 1 |
+| `mov r32, label` (optional) | otherwise table addresses are decimal literals like `4194424`; correct, but brittle-looking | `mov eax, x` → exit 1 |
+
+The `entry` gap is the one that is easy to miss and fatal: `asm0a`'s template contains
+`e_entry = 0x400078` as a literal, so a data-first source with code at 0x98 assembles into a
+binary that starts executing its tables. Wave 2a's "data first" decision — made to stop
+addresses churning — is exactly what makes `entry` mandatory.
+
+### The loop, stated precisely
+
+```
+asm0a.s  --[asm0a]-->  X      X is a working assembler with the same dialect
+X        --[asm0a.s]--> X'    X' == X  (fixpoint; X == asm0a is NOT required)
+```
+
+Only after the fixpoint holds does "the next version" exist, and then it arrives by **editing
+`asm0a.s`** and reassembling with the current binary. The first `X` is the same version as
+`asm0a`, merely self-produced; the version numbers start from the edits after it.
+
+Why the weaker requirement is the right one: it means the source does not have to reproduce
+`asm0a`'s exact bytes or offsets. Any source whose *behaviour* is equivalent will do, and the
+fixpoint then proves the loop is closed. Requiring `X == asm0a` would demand re-deriving a
+1351-byte layout byte for byte, which is a transcription exercise with no verification value.
+
 ### The next step is therefore unchanged in substance, but re-scoped
 
 2b is split, because the failure mode was hand-laying 441 bytes with 30-odd hand-computed
