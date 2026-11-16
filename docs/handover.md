@@ -25,7 +25,7 @@ handover; it becomes `asm0b`'s starting condition.
 | # | Condition |
 |---|---|
 | 7 | `asm0b`, as built by `asm0a`, passes the **whole inherited corpus** byte-identically: `exit42`, `hello_num`, `jmp`. |
-| 8 | **Fixpoint**: `asm0b` assembling `asm0b.s` produces bytes identical to what `asm0a` produced for `asm0b.s` (`stage2 == stage3`). |
+| 8 | **Fixpoint**: `asm0b` assembling `asm0b.s` produces bytes identical to what `asm0a` produced for `asm0b.s` (`stage2 == stage3`). Note it is `stage2 == stage3` that is required, **not** `asm0b == asm0a`: a different layout from a different generation is fine, exactly as GCC accepts `stage1 != stage2`. |
 | 9 | **Superset demonstrated**: `asm0b` assembles at least one fixture `asm0a` cannot. Otherwise the wave had no purpose. |
 
 Note what condition 8 does **not** do: the fixpoint detects *inconsistency between the two
@@ -80,3 +80,67 @@ Consequence: 2b gets **re-emitted from one coherent layout**, smallest-possible 
 asserted at every boundary, and every branch target checked against the label it should reach
 before the next block is appended. The existing attempt is preserved on branch `wip/2b` so the
 diagnosis is not lost; `main` keeps the green 2a artifact.
+
+## Correction from the historical record: grow in place, do not write a fresh `asm0b`
+
+Before planning `asm0b` as a new 29-form assembler, check what DEC actually did for the second
+generation. The evidence is thin but consistent:
+
+- Jones's FAQ: Ed Yourdon *"helped **hack up** the PAL III assembler for the -8 **from PAL II**"*.
+- Jones's FAQ: John Everett *"**adapted** PAL-III to make PAL-D"*.
+- Field Guide: PAL-III shipped on paper tape as the "PDP-8 Assembly System"; two passes through
+  the tape reader minimum.
+
+**"Hacked up" and "adapted" are both descriptions of source modification, not of writing a
+new program.** A successor produced by editing the predecessor's source and reassembling it is
+the only reading consistent with both verbs, and it is the cheap one: the delta is a few
+hundred lines, not a rewrite.
+
+What the record does **not** say — and this is why the check was worth doing but not worth
+repeating: the implementation language of PAL-II/PAL-III, the size of the delta, and whether
+the source was kept in a dialect the predecessor could assemble. Two searches produced no
+source for any of it; the PAL-III manual on bitsavers is a scan with no text layer. Treat
+"PAL-III was written in PAL and reassembled by PAL-II" as a strong inference, not a citation.
+
+### What that changes here
+
+Not "write `asm0b` from scratch", but **self-host `asm0a` and then grow it**:
+
+1. Extend `asm0a`'s dialect until it can express an assembler (that is waves 2c and 2d — the
+   missing 25 forms). This is not optional: an assembler's source needs labels, jumps,
+   arithmetic, memory operands and tables, so a 4-form assembler can never assemble its own
+   successor.
+2. Write **`asm0a.s`**: `asm0a`'s own logic as source text in `asm0a`'s dialect, transcribed
+   from the annotated byte listings.
+3. Self-host: `asm0a < asm0a.s` must produce a working assembler `X`; then `X < asm0a.s` must
+   produce `X'` with `X' == X`. That is condition 8, and it does **not** require `X == asm0a`.
+4. From then on, every new feature is an **edit to `asm0a.s`**, reassembled by the current
+   binary. That is precisely "hacked up", and it is the point of the whole exercise: after
+   step 3 there is no more hand-emission of the assembler, ever.
+
+Consequences for the gate:
+
+- Condition 2 (dialect closure) is no longer about `asm0b.s`; it is about **`asm0a.s`**: every
+  form `asm0a`'s own source uses must be supported and verified.
+- Condition 9 (superset) is satisfied by editing the source, not by writing a second program.
+- The name `asm0b` is retired. After self-hosting, the artefacts are `asm0a.s` plus a series of
+  binaries from it; the interesting object becomes the source file, which is the thing a human
+  can read.
+
+### The next step is therefore unchanged in substance, but re-scoped
+
+2b is split, because the failure mode was hand-laying 441 bytes with 30-odd hand-computed
+displacements:
+
+| Wave | Content | Gate |
+|---|---|---|
+| **2b-1** | label definitions, label table, pass 1 / pass 2 flip. **No jumps.** | `exit42` and `hello_num` still byte-identical; a program with labels but no jumps assembles identically to the same program without them |
+| **2b-2** | `jmp rel8` with the ±127 check | `src/jmp.s` byte-identical to `ref/jmp` **and** the produced binary exits 7, not 99 |
+| **2c** | `jz/jnz/jb/ja`, `inc`/`dec r32`, `cmp r32,imm8`, hex literals | a loop fixture whose exit status is the iteration count |
+| **2d** | the remaining forms `asm0a.s` will need: `movzx`, `div`, memory operands with SIB/disp8, `lea`, `sub r64`, `add r8,imm8`, `test`, `imul`, `entry` | `src/count10.s` → `ref/count10` (`e61a23c9…`), then `asm0a.s` self-hosts |
+
+And the process fix that matters more than the split: after emitting each block, **decode every
+branch in it with `objdump` and compare its target against the intended label offset**, as a
+mechanical check, before appending the next block. Six of six 2b defects were displacement or
+REX arithmetic that decoding would have caught immediately; none were caught by re-reading the
+hex.
