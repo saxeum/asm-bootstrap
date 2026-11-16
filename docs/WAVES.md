@@ -473,3 +473,42 @@ wrong bytes.
    three-instruction fixture with an observable output caught it. Fixed with a `memop2` wrapper
    that consumes an optional comma, so all three memory forms share one rule, and the now
    redundant skip in `do_movmem` became NOPs.
+
+## Wave 2d-5 — PASS: `div r8`, `sub r64,r64`, and **`count10` reproduced**
+
+Artifact: `asm0a`, 2714 bytes, sha `c6062a0ab6f748d0d0b76db3f44e46dcdb0aa24d8dbd5f32199d0951928dcdb3`, entry `0x400110`, filesz `0xa9a`.
+
+`src/count10.s` — 23 lines, written from the oracle's disassembly — assembles to **188 bytes
+identical to `ref/count10`**, and the produced binary prints `1` through `10`. This is the
+first program in the project that the assembler builds, that was *hand-emitted before the
+assembler could read it*, and that does non-trivial work: a loop, `div` by 10, digit
+construction on the stack, two `lea`s, a `sub` to shift the pointer, and a length change.
+
+Forms added: `div r8` (`F6 /6`) and `sub r64,r64` (`REX.W` + `29 /r`, with the REX.W chosen by
+whether the destination starts with `r`, so `sub eax,ebx` stays 32-bit). Dispatch: `sdisp`
+separates `sub` from `syscall` by character 2, `ddisp2` separates `div` from `db`/`dec`.
+
+### Gate
+
+```
+count10   byte-identical to ref/count10 (188 B), prints "1 2 3 4 5 6 7 8 9 10"
+exit42 42 | hello_num "Hello, World!" | jmp 7 | loop 10 | jz 5 | r8 7 | inc8 3 | cmp8 12 | stack "H
+"
+```
+
+### The recurring defect, now with a name
+
+For the **fourth** time I patched a conditional jump at opcode+1 instead of opcode+2:
+`0F 84 rel32` is six bytes with a two-byte opcode, so the displacement starts two bytes in.
+Writing at +1 clobbers the `84`, the instruction becomes `(bad)`, and `asm0a` dies with
+`SIGILL` on *every* input.
+
+This time the verification loop did not cover the patched site — it decoded the new blocks and
+left the patches to the test run, which is exactly backwards: a patch into existing code is the
+part most likely to be wrong precisely because it is not new. **The check must cover every
+write, not every new block.** Recorded here because repetition is the evidence that the habit,
+not the mistake, is the problem.
+
+Second defect: `ddisp2` compared `al` to `'v'` for `div`, but `ddisp` had left `al` as
+`[rbx+1]` = `'i'`. One-byte fix (compare `'i'`, unique among `db`/`dec`/`div`) — but only
+after the trace showed the new block was being entered with the wrong character.
