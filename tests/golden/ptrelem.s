@@ -80,9 +80,9 @@ jb L2b
 jmp.l L2e
 L2b:
 mov rcx, [rbp-24]
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, [rbp-32]
-mov rsi, rcx
+mov [rbp-16392], rcx
 lea rcx, [rbp-464]
 mov rdx, [rbp-40]
 add rdx, rdx
@@ -90,7 +90,10 @@ add rdx, rdx
 add rdx, rdx
 add rcx, rdx
 mov rcx, [rcx]
-mov rdx, rcx
+mov [rbp-16384], rcx
+mov rdx, [rbp-16384]
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call ll
 mov [rbp-32], rax
 mov rax, [rbp-40]

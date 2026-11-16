@@ -19,7 +19,8 @@ mov [rbp-8], rax
 mov rcx, [rbp-8]
 mov rdx, 2
 imul rcx, rdx
-mov rdi, rcx
+mov [rbp-16400], rcx
+mov rdi, [rbp-16400]
 call f
 mov rdi, rax
 mov eax, 60

@@ -35,7 +35,8 @@ add rdx, rdx
 add rdx, rdx
 add rcx, rdx
 mov rcx, [rcx]
-mov rdi, rcx
+mov [rbp-16400], rcx
+mov rdi, [rbp-16400]
 call f
 mov rdi, rax
 mov eax, 60

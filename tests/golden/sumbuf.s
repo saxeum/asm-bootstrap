@@ -61,9 +61,11 @@ mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 lea rcx, [rbp-400]
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, 3
-mov rsi, rcx
+mov [rbp-16392], rcx
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call sumbuf
 mov rdi, rax
 mov eax, 60

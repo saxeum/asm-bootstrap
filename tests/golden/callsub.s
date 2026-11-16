@@ -18,9 +18,11 @@ mov rbp, rsp
 mov r10, 16500
 sub rsp, r10
 mov rcx, 3
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, 2
-mov rsi, rcx
+mov [rbp-16392], rcx
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call sub2
 mov rdi, rax
 mov eax, 60

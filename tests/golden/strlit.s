@@ -48,11 +48,14 @@ mov rbp, rsp
 mov r10, 16500
 sub rsp, r10
 lea rcx, [rbp-400]
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, 0
-mov rsi, rcx
+mov [rbp-16392], rcx
 mov rcx, 4194424+m1
-mov rdx, rcx
+mov [rbp-16384], rcx
+mov rdx, [rbp-16384]
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call f
 mov [rbp-16], rax
 mov rax, [rbp-16]

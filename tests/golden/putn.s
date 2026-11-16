@@ -121,9 +121,11 @@ mov rbp, rsp
 mov r10, 16500
 sub rsp, r10
 mov rcx, 4321
-mov rdi, rcx
+mov [rbp-16400], rcx
 lea rcx, [rbp-400]
-mov rsi, rcx
+mov [rbp-16392], rcx
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call putn
 mov [rbp-16], rax
 mov rax, [rbp-16]

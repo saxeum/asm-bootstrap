@@ -18,20 +18,60 @@ add rax, rcx
 mov rsp, rbp
 pop rbp
 ret
+h:
+push rbp
+mov rbp, rsp
+mov r10, 16500
+sub rsp, r10
+mov [rbp-8], rdi
+mov [rbp-16], rsi
+mov [rbp-24], rdx
+mov [rbp-32], rcx
+mov rax, [rbp-8]
+mov rcx, [rbp-16]
+add rax, rcx
+mov rcx, [rbp-24]
+add rax, rcx
+mov rcx, [rbp-32]
+add rax, rcx
+mov rsp, rbp
+pop rbp
+ret
 main:
 push rbp
 mov rbp, rsp
 mov r10, 16500
 sub rsp, r10
 mov rcx, 1
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, 2
-mov rsi, rcx
+mov [rbp-16392], rcx
 mov rcx, 3
-mov rdx, rcx
+mov [rbp-16384], rcx
 mov rcx, 4
-mov rcx, rcx
+mov [rbp-16376], rcx
+mov rcx, [rbp-16376]
+mov rdx, [rbp-16384]
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call f
+push rax
+mov rdx, 1
+mov [rbp-16400], rdx
+mov rdx, 2
+mov [rbp-16392], rdx
+mov rdx, 3
+mov [rbp-16384], rdx
+mov rdx, 4
+mov [rbp-16376], rdx
+mov rcx, [rbp-16376]
+mov rdx, [rbp-16384]
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
+call h
+mov rcx, rax
+pop rax
+add rax, rcx
 mov rdi, rax
 mov eax, 60
 syscall

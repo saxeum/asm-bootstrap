@@ -597,9 +597,9 @@ test-cc: cc asm1
 	if $(ASM1) < tests/golden/fourargs.s > $$tmp/fa 2>/dev/null; then \
 	  chmod +x $$tmp/fa; \
 	  if $$tmp/fa; then g1=0; else g1=$$?; fi; \
-	  if [ $$g1 -eq 10 ]; then \
-	    printf '  cc    four arguments: a+b+c+d is 10, and the 4th is not lost to the frame\n'; \
-	  else echo "  fourargs exited $$g1, wanted 10"; fail=1; fi; \
+	  if [ $$g1 -eq 20 ]; then \
+	    printf '  cc    four arguments twice, at different depths: f(..) + h(..) exits 20\n'; \
+	  else echo "  fourargs exited $$g1, wanted 20"; fail=1; fi; \
 	else echo "  asm1 refuses fourargs.s"; fail=1; fi; \
 	  else echo "  ptrelem wrote [$$(cat $$tmp/pe.out)]"; fail=1; fi; \
 	else echo "  asm1 refuses ptrelem.s"; fail=1; fi; \
@@ -724,6 +724,27 @@ test-cc: cc asm1
 # assemble, and its normalised shape (tools/shape.awk) must appear in some test
 # input. A form nobody tests is a red gate with a name on it, which is the
 # difference between "we have 18 fixtures" and "we know what they reach".
+# ---- D2: the port compiles itself --------------------------------------------
+# The goal in one target. It is expected to FAIL until the port is a compiler; a
+# target that reports its own failure is worth more than a paragraph claiming
+# progress. cc1.s is the dialect text cc emits for src/cc.c; cc1 is that
+# assembled; cc1 must then compile src/cc.c to the SAME text.
+test-d2: asm1 cc
+	@mkdir -p $(WORK); \
+	if ! $(CC) < src/cc.c > $(WORK)/cc1.s 2>$(WORK)/d2.err; then \
+	  echo '  d2: cc cannot compile src/cc.c'; head -3 $(WORK)/d2.err; exit 1; fi; \
+	if ! $(ASM1) < $(WORK)/cc1.s > $(WORK)/cc1 2>>$(WORK)/d2.err; then \
+	  echo '  d2: asm1 refuses the text cc emitted for src/cc.c'; exit 1; fi; \
+	chmod +x $(WORK)/cc1; \
+	if ! $(WORK)/cc1 < src/cc.c > $(WORK)/cc2.s 2>>$(WORK)/d2.err; then \
+	  echo '  d2: the port does not run as a compiler yet'; exit 1; fi; \
+	if cmp -s $(WORK)/cc1.s $(WORK)/cc2.s; then \
+	  printf '  d2: THE PORT COMPILES ITSELF -- cc1.s and cc2.s are identical\n'; \
+	else \
+	  printf '  d2: the port is not yet a compiler: %s bytes emitted, expected %s\n' "$$(wc -c < $(WORK)/cc2.s)" "$$(wc -c < $(WORK)/cc1.s)"; \
+	  exit 1; \
+	fi
+
 # ---- the port ----------------------------------------------------------------
 # The compiler, written in the subset it compiles. Slice 1 is the output side:
 # emitstr/emitc/putn/line and one fixed program. The expected text was written

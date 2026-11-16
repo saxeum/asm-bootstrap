@@ -1799,3 +1799,20 @@ passes. The reverted patch is `.work/cc.s.argspill` — reapply it, then bisect 
 function at a time, which is cheap and was not done here.
 
 Until then the port writes around the collision: no call at depth > 0 with three or more arguments.
+
+## D2 is now a target, and it says how far away it is
+
+`make test-d2` runs the real pipeline: `cc` compiles `src/cc.c` (10 933 bytes), `asm1` assembles it, and
+the result must compile `src/cc.c` to the *same* 10 933 bytes. It currently prints
+
+```
+d2: the port is not yet a compiler: 288 bytes emitted, expected 10933
+```
+
+and exits 1. Everything the port still needs is listed above under "Not started": scanner, symbol table,
+statements, expressions, the general literal section. Each replaces one `pro[]` entry with real work, and
+the target is the only measure that matters.
+
+The infrastructure around it is now in place: `cc` can compile a 4.7 KB source into 10.9 KB of text
+(buffers and limits raised, refusal instead of overrun), the argument path is correct at every depth
+(spill), and the port's own slice 3 remains byte- and behaviour-exact.

@@ -31,8 +31,9 @@
 ;   [rbp+56] emit byte   [rbp+60] emit pointer  [rbp+64] number
 ;   [rbp+68] scratch     [rbp+72] want pointer  [rbp+76] want byte
 ;   [rbp+80] number      [rbp+84] digits
-; Buffers, all below rsp: input rbp-40000 (8192), output rbp-30000 (8192),
-; literal table rbp-20000 (9 entries of offset+length).
+; Buffers, all below rsp: input rbp-70000 (19000), output rbp-50000 (19000),
+; literal table rbp-29000 (99 entries of offset+length). The port needs more than
+; 8192 bytes of output: src/cc.c is 4.7 KB of C and its text is ~10 KB.
 
 start:
 pop rax
@@ -64,9 +65,11 @@ mov [rbp+112], eax
 mov [rbp+116], eax
 
 ; ---- read the whole input -----------------------------------------------
-lea rsi, [rbp+1]
-mov ecx, 40001
-sub rsi, rcx            ; rsi = input base
+call ldin
+mov rsi, rax            ; rsi = input base, from the one routine that knows where it is
+                        ; (it was hardcoded here as well, and when the buffer moved the
+                        ; reader wrote at one address and the parser read another -- a
+                        ; silent empty program, which is worse than a crash)
 rdloop:
 mov eax, 0
 mov edi, 0
@@ -81,7 +84,7 @@ mov ecx, [rbp+8]
 mov edx, 120
 add ecx, edx
 mov [rbp+8], ecx
-mov edx, 8000
+mov edx, 19000
 cmp ecx, edx
 jb rdnext
 jmp.l fail              ; larger than the buffer: refuse, never truncate
@@ -261,17 +264,27 @@ mov [rbp-168], eax
 call skipws
 call gcur
 cmp al, 41              ; no arguments
-jz cardskip
+jz.l cardskip
 mov eax, 1
 mov [rbp-208], eax
 cargloop:
+; The argument is computed at depth d+1 and then PARKED in a frame slot, not left
+; in a register: at d = 1 that register is rdx, which is also the third argument
+; register, so evaluating a later argument destroyed an earlier one (found by
+; `1 + f(1,2,3,4)` returning 12). Every argument is parked, then the argument
+; registers are loaded together just before the call.
 mov eax, [rbp-292]     ; the argument's depth: one deeper than the call's
 call exprd
-mov esi, 4194424+f_mov
+mov esi, 4194424+f_ls1
 call emitstr
-mov eax, [rbp-168]
-call emitarg
-mov esi, 4194424+f_sep
+mov eax, 16400
+mov ecx, [rbp-168]
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+sub eax, ecx           ; 16400 - 8*i, above the array region and inside the frame
+call emitnum
+mov esi, 4194424+f_arg2
 call emitstr
 mov eax, [rbp-292]
 call emitreg
@@ -283,7 +296,7 @@ mov [rbp-168], eax
 call skipws
 call gcur
 cmp al, 44
-jnz cardskip
+jnz.l cardskip
 mov eax, 1
 call bump
 jmp cargloop
@@ -301,6 +314,33 @@ mov eax, [rbp-220]
 mov [rdx+12], eax
 mov eax, 0
 mov [rbp-208], eax
+; load the argument registers from their parked slots, last argument first: a
+; load into rcx cannot disturb a slot, and the callee reads them all at entry
+mov eax, [rbp-168]
+mov [rbp-336], eax      ; the load loop's counter
+calal:
+mov eax, [rbp-336]
+cmp eax, 0
+jz calad
+dec eax
+mov [rbp-336], eax
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-336]
+call emitarg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, 16400
+mov ecx, [rbp-336]
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+sub eax, ecx
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+jmp calal
+calad:
 mov esi, 4194424+f_callk
 call emitstr
 call emitname
@@ -2247,13 +2287,13 @@ ret
 ; dialect had no disp32 and `lea rax, [rbp-40000]` could not be written. It can
 ; now: one instruction each, and the workaround is gone.
 ldin:
-lea rax, [rbp-40000]
+lea rax, [rbp-70000]
 ret
 ldout:
-lea rax, [rbp-30000]
+lea rax, [rbp-50000]
 ret
 ldtab:
-lea rax, [rbp-20000]
+lea rax, [rbp-29000]
 ret
 ; rax = input + cursor ; rax = input + [rbp+28]
 ldcur:
@@ -2271,9 +2311,10 @@ ret
 emitc:
 mov [rbp+56], al
 mov eax, [rbp+16]
-mov ecx, 8000
+mov ecx, 19000
 cmp eax, ecx
 jb emok
+jmp.l fail              ; larger than the output buffer: refuse, never overrun
 emok:
 mov [rbp+88], eax
 call ldout

@@ -20,7 +20,8 @@ push rax
 mov rdx, [rbp-8]
 mov rsi, 1
 sub rdx, rsi
-mov rdi, rdx
+mov [rbp-16400], rdx
+mov rdi, [rbp-16400]
 call fact
 mov rcx, rax
 pop rax
@@ -34,7 +35,8 @@ mov rbp, rsp
 mov r10, 16500
 sub rsp, r10
 mov rcx, 5
-mov rdi, rcx
+mov [rbp-16400], rcx
+mov rdi, [rbp-16400]
 call fact
 mov rdi, rax
 mov eax, 60

@@ -23,7 +23,8 @@ sub rsp, r10
 mov rax, 41
 mov [rbp-8], rax
 lea rcx, [rbp-8]
-mov rdi, rcx
+mov [rbp-16400], rcx
+mov rdi, [rbp-16400]
 call bump
 mov rax, [rbp-8]
 mov rdi, rax

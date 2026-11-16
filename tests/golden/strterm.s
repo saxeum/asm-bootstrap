@@ -71,17 +71,22 @@ mov [rbp-8], rdi
 mov [rbp-16], rsi
 mov [rbp-24], rdx
 mov rcx, [rbp-8]
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, [rbp-16]
-mov rsi, rcx
+mov [rbp-16392], rcx
 mov rcx, [rbp-24]
-mov rdx, rcx
+mov [rbp-16384], rcx
+mov rdx, [rbp-16384]
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call es
 mov [rbp-16], rax
 mov rcx, [rbp-8]
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, [rbp-16]
-mov rsi, rcx
+mov [rbp-16392], rcx
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call ec
 mov [rbp-16], rax
 mov rax, [rbp-16]
@@ -98,19 +103,25 @@ mov [rbp-16], rax
 mov rax, 0
 mov [rbp-24], rax
 mov rcx, [rbp-16]
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, [rbp-24]
-mov rsi, rcx
+mov [rbp-16392], rcx
 mov rcx, 4194424+m1
-mov rdx, rcx
+mov [rbp-16384], rcx
+mov rdx, [rbp-16384]
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call line
 mov [rbp-24], rax
 mov rcx, [rbp-16]
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, [rbp-24]
-mov rsi, rcx
+mov [rbp-16392], rcx
 mov rcx, 4194424+m2
-mov rdx, rcx
+mov [rbp-16384], rcx
+mov rdx, [rbp-16384]
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call line
 mov [rbp-24], rax
 mov rax, [rbp-24]

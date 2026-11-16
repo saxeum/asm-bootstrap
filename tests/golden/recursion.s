@@ -19,11 +19,13 @@ L1e:
 mov rcx, [rbp-8]
 mov rdx, 1
 sub rcx, rdx
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, [rbp-16]
 mov rdx, 1
 add rcx, rdx
-mov rsi, rcx
+mov [rbp-16392], rcx
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call f
 mov rsp, rbp
 pop rbp
@@ -34,9 +36,11 @@ mov rbp, rsp
 mov r10, 16500
 sub rsp, r10
 mov rcx, 10
-mov rdi, rcx
+mov [rbp-16400], rcx
 mov rcx, 0
-mov rsi, rcx
+mov [rbp-16392], rcx
+mov rsi, [rbp-16392]
+mov rdi, [rbp-16400]
 call f
 mov rdi, rax
 mov eax, 60

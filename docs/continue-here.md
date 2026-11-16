@@ -24,7 +24,7 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 
 Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **36 capability
 pairs** · **6 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
-**100 coverage forms** · **cc: 45 checks, 36 refusals** · 290 branch pins · 36 provenance records.
+**100 coverage forms** · **cc: 43 checks, 36 refusals** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 

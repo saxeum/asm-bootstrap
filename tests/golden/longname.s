@@ -19,7 +19,8 @@ sub rsp, r10
 mov rax, 41
 mov [rbp-8], rax
 mov rcx, [rbp-8]
-mov rdi, rcx
+mov [rbp-16400], rcx
+mov rdi, [rbp-16400]
 call averylongname
 mov rdi, rax
 mov eax, 60
