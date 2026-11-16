@@ -149,7 +149,12 @@ jz.l pcom
 cmp al, 115             ; 's'
 jz.l psys
 cmp al, 109             ; 'm'
-jz.l pmov
+jnz.l dnotm
+movzx eax, byte [rbx+3]
+cmp al, 122             ; 'z' => movzx
+jz.l pzx
+jmp.l pmov
+dnotm:
 cmp al, 100             ; 'd'
 jz.l pdb
 jmp.l fail
@@ -178,6 +183,11 @@ call emital
 jmp.l pline
 pmov:
 lea rbx, [rbx+4]
+movzx eax, byte [rbx+2]  ; a delimiter third means the name was 2 chars: 8-bit
+cmp al, 44              ; ','
+jz.l pmov8
+cmp al, 32              ; ' '
+jz.l pmov8
 call reg32
 mov [rbp+32], edx
 lea rbx, [rbx+1]
@@ -206,24 +216,20 @@ call emital
 dbnext:
 movzx eax, byte [rbx]
 cmp al, 44
-jnz.l dbdone
+jnz.l pline
 lea rbx, [rbx+1]
 call skipsp
 call num32
 mov eax, ecx
 call emital
 jmp.l dbnext
-dbdone:
-jmp.l pline
 
 skipsp:
 movzx eax, byte [rbx]
 cmp al, 32
-jnz.l skipd
+jnz.l pdone             ; shared ret
 lea rbx, [rbx+1]
 jmp.l skipsp
-skipd:
-ret
 
 num32:                  ; decimal -> ecx ; 10x = 8x + 2x
 xor ecx, ecx
@@ -233,7 +239,7 @@ add al, 100             ; -48 mod 256 in two steps: no sub r8,imm8, and
 add al, 108             ;   immediates are range-checked to -128..127
 cmp al, 10
 jb.l ndig
-jmp.l numdone
+jmp.l pdone
 ndig:
 mov edx, ecx
 add edx, edx            ; 2x
@@ -244,9 +250,6 @@ add ecx, edx            ; 10x
 add ecx, eax            ; + digit (0..9)
 lea rbx, [rbx+1]
 jmp.l ndigit
-numdone:
-ret
-
 reg32:
 mov eax, [rbx]
 mov edx, 7
@@ -277,6 +280,85 @@ jmp.l fail
 regret:
 lea rbx, [rbx+3]
 ret
+
+r8:                     ; 8-bit register name -> edx ; consumes 2 chars
+movzx edx, byte [rbx]
+movzx ecx, byte [rbx+1]
+add ecx, ecx            ; second char * 256, eight doublings (no shift in the dialect)
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, ecx
+add ecx, edx
+mov edx, 7
+cmp ecx, 26722
+jz.l r8ok
+mov edx, 6
+cmp ecx, 26724
+jz.l r8ok
+mov edx, 5
+cmp ecx, 26723
+jz.l r8ok
+mov edx, 4
+cmp ecx, 26721
+jz.l r8ok
+mov edx, 3
+cmp ecx, 27746
+jz.l r8ok
+mov edx, 2
+cmp ecx, 27748
+jz.l r8ok
+mov edx, 1
+cmp ecx, 27747
+jz.l r8ok
+mov edx, 0
+cmp ecx, 27745
+jz.l r8ok
+jmp.l fail
+r8ok:
+lea rbx, [rbx+2]
+ret
+
+pmov8:                  ; mov r8,imm8 -> B0+code ib
+call r8
+mov [rbp+32], edx
+lea rbx, [rbx+1]
+call skipsp
+call num32
+mov [rbp+36], ecx       ; spill: emital's syscall destroys rcx
+mov eax, [rbp+32]
+mov edx, 176            ; 0xB0
+add eax, edx
+call emital
+mov eax, [rbp+36]
+call emital
+jmp.l pline
+
+pzx:                    ; movzx r32,r8 -> 0F B6 /r
+lea rbx, [rbx+6]
+call reg32
+mov [rbp+32], edx
+lea rbx, [rbx+1]
+call skipsp
+call r8
+mov eax, [rbp+32]
+add eax, eax
+add eax, eax
+add eax, eax
+add eax, edx
+mov edx, 192
+add eax, edx
+mov [rbp+36], eax
+mov eax, 15
+call emital
+mov eax, 182
+call emital
+mov eax, [rbp+36]
+call emital
+jmp.l pline
 
 fail:
 mov eax, 60

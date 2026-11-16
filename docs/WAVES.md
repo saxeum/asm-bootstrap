@@ -1365,3 +1365,49 @@ memory operands. Fixpoint needs those implemented in `asm1` itself — that is s
 
 Two of these are the same lesson in different clothes: *a register is not preserved across a call you
 wrote yourself* (4), and *the stack pointer is not a frame base* (1).
+
+## asm1 step 1 of the count10 plan — PASS: 8-bit registers
+
+`src/asm1.s`, 1516 bytes. New forms, each verified by differential test against `asm0a` on the same
+source:
+
+```
+mov bl, 1        identical     movxz eax, bl    identical
+mov al, 255      identical     movzx edi, dh    identical
+mov ah, 48       identical     mixed source     identical (135 bytes)
+```
+
+### The 8-bit register resolver
+
+`asm1` has no shifts, so a 2-character name is folded into one integer by eight `add ecx,ecx`
+doublings — `second*256 + first` — and matched against eight constants in a descending chain that
+shares a single exit label. `bl` is `108*256+98 = 27746`. One label, 30 instructions, no shifts.
+
+### Three defects
+
+1. **A "failed" `call` leaked its return address.** `reg32` is called, and its failure path did
+   `jmp pmov8` instead of returning — so the pushed return address stayed on the stack and *every*
+   8-bit `mov` leaked one slot. Fixed by deciding the operand shape *before* the call: a delimiter
+   as the third character means a 2-character (8-bit) name, so `pmov` tests for `','` and `' '` and
+   falls through to `reg32`.
+2. **The label table overflowed: 33 labels against `asm0a`'s limit of 32.** `asm0a` reports this as
+   exit 1 with no other signal, so it looked like a syntax error at the line the prefix-bisect
+   stopped on — and that bisect was itself lying, because appending stub labels shifts offsets. Two
+   labels were pure aliases and were collapsed: `dbdone` was `jmp pline`, and `numdone` was a bare
+   `ret` that `pdone` already provides.
+3. **`emital` clobbers `rcx` and the parsed number lives there.** `mov bl, 1` emitted `b3 8b`: the
+   opcode was right and the immediate was the low byte of a return address. Fixed by spilling the
+   number to `[rbp+36]` before the opcode is emitted. This is the third appearance of the same
+   trap in asm1, and it will not be the last: **anything needed after an `emital` call must be in
+   memory or in rbx/rbp.**
+
+### Current coverage of `count10.s`
+
+```
+have:     mov r32,imm32, mov r8,imm8, movzx r32,r8, syscall, db
+missing:  mov [mem],r8, mov r32,[mem], mov byte[mem],imm8, lea r64,[mem],
+          add r8,imm8, cmp r8,imm8, inc r8, div r8, sub r64,r64,
+          mov r32,r32, xor r32,r32, label, jb rel8
+```
+
+Labels are at 29/32, so the next stage needs a couple freed before adding handlers.
