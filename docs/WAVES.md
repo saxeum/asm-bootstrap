@@ -682,3 +682,47 @@ Eight forms. The honest conclusion: the dialect is roughly half of what an assem
 source needs, and hand-emitting those eight is three or four more waves of the patch arithmetic
 that has already produced seven defects of its own. That trade — more byte code to enable
 avoiding byte code — is the one thing worth deciding before the next wave.
+
+## Option 2 attempted: write in the dialect instead of hand-emitting — blocked, not merged
+
+Instruction was to stop hand-emitting and write the next assembler in the existing dialect,
+accepting that it fixes its own problems afterwards. Attempted; three things came out of it,
+none of them a new assembler yet.
+
+**1. There was no `mov r32,r32`.** No register-to-register move existed at all, so not one line
+of assembler source was expressible. Added (`do_movrr`, `89 /r`), gated on `ref/movrr`
+(134 B, exits 7). That is wave 2d-9 and it is merged and green.
+
+**2. The probe found a silent mis-assembly, now fixed.** `mov al, [rsi]` assembled to `b0 00` —
+`mov al, 0` — and exited 0. `mdisp2` routed it down the 8-bit path on the comma at index 6, and
+the number parser then met `[` and produced 0. Fixed with `digchk`, which requires a digit.
+
+Mutation test on the fix, since a gate that cannot fail is decoration:
+
+```
+cmp al,0xff mutant   -> mov al,[rsi] exits 0, body b000   (silent bug returns)
+real asm0a           -> mov al,[rsi] exits 1
+real asm0a           -> mov al,5     exits 0              (valid input unaffected)
+```
+
+**3. The minimum form set is smaller than the eight the first probe suggested**, because two
+substitutions remove most of it:
+
+- `lea r64,[r64+disp8]` is a register move and a pointer increment, so `mov r64,r64` and
+  `add r32,r32` are not needed;
+- `mov r32,[mem]` loads 4 bytes and `cmp r32,imm32` compares them against a literal, so
+  mnemonic matching needs no `movzx r32,byte [mem]`.
+
+That reduces the blocker list to essentially **`cmp r32,imm32`** (plus rel32 branches for a
+source of realistic size). It was implemented (`cmpsrc`, class test on `[rbx+2]`, `81 /7 id` with
+its own decimal parser) and is **not green**: `cmp ebx,7` alone assembles correctly
+(`81 fb 07 00 00 00`), `jmp x` alone works, but the two together fail, while `cmp` with a label
+and `cmp` followed by an ordinary instruction both work. Not isolated; reverted rather than
+committed.
+
+**Committed as a target, not a wave:** `src/cmp32.s` and `ref/cmp32` (147 B, exits 7, hand-emitted
+and run). `asm0a` exits 1 on it today, so it is deliberately **absent from `docs/SHAS`** — that
+file is the list of things that must verify, and adding a fixture the assembler cannot yet
+produce would make the gate lie.
+
+State left behind: `asm0a` 3000 bytes, sha in `docs/SHAS`, 14/14 fixtures byte-identical.
