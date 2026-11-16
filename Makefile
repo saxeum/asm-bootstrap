@@ -520,6 +520,15 @@ test-cc: cc asm1
 	  $$tmp/uc < $$tmp/want7 > $$tmp/got7; g1=$$?; \
 	  if [ $$g1 -eq 0 ] && cmp -s $$tmp/got7 $$tmp/want8; then \
 	    printf '  cc    a filter: a and b upper-cased in stdin, written to stdout\n'; \
+	if $(CC) < tests/golden/cndterm.c > $$tmp/ct.s 2>/dev/null && cmp -s $$tmp/ct.s tests/golden/cndterm.s; then :; \
+	else echo "  cndterm.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/cndterm.s > $$tmp/ct 2>/dev/null; then \
+	  chmod +x $$tmp/ct; \
+	  if $$tmp/ct; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 3 ]; then \
+	    printf '  cc    a term in a condition: while (a[i] > 0) over 3,2,1,0 exits 3\n'; \
+	  else echo "  cndterm exited $$g1, wanted 3"; fail=1; fi; \
+	else echo "  asm1 refuses cndterm.s"; fail=1; fi; \
 	  else echo "  upcase: exit $$g1, output [$$(cat $$tmp/got7)]"; fail=1; fi; \
 	else echo "  asm1 refuses upcase.s"; fail=1; fi; \
 	  else echo "  catfile: exits $$g1/$$g2, and its output does not match its input"; fail=1; fi; \

@@ -30,8 +30,6 @@ lea rax, [rbp-264]
 mov rcx, [rbp-24]
 add rax, rcx
 movzx rax, byte [rax]
-mov [rbp-32], rax
-mov rax, [rbp-32]
 cmp rax, 97
 jz L3t
 jmp.l L3e
@@ -44,7 +42,10 @@ mov rdx, [rbp-284]
 add rcx, rdx
 mov [rcx], al
 L3e:
-mov rax, [rbp-32]
+lea rax, [rbp-264]
+mov rcx, [rbp-24]
+add rax, rcx
+movzx rax, byte [rax]
 cmp rax, 98
 jz L4t
 jmp.l L4e
@@ -69,7 +70,7 @@ lea rsi, [rbp-264]
 mov eax, 1
 mov edi, 1
 syscall
-mov [rbp-40], rax
+mov [rbp-32], rax
 mov eax, 0
 mov edi, 0
 lea rsi, [rbp-264]

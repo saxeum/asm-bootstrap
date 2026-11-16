@@ -2861,3 +2861,31 @@ hoist the element into a temporary first (`int c = b[i];`). That is the shape C 
 and it is now the top of the roadmap.
 
 `cc` 8 836 → 9 136 bytes. 32 checks, 35 refusals, 30 goldens.
+
+## A condition takes a term, not a name
+
+`if (b[i] == 97)` works. The previous wave's filter had to hoist the character into a temporary, and
+that awkward shape was the whole reason to look at this: `cond` loaded its left side with `ident`,
+`findvar`, `emit_le` — a *name* — where it should have taken a term.
+
+The fix is one line: `call expr`. The left side lands in `rax` at depth 0, which is exactly where the
+comparison machinery already expected it, and the bound is unchanged — `cndbnd` still puts a literal or
+a variable in place at depth 1. Everything `cond` supported still works, because a bare name and a
+`5` are terms too, and so is `1 + 1`.
+
+Programs written naturally now:
+
+```c
+while (a[i] > 0) { c = c + 1; i = i + 1; }        /* over 3,2,1,0 exits 3 */
+if (b[i] == 97) { b[i] = 65; }                    /* the filter, unhoisted */
+```
+
+Gates: `while (a[i] > 0)` exits 3, and the filter is re-pinned in its natural form (it still turns
+`aabbcca` into `AABBccA`, and `abracadabra` into `ABrAcAdABrA`).
+
+The condition's emitted text changed with it — a condition on a variable now loads 64-bit `rax` where
+it used to load 32-bit `eax` — so four goldens were re-pinned. The behaviour gates are what say the
+change is sound; the goldens only pin the shape, and this is the second time in two waves that the
+distinction did the work.
+
+`cc` 9 136 → 9 126 bytes: ten bytes *smaller*, because three calls to one.

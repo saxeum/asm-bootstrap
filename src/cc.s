@@ -1566,9 +1566,7 @@ ret
 cond:
 mov eax, 0
 mov [rbp-316], eax      ; the bound is a literal until cndbnd says otherwise
-call ident
-call findvar
-call emit_le
+call expr               ; the left side: a name, a subscript, or any term
 mov eax, 2
 mov [rbp+44], eax
 mov eax, 0

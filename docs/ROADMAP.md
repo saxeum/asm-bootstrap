@@ -1556,3 +1556,17 @@ Two gaps that writing them exposed, in order:
    a block is worth checking more widely.
 
 Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.
+
+## Compiler: a condition takes a term
+
+`if (b[i] == 97)` and `while (a[i] > 0)` work: `cond` takes a general term on the left (one `call expr`
+where three calls used to be) and a literal or a variable on the right, so every comparison form is
+now available on any expression.
+
+What is left is the port itself, and one detail worth checking before it starts: a declaration in the
+*middle* of a block (`int k = write(b, n);` after a while loop) is accepted, but whether that is by
+design or by luck has not been tested. A C version of `cc` will declare in the middle of blocks
+everywhere, so it should be a gate rather than an accident.
+
+Then: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus, with the dialect
+frozen as the witness.
