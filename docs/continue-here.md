@@ -46,6 +46,7 @@ The C bootstrap from the frozen seeds, on its own:
 ```
 make from-c
   from-c: asm2 51783 bytes sha aa9e992e912f95b6, cc1 43418 bytes sha 74e4dd9725169c08
+  from-c: wc built and run by cc1 + asm2 -- C-only from here
   from-c: cc2 == cc1 and asm2b == asm2 -- both .c artifacts reproduce
 ```
 
@@ -59,6 +60,17 @@ builds `src/asm1.c` with `cc`, assembles it with `asm1`, and runs `tools/asm2-ch
 hand-emitted references, the 80 capability/superior inputs, the 100 coverage forms, the 9 refusals,
 the 8 exact messages, `src/dis.s`, `src/cc.s`, `src/asm1.s`, the 99 032-byte source (and it runs,
 exit 42), and `asm2 < asm1.c.s == asm2`.
+
+The serious program:
+
+```
+make test-program
+  wc: 4/4 inputs counted correctly -- lines, words, characters
+```
+
+`tests/programs/wc.c` is a 128-byte-chunk line/word/char counter. `make from-c` builds it with the
+C-built `cc1` + `asm2` and runs the same four inputs, so the whole build for the program is
+C-tools-only after the frozen seeds.
 
 ## What changed in this session
 

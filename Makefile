@@ -21,7 +21,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap from-c asm1 dis cc hello test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help test-port test-d2 test-cc-source test-asm2 test-frozen freeze
+.PHONY: all bootstrap from-c asm1 dis cc hello test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help test-port test-d2 test-cc-source test-asm2 test-frozen freeze test-program
 help:
 	@echo 'make            build asm1 from seed/asm1, then the decoder (which needs it)'
 	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
@@ -37,6 +37,7 @@ help:
 	@echo 'make test-d2    the port compiles its own source to identical text'
 	@echo 'make test-asm2  the assembler in C reproduces asm1 on the corpus and itself'
 	@echo 'make from-c      rebuild the .c assembler and compiler from the frozen seeds'
+	@echo 'make test-program  build and run tests/programs/wc.c on four inputs'
 	@echo 'make test-frozen every .s under src/ and tests/ is frozen (sha256 record)'
 	@echo 'make freeze      write docs/frozen.tsv (a deliberate act)'
 	@echo 'make test-cc-source  asm1 < src/cc.s still reproduces cc byte for byte'
@@ -171,6 +172,8 @@ from-c:
 	  echo '  from-c: asm2 refuses its own C text'; exit 1; fi; \
 	if cmp -s $(WORK)/from-c/asm2 $(WORK)/from-c/asm2b; then :; else \
 	  echo '  from-c: the C assembler is not a fixpoint'; exit 1; fi; \
+	./tools/wc-check.sh $(WORK)/from-c/cc1 $(WORK)/from-c/asm2 $(WORK)/from-c || exit 1; \
+	printf '  from-c: wc built and run by cc1 + asm2 -- C-only from here\n'; \
 	printf '  from-c: asm2 %s bytes sha %s, cc1 %s bytes sha %s\n' \
 	  "$$(wc -c < $(WORK)/from-c/asm2)" "$$(sha256sum $(WORK)/from-c/asm2 | cut -c1-16)" \
 	  "$$(wc -c < $(WORK)/from-c/cc1)" "$$(sha256sum $(WORK)/from-c/cc1 | cut -c1-16)"; \
@@ -189,7 +192,7 @@ freeze:
 	@find src tests -name '*.s' | sort | xargs sha256sum > docs/frozen.tsv; \
 	printf '  wrote docs/frozen.tsv (%s assembly sources)\n' "$$(wc -l < docs/frozen.tsv)"
 
-check: test-tools test-frozen test-tmp test-header test-cc-source test-port test-d2 test-asm2 asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
+check: test-tools test-frozen test-tmp test-header test-cc-source test-port test-d2 test-asm2 asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc test-program verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -834,6 +837,13 @@ test-d2: asm1 cc
 	  printf '  d2: the port is not yet a compiler: %s bytes emitted, expected %s\n' "$$(wc -c < $(WORK)/cc2.s)" "$$(wc -c < $(WORK)/cc1.s)"; \
 	  exit 1; \
 	fi
+
+# ---- a real program, not a fixture -----------------------------------------
+# tests/programs/wc.c counts lines, words and characters. It is compiled and
+# assembled, then run on four inputs: normal text, empty, no final newline, and
+# a 300-byte stream that forces the 128-byte read loop.
+test-program: cc asm1
+	@mkdir -p $(WORK); ./tools/wc-check.sh $(CC) $(ASM1) $(WORK)
 
 # ---- D3: the assembler in C ------------------------------------------------
 # src/asm1.c is the assembler written in the subset cc compiles. cc makes the
