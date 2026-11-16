@@ -200,18 +200,60 @@ Then **immediately**: `make` (check exit code and sha changed), fixtures 18/18, 
 ## Next task: arrays with a computed index
 
 Pointers landed (`&x`, `*p`, `*p = v`, 64-bit values, two exact gates). The next thing a self-hosting
-`cc` needs is `int a[N];` and `a[i]` where `i` is a variable — a symbol-table entry is a name plus a
-value in parallel arrays, and today a name is one of eight slots and there is no array at all.
+`cc` needs is `int a[N];` and `a[i]` where `i` is a variable — a symbol table is parallel arrays, and
+today a name is one of eight slots and there is no array at all.
 
-Expressible already, with these forms: `lea rax, [rbp-B]`, load the index, `add rax, rax` three times
-for the eight-byte stride, `add rax, rcx`, `mov rax, [rax]`. So the work is parser and layout, not
-codegen: a declaration that allocates N slots from one base, and a postfix `[expr]` in `ex3`.
+### The design, worked out but not written
 
-Still open, and *not* the next task: the nested-`expr` corruption, which stays guarded
-(`cc: internal: nested expression`). Its trigger and symptom are recorded in `docs/cc.md`, the
-mechanism is not, and a probe must be **appended as a block anchored on content** — never spliced by
-line number. Arrays will need an index expression, which is *not* a nested `expr`, so the guard does
-not block this step.
+`a[i]` needs the *base* to survive while the *index* is computed, and the depth mechanism already
+provides exactly that: the register for depth `d` holds the base, depth `d + 1` computes the index.
+
+```
+lea <reg(d)>, [rbp-B]            ; the base
+mov eax, [rbp-128] / inc eax      ; one deeper
+call exprd                       ; the index into reg(d+1)
+add <d+1>, <d+1>  (three times)   ; stride 8
+add <d>, <d+1>
+mov <d>, [<d>]                    ; the value
+```
+
+That needs one new routine, and it is six lines:
+
+```
+exprd:
+; eax is the caller's depth; an expression at depth d leaves its value there
+mov [rbp-128], eax
+call ex1
+ret
+```
+
+`expr` becomes `mov eax, 0; jmp exprd` and keeps its nesting guard. Nothing else changes: `ex1`/`ex2`
+already restore the depth around each operand, so nesting an expression inside an expression works
+whenever the caller chooses the depth.
+
+### Three traps, each already paid for once
+
+1. **`want` and `skipws` clobber `rax`** — they write `eax`, which zeroes the upper half. A pointer
+   must not be held in `rax` across them; that is why `*p = v` computes the value first and loads the
+   pointer afterwards.
+2. **`[rbp-140]` is shared by every term.** A subscript's own offset must not live there across the
+   index parse. `-244` is `stptr`'s; use another fixed slot, not a shared one.
+3. **A nested subscript re-enters `ex1` from inside `ex3`** — the same structural nesting as the
+   unexplained name-buffer corruption. Refuse `a[b[j]]` with a flag until that bug is understood,
+   rather than shipping the shape that is known to corrupt state.
+
+### Symbol table work
+
+`defvar` advances the variable count by one. An array needs N consecutive slots, so it advances by N,
+and `varoff` (which computes `8*(index+1)`) gives the base unchanged. A per-variable "is array" flag
+is needed for one refusal: a bare array name (`x = a;`) must be refused rather than silently reading
+`a[0]`. Eight variables is the budget; arrays share it, and there is no bounds check.
+
+### Still open, and *not* the next task
+
+The nested-`expr` corruption stays guarded (`cc: internal: nested expression`): trigger and symptom in
+`docs/cc.md`, mechanism unknown, and a probe must be **appended as a block anchored on content** —
+never spliced by line number.
 
 The longer list — `div`, `char`, `.data`, string literals, a struct-free symbol table — is in
 `docs/ROADMAP.md`.
