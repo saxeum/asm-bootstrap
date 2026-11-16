@@ -344,3 +344,42 @@ From here there is no independent implementation to cross-check against. The saf
 `ref/`, the reject suite, the capability pairs, the superiority suite, the seed chain and the pinned
 decodes — which is why those had to exist first. `docs/provenance.tsv` still records `asm0a` for the
 fixtures, because `asm0a` can still assemble those; it can no longer assemble the assembler.
+
+### Phase 2, item 4 done: expressions
+
+```
+mov eax, 1 / end: / db end          ->  db 5     (label, resolved)
+mov eax, 1 / end: / db end - 2      ->  db 3     (label arithmetic)
+db fin / fin:                       ->  db 1     (FORWARD reference)
+db nosuch                           ->  line 2: rejected
+```
+
+`asm1` 5 094 → **5 351 bytes**. `expr := term (('+'|'-') term)*`, where a term is a literal or a label,
+spaces optional around the operator.
+
+**The value model is the interesting part.** In pass 0, a forward label has no value yet — so a symbol
+looks up as "unknown". That is *tolerated* in pass 0 (values there never affect a byte count) and
+**refused** in passes 1 and 2, which is what keeps `db nosuch` an error rather than a silent zero.
+That tolerance is also why the forward-reference case works at all: pass 1, the validate pass, has
+every label and resolves it before a byte is written.
+
+Capability pairs added: `expr-label`, `expr-arith`, `expr-fwd`, each against the hand-written constant
+it must equal. 11 pairs now.
+
+Four defects, and three of them are the same defect wearing different clothes:
+
+1. **`term` returned the pass flag as the symbol's value.** `db end` emitted `02` — the pass number —
+   instead of `05`. The lookup result was in `eax`, then clobbered by a `movzx eax, byte [rbp+16]`
+   before it was copied to `ecx`.
+2. **The accumulator slot was `[rbp+64]`, which is `emitmem`'s register field.** `lea` sets that field
+   *before* calling `memop`, and `memop` calls `expr` — so `lea rsi,[rsp]` lost its register and
+   `stack`/`count10` broke. Moved to `[rbp+12]` and `[rbp+4]`, verified free rather than assumed.
+3. **A label named `term` already existed** as the startup's NUL-termination loop. Duplicate labels
+   assemble and the *first* definition wins, so `call term` ran the startup loop and every expression
+   failed. Renamed to `trm`. Same class as the duplicate `dbnext`/`d_x`/`ls1` found earlier: harmless
+   to the assembler, fatal to the program.
+4. **`end - 2` with spaces** was rejected because the expression did not skip spaces around the
+   operator.
+
+Every one was caught by a test rather than by reading: the fixtures for (2) and (3), the capability
+pairs for (1) and (4).

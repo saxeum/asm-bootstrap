@@ -406,7 +406,7 @@ cmp al, 101
 jz.l pmovrr
 cmp al, 114
 jz.l pmovrr
-call numlit
+call expr
 mov [rbp+36], ecx
 mov eax, [rbp+32]
 mov edx, 184
@@ -427,7 +427,7 @@ call skipsp
 movzx eax, byte [rbx]
 cmp al, 34
 jz.l pdbstr
-call numlit
+call expr
 mov edx, 384
 call chklim
 mov eax, ecx
@@ -438,7 +438,7 @@ cmp al, 44
 jnz.l pline
 lea rbx, [rbx+1]
 call skipsp
-call numlit
+call expr
 mov edx, 384
 call chklim
 mov eax, ecx
@@ -598,7 +598,7 @@ call r8
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
-call numlit
+call expr
 mov edx, 384
 call chklim
 mov [rbp+36], ecx
@@ -658,7 +658,7 @@ call r8
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
-call numlit
+call expr
 mov edx, 256
 call chklim
 mov [rbp+36], ecx
@@ -748,7 +748,7 @@ memneg:
 cmp al, 45
 jnz.l fail
 memnum:
-call numlit
+call expr
 mov edx, 256
 call chklim
 mov [rbp+60], ecx
@@ -816,7 +816,7 @@ mov eax, 0
 mov [rbp+64], eax
 lea rbx, [rbx+1]
 call skipsp
-call numlit
+call expr
 mov edx, 384
 call chklim
 mov [rbp+36], ecx
@@ -1014,7 +1014,7 @@ call reg32
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
-call numlit
+call expr
 mov [rbp+36], ecx
 mov eax, [rbp+32]
 mov edx, 56
@@ -1371,3 +1371,84 @@ add al, 48
 call putch
 prx:
 ret
+
+lku0:
+lea rcx, [rbp+1]
+mov esi, 3861
+sub rcx, rsi
+mov edx, [rbp+80]
+lk0l:
+cmp edx, 0
+jz.l lk0z
+mov eax, [rcx]
+mov esi, [rbp+72]
+xor eax, esi
+mov edi, [rcx+4]
+mov esi, [rbp+76]
+xor edi, esi
+add eax, edi
+cmp eax, 0
+jz.l lk0f
+lea rcx, [rcx+12]
+dec edx
+jmp.l lk0l
+lk0f:
+mov eax, [rcx+8]
+mov edx, 1
+ret
+lk0z:
+mov eax, 0
+xor edx, edx
+ret
+
+expr:
+mov eax, 0
+mov [rbp+12], eax
+call trm
+mov [rbp+12], ecx
+exl:
+call skipsp
+movzx eax, byte [rbx]
+cmp al, 43
+jz.l expos
+cmp al, 45
+jz.l exneg
+jmp.l exret
+expos:
+lea rbx, [rbx+1]
+call skipsp
+call trm
+mov eax, [rbp+12]
+add eax, ecx
+mov [rbp+12], eax
+jmp.l exl
+exneg:
+lea rbx, [rbx+1]
+call skipsp
+call trm
+mov eax, [rbp+12]
+sub rax, rcx
+mov [rbp+12], eax
+jmp.l exl
+exret:
+mov ecx, [rbp+12]
+ret
+
+trm:
+movzx eax, byte [rbx]
+cmp al, 97
+jb.l termnum
+call lcpy
+call lku0
+mov [rbp+4], eax
+cmp edx, 0
+jnz.l termok
+movzx eax, byte [rbp+16]
+cmp eax, 0
+jz.l termok
+jmp.l fail
+termok:
+mov ecx, [rbp+4]
+ret
+termnum:
+jmp.l numlit
