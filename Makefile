@@ -19,12 +19,13 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-capability fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1 (the promoted previous stage)'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
 	@echo 'make test-reject  sources that must be refused, with no output'
 	@echo 'make test-capability  new syntax vs the old spelling: same bytes'
+	@echo 'make test-superior  inputs asm1 handles and asm0a cannot'
 	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
 	@echo 'make bootstrap-check  asm0a and seed/asm1 must agree on src/asm1.s'
 	@echo 'make triage     which is broken: your source edit, or the seed'
@@ -46,7 +47,7 @@ asm1: src/asm1.s $(SEED)
 	@chmod +x $@
 	@printf '  asm1  %s bytes  sha %s  (built by %s from src/asm1.s)\n' \
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(SEED)"
-test: test-asm0a asm1 test-asm1 test-reject test-capability
+test: test-asm0a asm1 test-asm1 test-reject test-capability test-superior
 test-asm0a:
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(PAIRS); do \
@@ -112,7 +113,7 @@ verify-provenance: asm1
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: asm1 fixpoint bootstrap-check test-reject test-capability verify-provenance
+check: asm1 fixpoint bootstrap-check test-reject test-capability test-superior verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -213,3 +214,28 @@ test-capability: asm1
 # and both come from the last commit — a state that passed every gate when made.
 triage:
 	@./tools/triage.sh
+
+# ---- superiority ------------------------------------------------------------
+# Cases where asm1 must succeed and asm0a must fail. There is no asm0a output to
+# compare against, so the oracle is behavioural: the binary the source produces
+# must run and exit with the value the source asks for.
+test-superior: asm1
+	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; \
+	{ seq 1 9000 | sed 's/.*/mov eax, 1/'; \
+	  printf 'mov eax, 60\nmov edi, 42\nsyscall\n'; } > $$tmp/big.s; \
+	size=$$(wc -c < $$tmp/big.s); \
+	if [ $$size -le 65536 ]; then \
+	  echo "  the test source is only $$size bytes -- it must exceed asm0a's 64 KiB read"; exit 1; fi; \
+	if $(ASM0A) < $$tmp/big.s > $$tmp/a 2>/dev/null; then \
+	  echo "  asm0a now assembles a $$size byte source: this test no longer discriminates"; fail=1; \
+	fi; \
+	if ! $(ASM1) < $$tmp/big.s > $$tmp/b 2>/dev/null; then \
+	  echo "  asm1 cannot assemble a $$size byte source"; exit 1; fi; \
+	chmod +x $$tmp/b; \
+	if $$tmp/b; then got=0; else got=$$?; fi; \
+	if [ $$got -eq 42 ]; then \
+	  printf '  superior: asm1 assembles %s bytes that asm0a cannot, and it runs (exit 42)\n' $$size; \
+	else \
+	  echo "  the binary built from the big source exited $$got, wanted 42"; fail=1; \
+	fi; \
+	exit $$fail

@@ -26,23 +26,37 @@ db 0, 16, 0, 0, 0, 0, 0, 0
 start:
 lea rbp, [rsp]
 mov eax, 0
-mov edi, 0
-lea rsi, [rbp+1]
-mov ecx, 26001
-sub rsi, rcx
-mov edx, 24000
-syscall
 mov [rbp+28], eax
-mov eax, [rbp+28]
-mov ecx, 24000
+lea rsi, [rbp+1]
+mov ecx, 300001
+sub rsi, rcx
+rdloop:
+mov eax, 0
+mov edi, 0
+mov edx, 120
+syscall
+mov [rbp+68], eax
+mov ecx, [rbp+28]
+mov edx, [rbp+68]
+add ecx, edx
+mov [rbp+28], ecx
+mov eax, [rbp+68]
+mov ecx, 120
 sub rax, rcx
-jz.l fail
+jnz.l rddone
+lea rsi, [rsi+120]
+mov eax, [rbp+28]
+mov ecx, 200000
+sub rax, rcx
+jb.l rdloop
+jmp.l fail
+rddone:
 mov eax, 0
 mov [rbp+16], eax
 mov [rbp+20], eax
 mov [rbp+80], eax
 lea rbx, [rbp+1]
-mov ecx, 26001
+mov ecx, 300001
 sub rbx, rcx
 mov ecx, [rbp+28]
 term:
@@ -54,7 +68,7 @@ jmp term
 termd:
 mov byte [rbx], 0
 lea rbx, [rbp+1]
-mov ecx, 26001
+mov ecx, 300001
 sub rbx, rcx
 call parse
 
@@ -67,7 +81,7 @@ mov [rbp+16], eax
 mov eax, 0
 mov [rbp+20], eax
 lea rbx, [rbp+1]
-mov ecx, 26001
+mov ecx, 300001
 sub rbx, rcx
 call parse
 mov eax, 2
@@ -134,7 +148,7 @@ mov [rbp+16], eax
 mov eax, 0
 mov [rbp+20], eax
 lea rbx, [rbp+1]
-mov ecx, 26001
+mov ecx, 300001
 sub rbx, rcx
 call parse
 mov eax, 60
@@ -297,7 +311,6 @@ mov eax, 0
 mov [rbp+48], eax
 jmp.l pu32
 d_x:
-d_x:
 cmp al, 120
 jnz.l d_l
 mov eax, 0
@@ -411,7 +424,6 @@ mov edx, 384
 call chklim
 mov eax, ecx
 call emital
-dbnext:
 dbnext:
 movzx eax, byte [rbx]
 cmp al, 44

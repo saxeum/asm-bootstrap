@@ -270,3 +270,38 @@ artifacts: it cannot build them. Provenance becomes a chain of `asm1` generation
 `docs/toolchain.tsv`, and the fixtures' role changes — `ref/` stops being "what asm0a must equal" and
 becomes "a hand-written program that any generation must still reproduce". The pinned sha, the
 branch decodes and the seed chain carry the rest.
+
+### Phase 1, item 1 done: `asm1` is now better than `asm0a` at input size
+
+```
+make test-superior
+  superior: asm1 assembles 99032 bytes that asm0a cannot, and it runs (exit 42)
+```
+
+`asm0a` reads at most 65 536 bytes and `asm1` read 24 000, so **on large inputs `asm1` was the
+weaker tool**. Both limits are gone: `asm1` now reads in 120-byte chunks until a short read, which
+is bounded only by the region we reserve (200 000 bytes, refused above that rather than truncated).
+
+The chunk size matters and the reason is not obvious. One large `read` does **not** work: the kernel
+copies only into pages already mapped below `rsp`, so a 26 000-byte read 30 KB down returned 22 021
+bytes — a silent partial read, which is how this whole defect was found. 120-byte chunks fault one
+page at a time, and the kernel expands the stack for each, so reads now reach 300 KB — verified, not
+assumed.
+
+`asm1` 4 680 → **4 725 bytes**.
+
+Gate: `tests/superior/` is a *behavioural* suite, because there is no `asm0a` output to compare
+against — that is the point. The source is generated (9 000 instructions plus an exit with status
+42), the test asserts `asm0a` fails on it, `asm1` succeeds, and the binary `asm1` produces **runs and
+exits 42**. It also refuses to pass vacuously: if `asm0a` ever assembles the source, the test fails
+saying it no longer discriminates.
+
+Two self-inflicted defects, both from `sed` by line number:
+
+- A deletion range applied *ascending* after an earlier deletion had shifted the file, so the second
+  range removed a live line and 9 fixtures broke.
+- The block I called "dead" `lblchk` was the live label scanner: the inline scan at `pline` jumps
+  into it. Deleting it broke every fixture that uses a label.
+
+Both were caught by the fixture corpus within one command, which is the argument for running it after
+every structural edit rather than after the next one.
