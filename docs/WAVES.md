@@ -3130,3 +3130,28 @@ no earlier test had produced.
 Two earlier suspicions in this file were wrong and are worth retracting: the literal counter and
 `wblock`'s `[rbp+20]+1` were in step all along, and the multi-argument call was passing arguments
 correctly. The bug was in the *data* the arguments pointed at.
+
+## Slice 2 blocked: an array element as an argument, inside a loop
+
+Slice 2 was to emit the prologue from a *table* — an array of literal addresses, walked by a loop. It
+hits a defect, narrowed in four probes:
+
+| shape | result |
+|---|---|
+| `es(p, l, t[0])` outside any loop | works |
+| `es(p, l, "ab")` inside a `while` | works |
+| `while (...) { l = es(p, l, t[i]); ... }` | **SIGSEGV** |
+| `while (...) { int w = t[i]; l = es(p, l, w); ... }` | **SIGSEGV** |
+
+So it is the *combination*: an array element read as a call argument, inside a loop. The same value
+hoisted into a variable *outside* the loop works; hoisting *inside* the loop does not, which points at
+the loop's per-iteration state rather than at the subscript itself.
+
+Prime suspect, recorded rather than chased at the end of a long session: the argument-depth slot
+`[rbp-292]`, which `ex3call` sets from `[rbp-128]` before `callargs`. A subscript read inside an
+argument walks depth 1 and 2, and the block-id machinery also uses `[rbp+92]`/`[rbp+96]` around a body —
+if any of those overlap, the emitted address is garbage rather than the label's, which matches a
+segfault at the first byte read.
+
+`src/cc.c`'s slice 2 is therefore not attempted. Slice 1 stands, gated, and this is the next thing to
+fix — with these four probes as the acceptance test, since each one must pass.

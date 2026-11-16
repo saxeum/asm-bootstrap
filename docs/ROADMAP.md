@@ -1684,3 +1684,13 @@ Next slices, in order, each with its own expected text written first:
 What the port still lacks in the language, and will hit in that order: `&&`/`||` (write nested `if`s
 instead), and a way to return a pointer (`emit(char *s)` has no equivalent; a string is a buffer and a
 length).
+
+## Next: an array element as an argument, inside a loop
+
+Four probes in `docs/WAVES.md` narrow it: `es(p,l,t[0])` outside a loop works, `es(p,l,"ab")` inside a
+loop works, and the two combined segfault — including with the element hoisted into a variable *inside*
+the loop. Suspect: `[rbp-292]` (argument depth) or the subscript slots overlapping what the loop's body
+uses.
+
+Fix that, then slice 2 (the prologue from a table), then the symbol table, statements, expressions, and
+the acceptance test `cc1 < src/cc.c > cc2.s ; cmp cc1.s cc2.s`.
