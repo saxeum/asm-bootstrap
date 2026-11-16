@@ -501,6 +501,29 @@ test-cc: cc asm1
 	  if $$tmp/wa; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 65 ]; then \
 	    printf '  cc    a 2000-byte buffer at index 1999 exits 65 (four-digit literals)\n'; \
+	if $(CC) < tests/golden/catfile.c > $$tmp/cf.s 2>/dev/null && cmp -s $$tmp/cf.s tests/golden/catfile.s; then :; \
+	else echo "  catfile.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/catfile.s > $$tmp/cf 2>/dev/null; then \
+	  chmod +x $$tmp/cf; \
+	  printf 'hello, world\n' > $$tmp/want5; \
+	  $$tmp/cf < $$tmp/want5 > $$tmp/got5; g1=$$?; \
+	  printf 'one\ntwo\nthree\nfour\n' > $$tmp/want6; \
+	  $$tmp/cf < $$tmp/want6 > $$tmp/got6; g2=$$?; \
+	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ] && cmp -s $$tmp/got5 $$tmp/want5 && cmp -s $$tmp/got6 $$tmp/want6; then \
+	    printf '  cc    cat: stdin copied to stdout byte for byte, twice\n'; \
+	if $(CC) < tests/golden/upcase.c > $$tmp/uc.s 2>/dev/null && cmp -s $$tmp/uc.s tests/golden/upcase.s; then :; \
+	else echo "  upcase.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/upcase.s > $$tmp/uc 2>/dev/null; then \
+	  chmod +x $$tmp/uc; \
+	  printf 'aabbcca\n' > $$tmp/want7; \
+	  printf 'AABBccA\n' > $$tmp/want8; \
+	  $$tmp/uc < $$tmp/want7 > $$tmp/got7; g1=$$?; \
+	  if [ $$g1 -eq 0 ] && cmp -s $$tmp/got7 $$tmp/want8; then \
+	    printf '  cc    a filter: a and b upper-cased in stdin, written to stdout\n'; \
+	  else echo "  upcase: exit $$g1, output [$$(cat $$tmp/got7)]"; fail=1; fi; \
+	else echo "  asm1 refuses upcase.s"; fail=1; fi; \
+	  else echo "  catfile: exits $$g1/$$g2, and its output does not match its input"; fail=1; fi; \
+	else echo "  asm1 refuses catfile.s"; fail=1; fi; \
 	  else echo "  widearray exited $$g1, wanted 65 -- a literal or an offset is truncated"; fail=1; fi; \
 	else echo "  asm1 refuses widearray.s"; fail=1; fi; \
 	  else echo "  bigarray exited $$g1, wanted 65 -- the array is outside the frame"; fail=1; fi; \

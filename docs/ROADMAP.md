@@ -1540,3 +1540,19 @@ depth is kept in mind.
 
 That leaves the port itself as the next piece of work rather than another feature: `src/cc.c`, compiled
 by `cc`, assembled by `asm1`, compared on the whole corpus, with the dialect frozen as the witness.
+
+## Compiler: `write(buf, n)` — input becomes output
+
+`cat` and a character filter both work: a program can read stdin, transform it, and write the result,
+which is the shape of a compiler. `write(a, n)` is the mirror of `read`, with the count as an
+expression.
+
+Two gaps that writing them exposed, in order:
+
+1. **A condition cannot be on an array element.** `if (b[i] == 97)` is refused because `cond` parses a
+   name rather than a term; the filter hoists into a temporary instead. Fixing it means `cond` taking
+   a general term for its left side, which is the same shape as the bound work already done.
+2. `int k = write(b, n);` after statements in a block is accepted, but a declaration in the middle of
+   a block is worth checking more widely.
+
+Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.

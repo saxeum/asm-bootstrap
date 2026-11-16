@@ -2832,3 +2832,32 @@ Gate: a 2 000-byte buffer written and read at index 1 999 exits 65 — four-digi
 declaration *and* a subscript, both of which were three-digit before.
 
 `cc` 8 858 → 8 836 bytes. 30 checks, 35 refusals, 28 goldens.
+
+## `write(buf, n)`, and two programs that transform their input
+
+`write` took only a literal — the bytes existed in the image and were written straight out. A compiler
+writes what it *computed*, so `write(a, n)` now writes n bytes from an array (or a pointer) to stdout
+and returns the count. The mirror of `read`, with one difference that fixes the code shape: the count
+is an *expression*, so it is evaluated first and moved to `rdx`, because taking the address needs `rsi`
+and the syscall needs `eax` and `edi`.
+
+That makes the first programs in this subset that transform rather than just print:
+
+```c
+/* cat */                                  /* a filter */
+int n = read(b, 100);                      int c = b[i];
+while (n > 0) {                            if (c == 97) { b[i] = 65; }
+    int k = write(b, n);                   if (c == 98) { b[i] = 66; }
+    n = read(b, 100);                          ...
+}
+```
+
+Gates: `cat` copies stdin to stdout byte for byte on two different inputs, and the filter turns
+`aabbcca` into `AABBccA`. Both are compared with `cmp`, not by eye.
+
+**And writing them found the next gap, which is the interesting part:** `if (b[i] == 97)` is refused.
+`cond` parses a *name*, not a term, so a condition cannot be on an array element — the filter has to
+hoist the element into a temporary first (`int c = b[i];`). That is the shape C code would not need,
+and it is now the top of the roadmap.
+
+`cc` 8 836 → 9 136 bytes. 32 checks, 35 refusals, 30 goldens.

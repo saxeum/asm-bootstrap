@@ -834,7 +834,18 @@ ex3call:
 mov eax, [rbp-16064]
 cmp eax, 1684104562      ; "read", four bytes little-endian
 jz ex3rdgo
+cmp eax, 1953067639      ; "writ", four bytes little-endian
+jz ex3wrgo
 jmp ex3cgo
+ex3wrgo:
+lea rdx, [rbp-16064]
+movzx eax, byte [rdx+4]
+cmp eax, 101             ; 'e'
+jnz.l fail
+movzx eax, byte [rdx+5]
+cmp eax, 0               ; "write" is five bytes
+jz.l ex3wr
+jmp.l fail
 ex3rdgo:
 lea rdx, [rbp-16064]
 mov eax, [rdx+4]
@@ -941,6 +952,62 @@ mov eax, [rbp-272]
 call emitnum
 mov esi, 4194424+f_rd3
 call emitstr
+ret
+
+ex3wr:
+; `write(a, n)` -- SYS_write of n bytes from the array (or pointer) `a` to
+; stdout. The mirror of `read`, except that the count is an *expression*: a
+; compiler writes what it computed.
+;
+; The count is evaluated first and moved to rdx, because taking the address
+; needs rsi and the syscall needs eax and edi -- so the order is fixed by which
+; register each value has to be in.
+mov eax, 1
+call bump               ; '(' -- already consumed by the caller
+call ident
+call findvar
+mov [rbp-268], eax
+call isarr
+mov [rbp-308], eax
+cmp eax, 0
+jnz ex3wrok
+jmp.l fail              ; write from something that is not an array
+ex3wrok:
+mov esi, 4194424+f_comma
+call want
+call expr               ; the count, at depth 0
+mov esi, 4194424+f_mov
+call emitstr
+mov esi, 4194424+f_rdx
+call emitstr
+mov esi, 4194424+f_sep
+call emitstr
+mov esi, 4194424+f_rax
+call emitstr
+mov esi, 4194424+f_nl
+call emitstr
+mov eax, [rbp-308]
+cmp eax, 0
+jz ex3wrp
+mov esi, 4194424+f_lea1
+jmp ex3wrb
+ex3wrp:
+mov esi, 4194424+f_mov  ; a pointer: the buffer's address is its value
+ex3wrb:
+call emitstr
+mov esi, 4194424+f_rsi
+call emitstr
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-268]
+call varoff
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov esi, 4194424+f_wr1
+call emitstr
+mov esi, 4194424+f_rpar
+call want
 ret
 
 ex3sub:
@@ -2681,5 +2748,16 @@ db 0
 f_decrcx:
 db 10
 db "dec rcx"
+db 10
+db 0
+f_rsi:
+db "rsi"
+db 0
+f_wr1:
+db "mov eax, 1"
+db 10
+db "mov edi, 1"
+db 10
+db "syscall"
 db 10
 db 0
