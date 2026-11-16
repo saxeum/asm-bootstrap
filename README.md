@@ -22,22 +22,22 @@ included; `docs/continue-here.md` is where a session starts.
 | self-hosted | `asm1` | 7 731 | `ac80d9f9094d7051` | `seed/asm1` from `src/asm1.s` |
 | seed | `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted previous stage |
 | decoder | `dis` | 1 343 | `2d2eb451d7c7a9a9` | `asm1` from `src/dis.s` |
-| compiler | `cc` | 8 744 | `a479bc7a8e8299d2` | `asm1` from `src/cc.s` |
+| compiler | `cc` | 8 745 | `0677455d9d3a79e0` | `asm1` from `src/cc.s` |
 
 Past the bootstrap. `asm1` is self-hosting, reaches its fixpoint, and is demonstrably better than
 what built it — 6 byte-level cases where `asm0a` answers wrongly and 30 syntax pairs it cannot parse.
 `asm0a` can no longer build the source at all (more than 128 labels), which is the handover, and
 `make bootstrap-check` says **NOT APPLICABLE** out loud rather than passing quietly.
 
-The compiler is real and small: `int x = 3`, `while`, `if`/`else`, eight variables, expressions with
-precedence, function calls with a calling convention, recursion, and pointers (`&x`, `*p`, `*p = v`)
-over a 64-bit value model. It emits text, not bytes, and every gate the assembler has applies to that
-text.
+The compiler is real and small: `int x = 3`, `while`, `if`/`else`, thirty-two variables, expressions
+with precedence, function calls with a calling convention, recursion, and pointers (`&x`, `*p`, `*p = v`),
+int and char arrays, a buffer that can cross a call, `read()` and `write()`, over a 64-bit value model.
+It emits text, not bytes, and every gate the assembler has applies to that text.
 
-What is next is in `docs/ROADMAP.md`. The immediate next step is `int a[N]` with a computed index —
-a self-hosting compiler needs parallel arrays before it can hold a symbol table. The one hard open
-item is a call inside a larger expression (`n * f(n-1)`), blocked by an unexplained parser corruption
-that is *guarded* rather than fixed.
+What is next is in `docs/ROADMAP.md`. One assembler feature stands between this and a compiler that
+could compile itself: **`.data`**, so that string literals live in memory and a program can address its
+own text. A call inside a larger expression used to be the other blocker; it works now, and the cause
+of the corruption that hid it was a missing `sub rsp` in `cc`'s own prologue.
 
 ## Use it
 
@@ -83,7 +83,7 @@ anything that tries to run it directly.
 |---|---|---|
 | 1 | `int x = N`, `x = x ± N`, `while (x)` | `twowrites` golden; `loop` compared by output with `tests/oracle/dots.s` |
 | 2 | `== != < > <= >=`, `if`/`else` — no new instruction, `jb`/`jz`/`jnz` plus an operand swap | same output as `tests/oracle/branch.s` |
-| 3 | a symbol table: eight variables, names ≤ 7 chars | `twovars` golden and oracle |
+| 3 | a symbol table: variables and names | `twovars` golden and oracle |
 | 4 | expressions with precedence, one register per depth | `(2 + 3*4) - 10 + 14` exits 18 |
 | 5 | a calling convention: args in `rdi`/`rsi`/`rdx`/`rcx`, return in `eax` | `add(2,3)` exits 5, `sub2(3,2)` exits 1 |
 | 6 | `return` anywhere, arguments as `+`/`-` terms, recursion | `f(10,0)` with an accumulator exits 10 |
@@ -271,8 +271,8 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1` |
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div` (8-bit form: `div bl`, quotient in `al`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `imul r,r,imm`, `div` needs a register of 32 or 64 bits, not 8, `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 15 characters |
-| compiler | `cc`, 8 744 bytes, built by `asm1` from `src/cc.s` (2 649 lines): C subset → dialect **text** → `asm1` → executable. 24 text goldens, 3 output oracles, 35 refusals (`make test-cc`, `docs/cc.md`) |
-| `make check` | 53 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, 7/7 superiority plus three behavioural, 38/38 decoder cases, the compiler's 26 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| compiler | `cc`, 8 745 bytes, built by `asm1` from `src/cc.s` (2 649 lines): C subset → dialect **text** → `asm1` → executable. 25 text goldens, 3 output oracles, 36 refusals (`make test-cc`, `docs/cc.md`) |
+| `make check` | 54 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, 7/7 superiority plus three behavioural, 38/38 decoder cases, the compiler's 27 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.

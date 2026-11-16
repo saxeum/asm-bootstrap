@@ -2700,3 +2700,23 @@ Three defects on the way, and the first is the interesting one:
   refused because `read` wants a name.
 
 `cc` 8 693 → 8 744 bytes. 26 checks, 35 refusals, 24 goldens.
+
+## Thirty-two variables per function, and a fixed frame
+
+`cc` had eight slots per function, at `[rbp-8*i]` in a 64-byte frame. A compiler function has more
+locals than that, so the limit is now 32 slots and the frame reserves 264 bytes.
+
+The change is four constants — the slot check in `defvar`, the fit check in `defarr`, and the frame
+size in the prologue fragment — but it re-pins every golden, because every prologue now says
+`mov rcx, 264` instead of `mov rcx, 64`. The behaviour gates are what carry the meaning; the goldens
+only pin the shape.
+
+Two refusals had to move with it: an array of nine is legal now (`a[33]` is refused instead), and nine
+variables is legal (`thirty-three` is refused). Both were replaced rather than deleted, because the
+limit still exists — it just moved.
+
+Gate: twenty variables in one function, `v1 + v20` exits 21 — which fails if the frame is too small
+for the slots, the one thing a golden cannot see.
+
+`cc` 8 744 → 8 745 bytes: one byte, because the prologue constant grew and the code shrank by the same
+amount. 27 checks, 36 refusals, 25 goldens.

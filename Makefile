@@ -473,6 +473,15 @@ test-cc: cc asm1
 	  if $$tmp/sb; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 198 ]; then \
 	    printf '  cc    a buffer crosses a call: sumbuf(&s, 3) exits 198\n'; \
+	if $(CC) < tests/golden/manyvars.c > $$tmp/mv.s 2>/dev/null && cmp -s $$tmp/mv.s tests/golden/manyvars.s; then :; \
+	else echo "  manyvars.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/manyvars.s > $$tmp/mv 2>/dev/null; then \
+	  chmod +x $$tmp/mv; \
+	  if $$tmp/mv; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 21 ]; then \
+	    printf '  cc    twenty variables in one function: v1 + v20 exits 21\n'; \
+	  else echo "  manyvars exited $$g1, wanted 21 -- the frame is too small for the slots"; fail=1; fi; \
+	else echo "  asm1 refuses manyvars.s"; fail=1; fi; \
 	  else echo "  sumbuf exited $$g1, wanted 198 -- the callee cannot read the caller's array"; fail=1; fi; \
 	else echo "  asm1 refuses sumbuf.s"; fail=1; fi; \
 	  else echo "  readloop: wanted 198/193"; fail=1; fi; \
@@ -551,12 +560,12 @@ test-cc: cc asm1
 	refuse 'int main(void) { int a[4]; int y = a; }'; \
 	refuse 'int main(void) { char s[4]; int n = read(&s, 4); }'; \
 	refuse 'int main(void) { int a[4]; int b[4]; int y = a[b[0]]; }'; \
-	refuse 'int main(void) { int a[9]; }'; \
+	refuse 'int main(void) { int a[33]; }'; \
 	refuse 'int main(void) { int a[2]; int a[2]; }'; \
 	refuse 'int main(void) { char x = 65; }'; \
 	refuse 'int main(void) { char a[4]; a = 1; }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(f()); }'; \
-	refuse 'int main(void) { int a1 = 1; int a2 = 2; int a3 = 3; int a4 = 4; int a5 = 5; int a6 = 6; int a7 = 7; int a8 = 8; int a9 = 9; }'; \
+	refuse 'int main(void) { int v1 = 1; int v2 = 2; int v3 = 3; int v4 = 4; int v5 = 5; int v6 = 6; int v7 = 7; int v8 = 8; int v9 = 9; int v10 = 10; int v11 = 11; int v12 = 12; int v13 = 13; int v14 = 14; int v15 = 15; int v16 = 16; int v17 = 17; int v18 = 18; int v19 = 19; int v20 = 20; int v21 = 21; int v22 = 22; int v23 = 23; int v24 = 24; int v25 = 25; int v26 = 26; int v27 = 27; int v28 = 28; int v29 = 29; int v30 = 30; int v31 = 31; int v32 = 32; int v33 = 33; }'; \
 	if [ $$ok -ne $$n ]; then echo "  cc: $$ok/$$n refusals"; fail=1; fi; \
 	printf '  cc    %s/%s rejections outside the subset, with no output\n' $$ok $$n; \
 	exit $$fail

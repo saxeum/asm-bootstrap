@@ -1321,15 +1321,15 @@ cmp eax, -1
 jz.l fail
 ret
 
-; defvar: declare the current name, refusing a repeat or a ninth variable
+; defvar: declare the current name, refusing a repeat or one past the last slot
 defvar:
 call idfind
 cmp eax, -1
 jnz.l fail              ; already declared
 mov eax, [rbp-108]
-cmp eax, 8
+cmp eax, 32
 jb defok
-jmp.l fail              ; ninth variable
+jmp.l fail              ; no free slot
 defok:
 mov edx, eax
 add eax, eax
@@ -1381,9 +1381,9 @@ jnz.l fail              ; already declared
 mov eax, [rbp-108]
 mov edx, [rbp-256]      ; the dialect has no `add r32, [mem]`
 add eax, edx
-cmp eax, 8
+cmp eax, 32
 jb defafit
-jmp.l fail              ; does not fit in the eight slots
+jmp.l fail              ; does not fit in the free slots
 defafit:
 mov eax, [rbp-108]
 mov [rbp-260], eax
@@ -2357,7 +2357,7 @@ db "push rbp"
 db 10
 db "mov rbp, rsp"
 db 10
-db "mov rcx, 64"
+db "mov rcx, 264"
 db 10
 db "sub rsp, rcx"
 db 10

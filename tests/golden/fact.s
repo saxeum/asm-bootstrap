@@ -2,7 +2,7 @@
 fact:
 push rbp
 mov rbp, rsp
-mov rcx, 64
+mov rcx, 264
 sub rsp, rcx
 mov [rbp-8], rdi
 mov rax, [rbp-8]
@@ -31,7 +31,7 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov rcx, 64
+mov rcx, 264
 sub rsp, rcx
 mov rcx, 5
 mov rdi, rcx

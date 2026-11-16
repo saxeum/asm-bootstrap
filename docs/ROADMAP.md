@@ -1474,3 +1474,16 @@ What is left before `cc` could compile a C version of itself:
 3. **More than eight variables per function** and a symbol table that can grow: a compiler has tables,
    and cc has eight slots.
 4. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.
+
+## Compiler: thirty-two variables
+
+A function has 32 slots instead of 8, in a 264-byte frame. That was the last *count* limit: there is
+no longer anything about `cc` that a compiler function would exhaust by being written normally.
+
+Left, in order:
+
+1. **`.data`** — string literals that live in memory. This is now the only thing standing between `cc`
+   and a program that parses text, because everything else it needs exists.
+2. `<=`/`>=` against a variable.
+3. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus, with
+   the dialect frozen as the witness.

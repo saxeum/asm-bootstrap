@@ -487,7 +487,7 @@ The callee copying its arguments at entry is the part that earns its keep: `sysc
 so an ABI that left the fourth argument in `rcx` would corrupt it the first time the function wrote
 anything. After the prologue the argument registers are dead.
 
-64 bytes of frame is not a guess: it is eight variables of eight bytes, which is the symbol table's
+264 bytes of frame is not a guess: it is thirty-two variables of eight bytes, which is the symbol
 whole capacity, so the frame cannot be too small for the variables the language can declare.
 
 ### The gate is behavioural, and it is about *order*
@@ -639,7 +639,7 @@ ret
 
 Three refusals came out of doing it: a bare array name (`a = 1`, `int y = a;`) because silently
 reading `a[0]` is a wrong answer; a subscript of something that is not an array; and an array too big
-for the eight slots. A **nested** subscript (`a[b[0]]`) is refused too, because it re-enters the
+for the free slots. A **nested** subscript (`a[b[0]]`) is refused too, because it re-enters the
 parser from inside a term — the shape that used to corrupt state. Now that the cause is known that
 refusal is probably unnecessary; it stays until a test can show it is safe.
 
