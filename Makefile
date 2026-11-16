@@ -527,6 +527,15 @@ test-cc: cc asm1
 	  if $$tmp/ct; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 3 ]; then \
 	    printf '  cc    a term in a condition: while (a[i] > 0) over 3,2,1,0 exits 3\n'; \
+	if $(CC) < tests/golden/middecl.c > $$tmp/md.s 2>/dev/null && cmp -s $$tmp/md.s tests/golden/middecl.s; then :; \
+	else echo "  middecl.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/middecl.s > $$tmp/md 2>/dev/null; then \
+	  chmod +x $$tmp/md; \
+	  if $$tmp/md; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 7 ]; then \
+	    printf '  cc    declarations after statements, in the middle of a block, exit 7\n'; \
+	  else echo "  middecl exited $$g1, wanted 7"; fail=1; fi; \
+	else echo "  asm1 refuses middecl.s"; fail=1; fi; \
 	  else echo "  cndterm exited $$g1, wanted 3"; fail=1; fi; \
 	else echo "  asm1 refuses cndterm.s"; fail=1; fi; \
 	  else echo "  upcase: exit $$g1, output [$$(cat $$tmp/got7)]"; fail=1; fi; \
@@ -611,6 +620,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { char s[4]; int n = read(s); }'; \
 	refuse 'int main(void) { int x = 1; if (x <= 255) { } }'; \
 	refuse 'int main(void) { int x = 1; if (x >= 0) { } }'; \
+	refuse 'int main(void) { int n = 1; if (n) { int k = 2; n = n + k; } if (n) { int k = 3; n = n + k; } }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(1, 2, 3, 4, 5); }'; \
 	refuse 'int main(void) { int p = &5; }'; \
 	refuse 'int main(void) { int y = *q; }'; \

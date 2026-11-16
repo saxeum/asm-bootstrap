@@ -1570,3 +1570,22 @@ everywhere, so it should be a gate rather than an accident.
 
 Then: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus, with the dialect
 frozen as the witness.
+
+## Compiler: the subset is described
+
+Every construct the language claims is covered by a gate or a refusal, and the restrictions that are
+left are *written down* rather than discovered: no name shadowing (the symbol table is per function),
+`<=`/`>=` bounds must be 0..255 when literal, arrays up to ~7.7 KB, 32 scalars, five-digit literals.
+
+The next piece of work is the port, and it is the last one:
+
+**`src/cc.c`** — a C version of this compiler, in the subset it compiles, then
+
+```
+cc < src/cc.c > cc1.s        # compiled by the compiler this project grew
+asm1 < cc1.s > cc1           # assembled by the assembler it bootstrapped
+cc1  < src/cc.c > cc2.s      # and the result must compile itself
+cmp cc1.s cc2.s              # identically, on the whole corpus's worth of input
+```
+
+The dialect stays frozen as the witness: `asm1` must not move while `cc1` is being made to match it.

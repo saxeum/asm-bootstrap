@@ -2889,3 +2889,16 @@ change is sound; the goldens only pin the shape, and this is the second time in 
 distinction did the work.
 
 `cc` 9 136 → 9 126 bytes: ten bytes *smaller*, because three calls to one.
+
+## Mid-block declarations work; shadowing does not
+
+Three probes before a gate: a declaration after a statement exits 7, one after a `while` exits 5, and
+one inside a nested block after a statement exits 3. All fine — a C port will use that shape
+everywhere, and it is now a gate rather than an accident.
+
+The fourth probe is the one worth writing down: **declaring the same name in two different blocks is
+refused.** `cc`'s symbol table is per *function*, not per block — "a fresh symbol table for this
+function" is what its prologue says — so the second `int k` is a duplicate declaration, and the refusal
+is correct behaviour for that design rather than a bug. It is now a refusal in the suite, so the
+restriction is visible: a program in this subset must not shadow a name, even in a scope where C would
+let it.
