@@ -549,6 +549,8 @@ mov eax, 1
 call emitreg
 mov esi, 4194424+f_nl
 call emitstr
+mov eax, 0
+mov [rbp-236], eax      ; the index is parsed: a subscript in the VALUE is fine
 mov esi, 4194424+f_rbrk
 call want
 mov esi, 4194424+f_eq
@@ -779,6 +781,8 @@ ret
 ex3:
 call skipws
 call gcur
+cmp al, 40
+jz.l ex3paren
 cmp al, 38
 jz.l ex3addr
 cmp al, 42
@@ -1121,6 +1125,35 @@ mov esi, 4194424+f_rbrk
 call want
 mov eax, 0
 mov [rbp-236], eax
+ret
+
+ex3paren:
+; `( expr )` -- grouping. The inner expression is parsed one depth deeper so it
+; cannot clobber reg 0..d, and its value is then moved into reg d, which is
+; where the enclosing expression expects a term. Without this there is no way to
+; write `(m - d * 10)` or any of the grouping a C program is full of.
+mov eax, 1
+call bump               ; '('
+mov eax, [rbp-128]
+inc eax
+call chkdep
+call exprd
+mov eax, [rbp-128]
+dec eax
+mov [rbp-128], eax
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, [rbp-128]
+inc eax
+call emitreg
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_rpar
+call want
 ret
 
 ex3addr:

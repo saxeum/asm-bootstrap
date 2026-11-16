@@ -1589,3 +1589,22 @@ cmp cc1.s cc2.s              # identically, on the whole corpus's worth of input
 ```
 
 The dialect stays frozen as the witness: `asm1` must not move while `cc1` is being made to match it.
+
+## Compiler: grouping, and a routine ported
+
+`(expr)` works, so any expression can be grouped, and `putn` — the decimal formatter, `emitnum`'s
+equivalent — is now written in the subset, compiled by `cc`, and gated on its output.
+
+That is the first *piece* of the port rather than a capability added for it, and it went in without any
+new assembler feature: `p[i] = p[j]`, `while (i < j)`, `int t = p[i]` and arithmetic with `/` and `%`
+were all already there.
+
+What the port still wants, in the order `putn`'s neighbours will hit them:
+
+1. **`char` literals** (`'a'` rather than 97) — cosmetic in the emitted code, but every C source uses
+   them, and `cc` prints bytes as numbers today.
+2. **`&&` and `||`** — `cond` handles one comparison; a compiler's conditions are usually two.
+3. **A function that returns `char *`** — the port will want `emit(char *s)`, and today a pointer is an
+   `int` and a string is a buffer plus a length.
+4. Then the port itself, one routine at a time, starting with the ones that have no dependencies:
+   `putn` (done), then `emitname`, then the literal table.

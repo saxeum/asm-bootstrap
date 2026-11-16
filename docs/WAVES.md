@@ -2902,3 +2902,42 @@ function" is what its prologue says — so the second `int k` is a duplicate dec
 is correct behaviour for that design rather than a bug. It is now a refusal in the suite, so the
 restriction is visible: a program in this subset must not shadow a name, even in a scope where C would
 let it.
+
+## Parentheses, and the first piece of `cc` written in C
+
+`48 + (m - d * 10)` was refused, because the subset had **no grouping at all**. That is a blocker for a
+port rather than an inconvenience: C source is full of parentheses, and every expression in `cc`'s own
+body uses them.
+
+`ex3paren` parses the inner expression one depth deeper and moves its value into the enclosing depth:
+
+```
+ex3paren:  '(' ; exprd(d+1) ; mov reg d, reg d+1 ; ')'
+```
+
+which is the same shape as a subscript's index, and for the same reason — the nested parse must not
+clobber `reg 0..d`. Gates: `(1 + 2) * 3` exits 9, `48 + (m - d * 10)` exits 52, and `(((7)))` is 7.
+
+Then the thing parentheses were *for*: `putn(n, p)` — decimal digits of n written into a buffer at p,
+reversed in place, returning the length. That is `emitnum`, which is `cc`'s own routine, **written in
+the subset and compiled by `cc`**:
+
+```c
+int putn(int n, int p) {
+	int len = 0; int m = n; int d = 0;
+	if (m == 0) { p[0] = 48; return 1; }
+	while (m > 0) { d = m / 10; p[len] = 48 + (m - d * 10); len = len + 1; m = d; }
+	int i = 0; int j = len - 1;
+	while (i < j) { int t = p[i]; p[i] = p[j]; p[j] = t; i = i + 1; j = j - 1; }
+	return len;
+}
+```
+
+`putn(1234)` prints `1234`. Gate: output compared with `cmp`.
+
+Writing it found one more thing: `p[i] = p[j]` was refused, because the nested-subscript flag was still
+set when the *value* was parsed. The flag exists to stop `a[b[0]]` clobbering the index machinery, and
+it now clears as soon as the index is parsed — the value is a fresh expression, not part of the
+subscript. `a[b[0]]` is still refused, and still for the right reason.
+
+`cc` 9 126 → 9 238 bytes. 37 checks, 36 refusals, 34 goldens.

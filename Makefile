@@ -534,6 +534,25 @@ test-cc: cc asm1
 	  if $$tmp/md; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 7 ]; then \
 	    printf '  cc    declarations after statements, in the middle of a block, exit 7\n'; \
+	if $(CC) < tests/golden/parens.c > $$tmp/pe.s 2>/dev/null && cmp -s $$tmp/pe.s tests/golden/parens.s; then :; \
+	else echo "  parens.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/parens.s > $$tmp/pe 2>/dev/null; then \
+	  chmod +x $$tmp/pe; \
+	  if $$tmp/pe; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 52 ]; then \
+	    printf '  cc    grouping: 48 + (m - d * 10) with m=34 exits 52\n'; \
+	  else echo "  parens exited $$g1, wanted 52"; fail=1; fi; \
+	else echo "  asm1 refuses parens.s"; fail=1; fi; \
+	if $(CC) < tests/golden/putn.c > $$tmp/pu.s 2>/dev/null && cmp -s $$tmp/pu.s tests/golden/putn.s; then :; \
+	else echo "  putn.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/putn.s > $$tmp/pu 2>/dev/null; then \
+	  chmod +x $$tmp/pu; \
+	  printf '1234\n' > $$tmp/want9; \
+	  $$tmp/pu > $$tmp/got9; g1=$$?; \
+	  if [ $$g1 -eq 0 ] && cmp -s $$tmp/got9 $$tmp/want9; then \
+	    printf '  cc    a number formatted by a compiled program: putn(1234) prints 1234\n'; \
+	  else echo "  putn wrote [$$(cat $$tmp/got9)], wanted [1234]"; fail=1; fi; \
+	else echo "  asm1 refuses putn.s"; fail=1; fi; \
 	  else echo "  middecl exited $$g1, wanted 7"; fail=1; fi; \
 	else echo "  asm1 refuses middecl.s"; fail=1; fi; \
 	  else echo "  cndterm exited $$g1, wanted 3"; fail=1; fi; \
