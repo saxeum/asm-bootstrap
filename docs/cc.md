@@ -891,3 +891,27 @@ tools/differential.sh seed/cc ./asm1 1/5 (the pre-signed dialect witness DIFFERS
 
 That failure against the old compiler is why the gate can be trusted: a green run is not a format
 check wearing a gate's clothes.
+
+## Stage 14: lisp.c, and the subset's real edges
+
+`tests/programs/lisp.c` is a language implementation in the subset: a reader for numbers, symbols,
+lists and quote; 4096 sixteen-byte nodes in one `char[140000]` passed as an `int`; `eval` for numbers,
+symbols, `if`, `define`, `quote`, `+ - * /`, comparisons, `car`, `cdr` and `cons`; and one fixed
+`lisp: error` path. Arena, definitions, input and output are fixed, and the value is written only
+after eval and printing succeed.
+
+The program is also a compact list of things this subset does not have, all found by compiling and
+running rather than reading:
+
+- a condition's right-hand side is a variable or a literal, not an arbitrary expression (`hi > top` was refused; the bound is a local);
+- `x >= 0` is refused by the normalisation, so descending loops test `i > 0` with the decrement first;
+- a call cannot appear in another call's argument list (`eval(m, car(m, a))` is an error; `ca` is a
+  local in every case);
+- duplicate locals anywhere in one function are refused;
+- two subscripts cannot be compared directly (`m[so+i] != m[no+i]`); each side is a local;
+- a bare array name is not an argument (`&mem`, except `read`);
+- `write(p, len)` takes a pointer value, not a base-relative offset.
+
+`make test-program` and `make from-c` each build and run the 29-value table and 17 refusals with
+their own compiler/assembler pair; the emitted text and binaries are byte-identical. The recursion
+limit is the compiler's 260000-byte frame: the tests stay shallow, and `docs/continue-here.md` says so.

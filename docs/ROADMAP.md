@@ -13,7 +13,8 @@ self-hosting, produces the 18 hand-emitted `ref/` binaries, and its branch pins 
 ordered plan and its history**: sections below were true when written and some of their limits were
 raised later. The bootstrap endgame is reached: `src/asm1.c` is compiled by `cc`, assembled by `asm1`
 into `asm2`, and `make test-asm2` requires it to reproduce `asm1` byte for byte on the whole corpus
-and to assemble its own compiler text into itself. Signed comparisons, `idiv` and `cqo` are in; the
+and to assemble its own compiler text into itself. Signed comparisons, `idiv` and `cqo` are in, and the
+four programs (`wc`, `calc`, `sort`, `lisp`) run on both chains. The
 next feature is `.data`, not another rewrite.
 
 ## History

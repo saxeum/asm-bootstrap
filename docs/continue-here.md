@@ -30,7 +30,7 @@ make clean && make && make check
 
 Must print: frozen 161 · frozen `src/cc.s` still equals `seed/cc` · port 43/43 · d2 self-host ·
 asm2 234 checks · coverage 113/113 · C assembler fixpoint (54 416) · signed superior · wc 4/4 ·
-calc 10/10 + 2/2 · sort 6/6 + 2/2 · provenance 36 · SHAS · 290/290 pins.
+calc 10/10 + 2/2 · sort 6/6 + 2/2 · lisp 29/29 + 17/17 · provenance 36 · SHAS · 290/290 pins.
 
 The C-only chain:
 
@@ -38,6 +38,7 @@ The C-only chain:
 make from-c
   from-c: asm2 54416 ccb1607db88a2ee1, cc1 44154 5e9ad682b3564711
   from-c: cc2 == cc1 and asm2b == asm2
+  from-c: wc, calc, sort and lisp built and run by cc1 + asm2
 ```
 
 The differential (gcc is the second opinion, never an artifact; run by hand, not from `check`):
@@ -64,13 +65,27 @@ magnitude workaround is deleted.
 the dialect witness. The canonical `asm1` is built from `src/asm1.c`, the canonical `cc` from
 `src/cc.c`. `src/asm1.s` and `src/cc.s` are frozen and pinned.
 
+## The four programs
+
+`wc.c`, `calc.c`, `sort.c` and `lisp.c` are built and run by both chains. `lisp.c` reads numbers,
+symbols, lists and quote; evaluates numbers, symbols, `if`, `define`, `quote`, `+ - * /`,
+comparisons, `car`, `cdr` and `cons`; and writes one value per line. Its memory is one `char[140000]`
+passed as an `int`: input at 0, 4096 nodes at 65536 (16 bytes each), and the parser/name/env/output
+state above 131072. The arena, 64 definitions, the 60000-byte input and the output buffer are fixed
+and each exhaustion is `lisp: error` on stderr with exit 1.
+
+It has no closures, no `set!`, no user functions, no GC and no dotted-pair reader. The reader,
+evaluator and printer recurse, and every call has the compiler's 260000-byte frame, so deeply
+nested lists are a known limit rather than a tested feature; the tests stay shallow. The arena-full
+case is a flat run of definitions, not a 3000-deep chain.
+
 ## What is left
 
 1. **`.data`** — a second read-write `PT_LOAD`, and string literals in memory. This is the next
    assembler feature with no user.
 2. **Assembler gaps**: `add r32, imm32`, `cmp`/`mov` with `[mem]`, `[base+index*scale]`, `imul r,r,imm`.
-3. **`lisp.c`** (#7) — the next serious program, after `calc` (#5) and `sort` (#6).
-4. **Differential in CI** is deliberately manual; it is rung 4 in `docs/oracles.md`.
+3. **Differential in CI** is deliberately manual; it is rung 4 in `docs/oracles.md`.
+
 
 ## Where things are
 
@@ -84,7 +99,7 @@ the dialect witness. The canonical `asm1` is built from `src/asm1.c`, the canoni
 | `docs/oracles.md` | what `ref/`, the oracles and the differential do not prove |
 | `tools/differential.sh` | gcc second opinion (the one named `test-tools` exemption) |
 | `tests/differential/` | the intersection programs |
-| `tests/programs/` | `wc.c`, `calc.c`, `sort.c` |
+| `tests/programs/` | `wc.c`, `calc.c`, `sort.c`, `lisp.c` |
 | `docs/frozen.tsv`, `docs/SHAS`, `docs/provenance.tsv`, `docs/toolchain.tsv` | the records |
 
 ## Violations

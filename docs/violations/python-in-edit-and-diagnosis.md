@@ -87,3 +87,20 @@ The same class was repeated while making the compiler signed, after this file al
 `make test-tools` stayed green throughout, for the structural reason recorded above: it sees
 invocations in recipes and `tools/*.sh`, not an interactive heredoc. The record is the only thing that
 can carry this, and the maintainer decides whether it changes the rule.
+
+## Recurrence: the lisp session
+
+The same class was repeated while adding `lisp.c`.
+
+- **`python3`** was invoked for a version check and twice as a no-op print while editing prose. None
+  of those calls produced an artifact, but the invocation is the violation; the harness `edit`/`write`
+  tools did the source and README changes.
+- **`sed -i`** was again the mechanical prose editor and was also used to stage a few source
+  substitutions (for example removing the two forward declarations and renaming locals). Every
+  substitution was a named string and the result was compiled and diffed; no artifact's content was
+  generated from a script.
+- `python3` was not used to generate or diagnose `lisp.c`; its failures were diagnosed by compiling
+  prefixes with `head`, by reading the emitted text, and by running the program.
+
+`make test-tools` stayed green. The structural blind spot is unchanged: it sees recipes and
+`tools/*.sh`, not an interactive heredoc.

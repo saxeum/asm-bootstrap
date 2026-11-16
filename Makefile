@@ -37,7 +37,7 @@ help:
 	@echo 'make test-d2    the port compiles its own source to identical text'
 	@echo 'make test-asm2  the assembler in C reproduces asm1 on the corpus and itself'
 	@echo 'make from-c      rebuild the .c assembler and compiler from the frozen seeds'
-	@echo 'make test-program  build and run tests/programs/wc.c on four inputs'
+	@echo 'make test-program  build and run wc.c, calc.c, sort.c and lisp.c'
 	@echo 'make test-frozen every .s under src/ and tests/ is frozen (sha256 record)'
 	@echo 'make freeze      write docs/frozen.tsv (a deliberate act)'
 	@echo 'make test-cc-source  asm1 < src/cc.s still reproduces cc byte for byte'
@@ -178,7 +178,9 @@ from-c:
 	./tools/wc-check.sh $(WORK)/from-c/cc1 $(WORK)/from-c/asm2 $(WORK)/from-c || exit 1; \
 	./tools/calc-check.sh $(WORK)/from-c/cc1 $(WORK)/from-c/asm2 $(WORK)/from-c || exit 1; \
 	./tools/sort-check.sh $(WORK)/from-c/cc1 $(WORK)/from-c/asm2 $(WORK)/from-c || exit 1; \
+	./tools/lisp-check.sh $(WORK)/from-c/cc1 $(WORK)/from-c/asm2 $(WORK)/from-c || exit 1; \
 	printf '  from-c: sort built and run by cc1 + asm2 -- ordered, duplicates, refusals\n'; \
+	printf '  from-c: lisp built and run by cc1 + asm2 -- reader, eval, refusals\n'; \
 	printf '  from-c: calc built and run by cc1 + asm2 -- signed, parenthesised, refused\n'; \
 	printf '  from-c: wc built and run by cc1 + asm2 -- C-only from here\n'; \
 	printf '  from-c: asm2 %s bytes sha %s, cc1 %s bytes sha %s\n' \
@@ -856,7 +858,7 @@ test-d2: asm1 cc
 # assembled, then run on four inputs: normal text, empty, no final newline, and
 # a 300-byte stream that forces the 128-byte read loop.
 test-program: cc asm1
-	@mkdir -p $(WORK); ./tools/wc-check.sh $(CC) $(ASM1) $(WORK) && ./tools/calc-check.sh $(CC) $(ASM1) $(WORK) && ./tools/sort-check.sh $(CC) $(ASM1) $(WORK)
+	@mkdir -p $(WORK); ./tools/wc-check.sh $(CC) $(ASM1) $(WORK) && ./tools/calc-check.sh $(CC) $(ASM1) $(WORK) && ./tools/sort-check.sh $(CC) $(ASM1) $(WORK) && ./tools/lisp-check.sh $(CC) $(ASM1) $(WORK)
 
 # ---- D3: the assembler in C ------------------------------------------------
 # src/asm1.c is the assembler written in the subset cc compiles. cc makes the
