@@ -3420,3 +3420,44 @@ byte; the attempt's own failures need a correct way to split the file, which is 
 (`head`/`tail` on line numbers from `grep -n '^int '`) rather than an awk that re-encodes the text.
 
 **The bisect is unfinished, and the next session starts by throwing away the splitter, not the question.**
+
+## The bisect, done properly: one function, thirteen lines
+
+The splitter was replaced with `grep -n '^int '` for boundaries and `head`/`tail` on line numbers, and
+every variant printed its own size — which was the point: `1 888 bytes` next to `prefix 6` is a subject
+that can be checked.
+
+| prefix | through line | bytes | parses |
+|---|---|---|---|
+| 1–5 | 70 | ≤ 1 648 | yes |
+| **6** | **83** | **1 888** | **no** |
+| 7–21 | 409 | ≤ 7 248 | no |
+
+**The first failure is `skipws`, function 6 of 21, thirteen lines.** That is the whole search space now:
+
+```c
+int skipws(int s)
+{
+	int c = 0;
+	int go = 1;
+	while (go == 1) {
+		c = gch(s);
+		if (c == 32) { s[0] = s[0] + 1; } else { go = 0; }
+		if (c == 9) { s[0] = s[0] + 1; go = 1; }
+		if (c == 10) { s[0] = s[0] + 1; go = 1; }
+	}
+	return gch(s);
+}
+```
+
+Removing `gch` entirely does not help (309-byte subject, still refused), so the function alone is enough.
+But **the probes contradict each other**: "a while inside a function with one statement" is refused at
+cursor 114, while the same shape in an earlier probe compiled. Two of tonight's probe results cannot both
+be true, so the probe *method* is now the suspect rather than the language: the diagnostic prints the
+cursor from `fail`, and a refusal raised inside a nested routine may report a cursor that has since
+moved — a number that fits, attached to the wrong moment.
+
+Recorded rather than resolved: the localisation (one 13-line function, measured) stands; the rule that
+makes it fail is *not* established, and every conclusion drawn from hand-built probes about it is
+withdrawn until the diagnostic reports a position that cannot be stale — the byte being looked at, not the
+cursor, or the line number of the statement being parsed.

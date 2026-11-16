@@ -1838,3 +1838,17 @@ moves. The first deletion that changes it names the context.
 Candidates worth checking first, in order: the block-id counter (monotonic now, and nothing resets it
 between functions), the literal table (99 entries; the attempt has ~40), and the state array's pointer
 fields `s[10..14]` — a *pointer stored in an int array* is a shape only the port uses.
+
+## Next: `skipws`, thirteen lines, and a diagnostic that cannot lie
+
+The file-level bisect localised the port's first refusal to `skipws` (function 6 of 21, lines 71–83) with
+the sizes recorded, so the search space is thirteen lines rather than a file. The probe method used
+against it produced contradictory results, and those are withdrawn.
+
+The next move is to make the diagnostic report something that cannot be stale — the **byte being examined**
+when the refusal is raised, or the input line number — rather than the input cursor, which a nested routine
+may have moved after the decision to fail was made. Then re-run the three probes that disagree; whichever
+of them is real will be visible.
+
+Everything else about D2 is unchanged: `src/cc.c` is slice 3, `make test-d2` is red and says so, and the
+attempt at a front end is preserved with its bisect result beside it.
