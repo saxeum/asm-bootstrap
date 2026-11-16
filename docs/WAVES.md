@@ -726,3 +726,46 @@ file is the list of things that must verify, and adding a fixture the assembler 
 produce would make the gate lie.
 
 State left behind: `asm0a` 3000 bytes, sha in `docs/SHAS`, 14/14 fixtures byte-identical.
+
+## Wave 2d-10 — PASS: `cmp r32,imm32` — and a stack-imbalance bug, not an arithmetic one
+
+Artifact: `asm0a`, 3125 bytes, sha `1ce5345d8eb2809e1132290f1db5dacc699e053ac63e6444c75a1a855d7d3781`, entry `0x400110`, filesz `0xc35`.
+
+This is the wave that was left blocked last session, when `cmp ebx,7` followed by any `j*` failed
+while each worked alone. The cause was not a miscalculated offset. It was this:
+
+**`call cmpsrc` pushes a return address, and the r32 path jumped to `eol3` instead of
+returning.** So `rsp` stayed eight bytes low for the rest of that pass — and `do_br` reaches its
+name scratch and its label table through `[rsp+0x1F7F0]` and `[rsp+0x1F800]`. Every label
+lookup after a `cmp r32` was therefore reading eight bytes away from where it had been written.
+
+The discriminator that found it was splitting the symptom by *what the next line needs*:
+
+```
+cmp32 then syscall     ok         (no stack-relative addresses)
+cmp32 then inc bl      ok         (no stack-relative addresses)
+cmp32 then jmp/jz/jnz  fail       (do_br uses [rsp+...] for scratch and table)
+cmp8  then jmp         ok         (cmp8's path returns normally, rsp balanced)
+jmp   then cmp32       fail       (the shift happens before the jmp is resolved)
+```
+
+Fix: the r32 path discards its own frame (`add rsp,8`) before jumping onward — exactly what the
+`ret` would have done, without the jump. One 4-byte instruction plus a 5-byte jump.
+
+### Gate
+
+```
+cmp32  byte-identical to ref/cmp32 (147 B), exits 7
+all 15 fixtures byte-identical, behaviour correct
+```
+
+### The lesson, stated as a rule
+
+**A tail jump out of a called routine must restore the stack as it found it.** The project's
+earlier defects were all arithmetic — file/segment offsets, 2-byte opcodes — and this one looked
+identical from the outside (exit 1, no output) while being a different kind of error entirely:
+control-flow balance rather than byte layout. The way to tell them apart was not to re-check the
+arithmetic (which was correct) but to ask *what the failing line depends on*.
+
+That distinction is worth having written down, because the next wave — rel32 branches — is
+control-flow work, and the failure modes will look like this one rather than like the last ten.
