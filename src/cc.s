@@ -1473,6 +1473,8 @@ ret
 ; [rbp+44] = jump kind (0 jb, 1 jz, 2 jnz, 3 jb with swapped operands)
 ; [rbp+124] = the bound, already adjusted
 cond:
+mov eax, 0
+mov [rbp-316], eax      ; the bound is a literal until cndbnd says otherwise
 call ident
 call findvar
 call emit_le
@@ -1511,8 +1513,7 @@ mov eax, 0
 mov [rbp+44], eax
 ret
 cnd_lt2:
-call numval
-mov [rbp+124], eax
+call cndbnd
 mov eax, 0
 mov [rbp+44], eax
 ret
@@ -1536,8 +1537,7 @@ mov eax, 3
 mov [rbp+44], eax
 ret
 cnd_gt2:
-call numval
-mov [rbp+124], eax
+call cndbnd
 mov eax, 3
 mov [rbp+44], eax
 ret
@@ -1550,8 +1550,7 @@ cmp al, 61
 jnz.l fail
 mov eax, 1
 call bump
-call numval
-mov [rbp+124], eax
+call cndbnd
 mov eax, 1
 mov [rbp+44], eax
 ret
@@ -1564,15 +1563,56 @@ cmp al, 61
 jnz.l fail
 mov eax, 1
 call bump
-call numval
-mov [rbp+124], eax
+call cndbnd
 mov eax, 2
 mov [rbp+44], eax
 ret
 
 ; condj: emit the test and a jump-if-TRUE to L<id><letter>, the letter being in
 ; [rbp+92] and the id in [rbp+96]
+cndbnd:
+; the bound of a comparison: a number, or a variable loaded into rcx. [rbp-316]
+; is 1 when the bound is in rcx, which is the only thing condj needs to know --
+; `<=` and `>=` with a variable bound are refused, because adjusting a register
+; bound needs an inc/dec and the two normalised forms are not worth the extra
+; path until something needs them.
+call skipws
+call gcur
+cmp al, 48
+jb cndbv
+cmp al, 58
+jb cndbn
+cndbv:
+call ident
+call findvar
+call varoff
+mov [rbp-112], eax
+mov eax, 1
+mov [rbp-316], eax
+mov esi, 4194424+f_cmov2
+call emitstr
+mov esi, 4194424+f_lbr2
+call emitstr
+mov eax, [rbp-112]
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov eax, 0
+mov [rbp+124], eax
+ret
+cndbn:
+mov eax, 0
+mov [rbp-316], eax
+call numval
+mov [rbp+124], eax
+ret
+
 condj:
+mov eax, [rbp-316]
+cmp eax, 0
+jz cj_lit
+jmp.l cj_var
+cj_lit:
 mov eax, [rbp+44]
 cmp eax, 3
 jz cj_swap
@@ -1613,6 +1653,37 @@ call emitc
 mov esi, 4194424+f_nl
 call emitstr
 ret
+cj_var:
+; a variable bound: it was loaded into rcx by cndbnd, so the compare is between
+; two registers. `x > y` is `y < x`, which is the same swap the literal path
+; uses; `<=` and `>=` never reach here.
+mov eax, [rbp+44]
+cmp eax, 3
+jz cjv_sw
+mov esi, 4194424+f_cmp1
+call emitstr
+jmp cjv_j
+cjv_sw:
+mov esi, 4194424+f_cmp2
+call emitstr
+cjv_j:
+mov eax, [rbp+44]
+cmp eax, 1
+jz cjv_z
+cmp eax, 2
+jz cjv_nz
+mov esi, 4194424+f_cjb
+call emitstr
+jmp.l cj_fin
+cjv_z:
+mov esi, 4194424+f_cjz
+call emitstr
+jmp.l cj_fin
+cjv_nz:
+mov esi, 4194424+f_cjnz
+call emitstr
+jmp.l cj_fin
+
 
 ; newid: the next block id, refused beyond nine (one digit per label)
 newid:
@@ -2549,4 +2620,13 @@ db 10
 db 0
 f_comma:
 db ","
+db 0
+f_lbr2:
+db "[rbp-"
+db 0
+f_cmp1:
+db "cmp rax, rcx"
+db 0
+f_cmp2:
+db "cmp rcx, rax"
 db 0

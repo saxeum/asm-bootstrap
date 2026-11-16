@@ -1442,3 +1442,19 @@ bound must be a literal. That is now the top of the list, ahead of `.data`:
    dialect has `cmp r32, r32` and `jb`.
 2. **`.data`** — string literals that live in memory, so a program can address its own text.
 3. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.
+
+## Compiler: comparisons against a variable
+
+`while (i < n)`, `if (a > b)`, `a == b`, `a != b` all work; `<=` and `>=` with a variable bound are
+refused and say so. The gate is the read loop written naturally: 198 for `ABC`, 193 for ten bytes.
+
+What is left before `cc` could compile a C version of itself:
+
+1. **`.data`** — string literals that live in memory, so a program can address its own text.
+2. **`<=`/`>=` against a variable** (`inc`/`dec` on the bound in a register).
+3. **Structs, or a disciplined pair of parallel arrays.** A symbol table without either is possible
+   but painful: `cc` has eight variables per function and no way to pass an array to a function.
+4. **Arrays as arguments.** Today a bare array name is refused, so a function cannot be handed a
+   buffer — a compiler's `emit(char *buf)` has no equivalent.
+5. Then the port itself: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole
+   corpus, with the dialect frozen as the witness.

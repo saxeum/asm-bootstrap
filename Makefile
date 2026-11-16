@@ -449,6 +449,25 @@ test-cc: cc asm1
 	  printf '' | $$tmp/rs; if [ $$? -eq 0 ]; then g3=0; else g3=1; fi; \
 	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ] && [ $$g3 -eq 0 ]; then \
 	    printf '  cc    read(): a stdin loop over a char array sums 198, then 193, then 0\n'; \
+	if $(CC) < tests/golden/cmpvar.c > $$tmp/cv.s 2>/dev/null && cmp -s $$tmp/cv.s tests/golden/cmpvar.s; then :; \
+	else echo "  cmpvar.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/cmpvar.s > $$tmp/cv 2>/dev/null; then \
+	  chmod +x $$tmp/cv; \
+	  if $$tmp/cv; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 10 ]; then \
+	    printf '  cc    a variable bound: while (i < n) sums 0..4 and exits 10\n'; \
+	  else echo "  cmpvar exited $$g1, wanted 10"; fail=1; fi; \
+	else echo "  asm1 refuses cmpvar.s"; fail=1; fi; \
+	if $(CC) < tests/golden/readloop.c > $$tmp/rl.s 2>/dev/null && cmp -s $$tmp/rl.s tests/golden/readloop.s; then :; \
+	else echo "  readloop.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/readloop.s > $$tmp/rl 2>/dev/null; then \
+	  chmod +x $$tmp/rl; \
+	  printf 'ABC' | $$tmp/rl; if [ $$? -eq 198 ]; then g1=0; else g1=1; fi; \
+	  printf 'ABCDEFGHIJ' | $$tmp/rl; if [ $$? -eq 193 ]; then g2=0; else g2=1; fi; \
+	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ]; then \
+	    printf '  cc    read in a loop with i < n: 198 for ABC, 193 for ten bytes\n'; \
+	  else echo "  readloop: wanted 198/193"; fail=1; fi; \
+	else echo "  asm1 refuses readloop.s"; fail=1; fi; \
 	  else echo "  readsum: three inputs want 198/193/0"; fail=1; fi; \
 	else echo "  asm1 refuses readsum.s"; fail=1; fi; \
 	if $(CC) < tests/golden/divmod.c > $$tmp/dm.s 2>/dev/null && cmp -s $$tmp/dm.s tests/golden/divmod.s; then :; \
@@ -513,6 +532,8 @@ test-cc: cc asm1
 	refuse 'int main(void) { int x = 1 & 1; }'; \
 	refuse 'int main(void) { int x = 1; int y = read(x, 4); }'; \
 	refuse 'int main(void) { char s[4]; int n = read(s); }'; \
+	refuse 'int main(void) { int n = 3; int i = 0; while (i <= n) { i = i + 1; } }'; \
+	refuse 'int main(void) { int n = 3; int i = 0; while (i >= n) { i = i + 1; } }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(1, 2, 3, 4, 5); }'; \
 	refuse 'int main(void) { int p = &5; }'; \
 	refuse 'int main(void) { int y = *q; }'; \

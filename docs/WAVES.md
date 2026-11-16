@@ -2635,3 +2635,37 @@ Three inputs, three exact answers: `ABC` → 198, `ABCDEFGHIJ` (two reads) → 1
 must be a literal (`cond` calls `numval`). The gate program is written the awkward way round, counting
 `n` down, and that refusal is the next thing to fix: a condition on two variables is the single most
 common construct a compiler uses.
+
+## A condition's bound can be a variable
+
+`while (i < n)` compiles now. The gate program from the last wave was written the awkward way round
+because it could not, and this wave's first act was to write it naturally:
+
+```c
+int n = read(buf, 8);
+while (n > 0) { int i = 0; while (i < n) { total = total + buf[i]; i = i + 1; } n = read(buf, 8); }
+```
+
+`cond` used to resolve its bound with `numval`, so only a literal could appear to the right of a
+comparison. It now goes through `cndbnd`, which takes either a number or a name: a name is loaded into
+`rcx` and a flag tells `condj` that the compare is between two registers rather than against an
+immediate. `<`, `>`, `==` and `!=` work that way, `>` reusing the same operand swap the literal path
+already had.
+
+**`<=` and `>=` with a variable bound are refused**, deliberately: the literal path normalises them by
+adjusting the bound (`x <= N` becomes `x < N+1`), and adjusting a *register* needs an `inc`/`dec` plus
+its own path. Two refusals record that they are refused, so the gap is visible rather than surprising.
+
+Two gates, both exact: `while (i < n)` summing 0..4 exits 10, and the read loop exits 198 for `ABC`
+and 193 for ten bytes — the same answers as the awkward version, from a program a person would write.
+
+Three awk slips this wave, all caught by `diff` before anything was built:
+
+- a pattern with an unescaped `|` (awk reads it as alternation) rewrote a whole document — the second
+  time that has happened, so the rule is now: match with `index($0, "...")`, never with a regex
+  containing `|`;
+- `/index(...)/` in a rule is a regex, not a call — awk said so, which is the good outcome;
+- a heredoc inside an `&&` chain after a failing command never ran, so a file two later steps depended
+  on did not exist, and an edit silently did nothing.
+
+`cc` 8 430 → 8 693 bytes. 25 checks, 35 refusals, 23 goldens. 52 check lines.
