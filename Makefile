@@ -173,6 +173,8 @@ from-c:
 	if cmp -s $(WORK)/from-c/asm2 $(WORK)/from-c/asm2b; then :; else \
 	  echo '  from-c: the C assembler is not a fixpoint'; exit 1; fi; \
 	./tools/wc-check.sh $(WORK)/from-c/cc1 $(WORK)/from-c/asm2 $(WORK)/from-c || exit 1; \
+	./tools/calc-check.sh $(WORK)/from-c/cc1 $(WORK)/from-c/asm2 $(WORK)/from-c || exit 1; \
+	printf '  from-c: calc built and run by cc1 + asm2 -- signed, parenthesised, refused\n'; \
 	printf '  from-c: wc built and run by cc1 + asm2 -- C-only from here\n'; \
 	printf '  from-c: asm2 %s bytes sha %s, cc1 %s bytes sha %s\n' \
 	  "$$(wc -c < $(WORK)/from-c/asm2)" "$$(sha256sum $(WORK)/from-c/asm2 | cut -c1-16)" \
@@ -843,7 +845,7 @@ test-d2: asm1 cc
 # assembled, then run on four inputs: normal text, empty, no final newline, and
 # a 300-byte stream that forces the 128-byte read loop.
 test-program: cc asm1
-	@mkdir -p $(WORK); ./tools/wc-check.sh $(CC) $(ASM1) $(WORK)
+	@mkdir -p $(WORK); ./tools/wc-check.sh $(CC) $(ASM1) $(WORK) && ./tools/calc-check.sh $(CC) $(ASM1) $(WORK)
 
 # ---- D3: the assembler in C ------------------------------------------------
 # src/asm1.c is the assembler written in the subset cc compiles. cc makes the
