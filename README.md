@@ -26,58 +26,48 @@ To prove the output is the *verified* object and not merely something that runs:
 ./asm0a < src/count10.s | cmp - ref/count10 && echo identical
 ```
 
+## Self-hosting: it assembles itself
+
+`src/asm1.s` is an assembler written **in the language it assembles**. `asm0a` — the hand-emitted
+bootstrap — builds it once; after that the only tool needed is the artifact itself.
+
+```bash
+./asm0a < src/asm1.s > asm1
+```
+
+```bash
+chmod +x asm1 && ./asm1 < src/asm1.s > asm1b
+```
+
+```bash
+cmp asm1 asm1b && echo identical
+```
+
+The second generation is byte-identical to the first (`4295` bytes, sha256 `250e02c9…`), and so is
+the third — the fixpoint is reached, not merely approached.
+
+That the result is a *working* assembler, and not a coincidentally equal blob, is a separate check:
+
+```bash
+chmod +x asm1b && ./asm1b < src/count10.s | cmp - ref/count10 && echo identical
+```
+
+Three generations deep, it still reproduces the hand-emitted oracle exactly, and the binary it
+produces prints `1`…`10`.
+
 ## State
 
 | | |
 |---|---|
-| artifact | `asm0a`, 3745 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
-| identity | sha256 in `docs/SHAS` |
-| fixtures | 16, all byte-identical to hand-emitted references and behaviourally correct |
-| branches | 269 sites pinned in `docs/branches.tsv`, all verified by decoding |
-| source language | 8-, 32- and 64-bit operands, memory operands, labels, two passes, decimal immediates |
+| bootstrap | `asm0a`, 3745 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD`, sha256 in `docs/SHAS` |
+| self-hosted | `asm1`, 4295 bytes, sha256 `250e02c9…`, built by `asm0a` from `src/asm1.s` (1146 lines) |
+| fixpoint | `asm0a(asm1.s) == asm1(asm1.s) == asm1(asm1.s)(asm1.s)`, all 4295 bytes, one sha256 |
+| fixtures | 18, all byte-identical to hand-emitted references and behaviourally correct |
+| branches | 288 sites pinned in `docs/branches.tsv`, verified by decoding |
+| source language | `mov` in 8/32/64-bit widths, `movzx` from registers and memory, `lea`, `add`/`sub`/`cmp`/`xor`/`inc`/`dec`/`div`, `call`/`ret`, `jmp`/`jz`/`jnz`/`jb` with `rel8` and `.l` `rel32`, `syscall`, `db` with strings and escapes, labels, two passes, decimal immediates |
 
-`src/count10.s` — the largest oracle — assembles to exactly `ref/count10` (188 bytes) and the
-result prints `1`…`10`.
+`src/asm1.s` assembles every fixture, including `src/count10.s` → exactly `ref/count10`.
 
-## Verify
-
-```bash
-sha256sum -c docs/SHAS            # every artifact matches its recorded sha
-tools/check-branches.sh           # 235 pinned branch sites still decode to their targets
-tools/check-branches.sh --selftest # and the checker rejects three known-bad sites
-```
-
-`--selftest` is the important one: a checker that cannot fail is decoration. It is run against
-`0x15e`, `0x5c5` and `0x1b6` — three sites that were genuinely wrong in waves 2d-5/2d-6/2d-7 —
-and must report failure.
-
-## What the dialect accepts
-
-One instruction per line; labels; `;` comments; `entry` is **not** implemented (the entry point
-is always `0x400078 + code offset`, which means data must follow code).
-
-| category | forms |
-|---|---|
-| moves | `mov r32,imm32` · `mov r8,imm8` · `mov r32,r32` · `movzx r32,r8` · `movzx r32,byte [mem]` |
-| memory | `mov r32,[mem]` · `mov [mem],r32` · `mov [mem],r8` · `mov byte [mem],imm8` · `lea r32\|r64,[mem]` |
-| ALU | `add r8,imm8` · `cmp r8,imm8` · `cmp r32,imm32` · `inc`/`dec r8` and `r32` · `div r8` · `sub r64,r64` · `xor r32,r32` |
-| control | `jmp` · `jz` · `jnz` · `jb` (rel8) and `jmp.l` · `jz.l` · `jnz.l` · `jb.l` (rel32) |
-| other | `syscall` · `db "…"` · `db n,n,n` |
-
-Addressing is `[base]` or `[base+disp8]`; base may be any 32- or 64-bit register. Immediates
-are **decimal only**.
-
-## Known limits (open, not hidden)
-
-- **Parses are validated.** A leftover the parser did not consume now fails instead of being
-  skipped: `mov eax, 0x10`, `add al, -1` and `db 0x48` exit 1 rather than assembling to `0`, and
-  `mov bl, 256` is range-checked. Trailing `;` comments and trailing spaces are accepted. Hex and
-  signed literals are **rejected, not interpreted** — they are on the handover list.
-- **No `entry`**, so data must follow code and its addresses are decimal literals.
-- 32 labels maximum, 7-character names, no `test`/`imul` (needed for `fib`, not for
-  self-hosting).
-
-## Provenance
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.
