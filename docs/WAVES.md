@@ -87,3 +87,37 @@ Single coherent emission, no patching — a deliberate relayout that pays for it
 - **relative jumps**: `jmp`/`jz`/`jnz`/`jb`/`ja` with rel8, falling back to rel32 when the
   displacement does not fit — this is what `count10` and `fib` need;
 - acceptance: `count10.s` → `e61a23c9…`, and `hello_num.s`/`exit42.s` unchanged.
+
+## Wave 2a — PASS: relayout (data first) + bounds checks
+
+Rebuilt `asm0a` as one coherent emission instead of more `dd` patches. Three changes:
+
+1. **Data first.** `TABLE` at code offset 0x00 (address 0x400078) and `TPL` at 0x20
+   (0x400098), with the entry point at 0x98 (0x400110). Data addresses are now independent of
+   code size, so adding instructions can never churn them again — this removes the bug class
+   from wave 1a, where `TABLE`'s address kept being written as its code-relative offset.
+2. **Bounds checks in every scan loop**: `sb` (skip blanks), `ml` (number), `xsb` (xor
+   operands), `dbl` (db text). Each loop now begins `cmp rbx, r13 / jae fail`, so the source
+   end is a hard boundary instead of whatever is next on the stack.
+3. **`eol` test-first**, replacing the wave-1b hack of jumping to `eol+3` from handlers that
+   already sat on the newline. Callers now enter `eol` directly; it tests, then advances.
+
+Artifact: `asm0a`, 883 bytes, sha `5f1ba8cfadc9b65a7591ec1baa4f17f186496f9503fbbecd977d786b71299fa7`, entry 0x400110, filesz 0x373.
+
+```
+$ ./asm0a < src/exit42.s   | cmp - expected && echo ok   # wave 1a oracle
+ok
+$ ./asm0a < src/hello_num.s | cmp - hello    && echo ok   # wave 1b oracle
+ok
+$ printf 'db "unterminated\n' | ./asm0a >/dev/null ; echo $?
+1                                                         # was SIGSEGV (139) in 1b
+$ printf 'db "a\tb\"c\\d\n"\n' | ./asm0a | xxd -s 120
+00000078: 6109 6222 635c 640a                             # escapes intact
+```
+
+Both earlier oracles still reproduce byte-for-byte, which is the point of doing the relayout
+as its own phase: it changed where everything lives while changing nothing it produces.
+
+Remaining limitation, unchanged: `mov eax,` with no operand assembles as `mov eax, 0` and
+exits 0. Number parsing needs an "at least one digit" flag, which arrives with wave 2b's
+operand handling.

@@ -18,8 +18,9 @@ unknown original author, the paper-tape two-pass design, and the line that leads
 | 0 | `hello` | 165 B | `4f386903…6552e1` | hand-emitted; prints `Hello, World!` |
 | 0 | `count10` | 188 B | `e61a23c9…94ec5bd9a` | hand-emitted; prints `1`..`10` |
 | 0 | `fib` | 334 B | `f61cea2c…2e10098` | hand-emitted; `fib(0..93)` matches OEIS A000045 |
-| 1a | `asm0a` | 664 B → 833 B | `9192d28f…16fa7989` | assembles `src/exit42.s`, byte-identical to hand-written |
+| 1a | `asm0a` | 664 B | `255ac2e1…3aa5e60` | assembles `src/exit42.s`, byte-identical to hand-written |
 | 1b | `asm0a` | 833 B | `9192d28f…16fa7989` | assembles `src/hello_num.s` → **equals `hello`**, sha `4f386903…` |
+| 2a | `asm0a` | 883 B | `5f1ba8cf…71299fa7` | relayout: data first, bounds checks in every scan loop; both oracles unchanged |
 | 1c | — | — | — | labels + `entry` + two passes, so `src/hello.s` assembles |
 | 2 | — | — | — | relative jumps; `src/count10.s` → sha `e61a23c9…` |
 | 3 | — | — | — | fixpoint: `asmN.s` assembled by `asmN` equals `asmN` |
@@ -57,10 +58,14 @@ docs/pdp8-to-gcc.md    PDP-8 assembler history, references, and the bootstrap pl
 
 ## Known defects (open, not hidden)
 
-- `db "unterminated` **segfaults**: the scan loop has no bound against the source end. Fix is
-  scheduled in wave 2 (bounds checks in every scan loop), not patched in place.
-- No digit validation beyond `'0'..'9'` per byte, no overflow check on `mov` immediates.
+- `mov eax,` with no operand assembles as `mov eax, 0` and exits 0 — number parsing needs an
+  "at least one digit" flag (arrives in 2b).
+- No overflow check on `mov` immediates.
+- No labels, no jumps yet (wave 2b).
 - Source is read from stdin; output goes to stdout, so the caller must `chmod +x`.
+
+Fixed in 2a: `db "unterminated` used to SIGSEGV, because the scan loop had no bound against
+the source end. Every scan loop now checks `rbx >= r13` first and exits 1.
 
 ## Build rule
 
