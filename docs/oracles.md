@@ -64,19 +64,26 @@ Four things break the circularity, in increasing independence:
    every reference is *run* before it is hashed, never merely hashed.
 2. **An independent decoder.** `objdump` says which instruction the bytes are, using someone
    else's tables. It shares lineage with the CPU vendor's ISA, but not with my code.
-3. **An independent encoder.** Assembling the same fixture with GNU `as` and comparing is the
-   strongest check available and does **not** violate the build rule — `as` never touches an
+3. **An independent opcode authority.** `ref.x86asm.net`'s XML reference, queried by
+   `<opcd_ext>`, says which primary opcode and group extension belong to each mnemonic and
+   operand shape. Stronger than objdump for "is this the *canonical* opcode for this form".
+   All 29 forms we emit are checked against it in `docs/encodings.md`, 0 problems — including
+   the finding that our first query matched `LOADALL` rather than `SYSCALL` for `0F 05`
+   because that opcode is mode-dependent. Limitation: it constrains operand *shape*, not our
+   ModRM/REX/disp bits.
+4. **An independent encoder.** Assembling the same fixture with GNU `as` and comparing is the
+   strongest remaining check and does **not** violate the build rule — `as` never touches an
    artifact, it only produces a second opinion in the verification path. Limitation: our
    dialect differs from `as` syntax, so this is per-fixture and partly manual.
-4. **Self-hosting.** `asmN.s` assembled by `asmN` must equal `asmN`. Once wave 3 lands, this
+5. **Self-hosting.** `asmN.s` assembled by `asmN` must equal `asmN`. Once wave 3 lands, this
    is the cheapest strong signal, and it is exactly GCC's `stage2`/`stage3` comparison.
 
 Plus two cheap ones that make the *gates* honest rather than the oracle:
 
-5. **Mutation testing.** Corrupt one byte of the encoder table and confirm the corpus fails.
+6. **Mutation testing.** Corrupt one byte of the encoder table and confirm the corpus fails.
    A gate that cannot be made to fail is a format check wearing a gate's costume. We did this
    once, for `docs/SHAS` (`hello: FAILED` after a one-byte flip), and not yet for the encoder.
-6. **Coverage assertion.** Every supported form must appear in at least one fixture. Without
+7. **Coverage assertion.** Every supported form must appear in at least one fixture. Without
    it, adding a form adds untested code that the corpus silently ignores.
 
 ## What the PDP-8 people (and their predecessors) used
