@@ -488,3 +488,44 @@ new capability pairs — which is the argument for keeping both.
 
 Still missing and noticed while testing: `test eax, eax` (register form, `85 /r`) is not implemented;
 it is rejected with a line number, which is the right failure, not a wrong answer.
+
+### Phase 2, item 6 continued: the register forms — and an `asm0a` defect they exposed
+
+```
+and   eax, ecx -> 21 c8      or eax, ecx   -> 09 c8
+test  eax, ecx -> 85 c8      cmp eax, ecx  -> 39 c8
+test  edi, edi -> 85 ff
+```
+
+`asm1` 5 651 → **5 781 bytes**. The parameterised handler gained a register arm: after the destination
+is parsed, `e`/`r` as the next character means a register source, emitted as `C0|(src<<3)|dst` with a
+per-mnemonic opcode (`cmp` 39, `and` 21, `or` 09, `test` 85) held in `[rbp+52]`. `test edi, edi` — the
+form flagged as missing at the end of the last entry — now works.
+
+**Then the capability suite refused one of my own pairs, and it was right to.**
+
+```
+tests/capability/and-rr.cap.s: asm0a ACCEPTS the new syntax (it should not)
+```
+
+`and eax, ecx` is *accepted* by `asm0a`, which should have been impossible. Probed:
+
+```
+and eax, ecx     asm0a emits 01 c8     asm1 emits 21 c8
+```
+
+`01 /r` is **`add`**. `asm0a` parses `and` by its first letter and never checks the rest of the
+mnemonic, so it silently assembles a *different instruction than the one written*. That is a
+wrong-answer defect of exactly the class this project has been hunting in `asm1` — found in the
+frozen bootstrap, by a test that was supposed to be confirming `asm1`'s new syntax.
+
+It cannot be fixed: `asm0a` is frozen. It is now recorded as a **superiority** case instead — `asm1`
+emits `21 c8`, `asm0a` emits `01 c8`, and the test fails if they ever agree:
+
+```
+superior: and eax,ecx -> 21 c8 where asm0a emits 01 c8 (it reads "and" as "add")
+```
+
+The lesson is worth stating plainly: **an independent implementation is not a correct one.** The
+cross-check between `asm0a` and `asm1` was valuable because they were *different*, not because
+`asm0a` was right — and this is the first case where they disagree and `asm1` is the correct side.

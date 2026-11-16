@@ -1,0 +1,1 @@
+cmp eax, ecx

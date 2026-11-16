@@ -249,6 +249,17 @@ test-superior: asm1
 	    echo "  entry case: e_entry bytes $$entry, exit $$got (wanted 7c004000 / 42)"; fail=1; fi; \
 	else \
 	  echo "  asm1 cannot assemble the entry case"; fail=1; fi; \
+	printf 'and eax, ecx\n' > $$tmp/and.s; \
+	$(ASM1) < $$tmp/and.s > $$tmp/and1 2>/dev/null; \
+	body=$$(xxd -s 120 -p $$tmp/and1); \
+	if [ "$$body" = "21c8" ]; then \
+	  if $(ASM0A) < $$tmp/and.s > $$tmp/and0 2>/dev/null && cmp -s $$tmp/and1 $$tmp/and0; then \
+	    echo "  asm0a now agrees on 'and': this test no longer discriminates"; fail=1; \
+	  else \
+	    printf '  superior: and eax,ecx -> 21 c8 where asm0a emits 01 c8 (it reads "and" as "add")\n'; \
+	  fi; \
+	else \
+	  echo "  and eax,ecx emitted $$body, wanted 21c8"; fail=1; fi; \
 	exit $$fail
 
 test-reject-msg: asm1

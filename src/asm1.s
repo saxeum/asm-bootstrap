@@ -278,6 +278,8 @@ mov [rbp+44], eax
 lea rbx, [rbx+4]
 mov eax, 32
 mov [rbp+48], eax
+mov eax, 33
+mov [rbp+52], eax
 jmp.l pc32
 d_add:
 cmp al, 97
@@ -297,6 +299,8 @@ mov eax, 128
 mov [rbp+44], eax
 mov eax, 0
 mov [rbp+48], eax
+mov eax, 133
+mov [rbp+52], eax
 mov eax, 1
 mov [rbp+52], eax
 jmp.l p8i
@@ -324,6 +328,8 @@ mov eax, 129
 mov [rbp+44], eax
 mov eax, 56
 mov [rbp+48], eax
+mov eax, 57
+mov [rbp+52], eax
 jmp.l pc32
 d_i:
 cmp al, 105
@@ -337,12 +343,16 @@ mov eax, 254
 mov [rbp+44], eax
 mov eax, 0
 mov [rbp+48], eax
+mov eax, 133
+mov [rbp+52], eax
 jmp.l pu8
 d_i32:
 mov eax, 255
 mov [rbp+44], eax
 mov eax, 0
 mov [rbp+48], eax
+mov eax, 133
+mov [rbp+52], eax
 jmp.l pu32
 d_x:
 cmp al, 120
@@ -1045,6 +1055,11 @@ call reg32
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
+movzx eax, byte [rbx]
+cmp al, 101
+jz.l pc32rr
+cmp al, 114
+jz.l pc32rr
 call expr
 mov [rbp+36], ecx
 mov eax, [rbp+32]
@@ -1064,6 +1079,23 @@ call emital
 movzx eax, byte [rbp+38]
 call emital
 movzx eax, byte [rbp+39]
+call emital
+jmp.l pline
+pc32rr:
+call reg32
+mov [rbp+36], edx
+mov eax, [rbp+36]
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+32]
+add eax, edx
+mov edx, 192
+add eax, edx
+mov [rbp+40], eax
+mov eax, [rbp+52]
+call emital
+mov eax, [rbp+40]
 call emital
 jmp.l pline
 fail:
@@ -1235,6 +1267,8 @@ mov eax, 129
 mov [rbp+44], eax
 mov eax, 8
 mov [rbp+48], eax
+mov eax, 9
+mov [rbp+52], eax
 jmp.l pc32
 d_t:
 cmp al, 116
@@ -1244,6 +1278,8 @@ mov eax, 247
 mov [rbp+44], eax
 mov eax, 0
 mov [rbp+48], eax
+mov eax, 133
+mov [rbp+52], eax
 jmp.l pc32
 
 d_call:
