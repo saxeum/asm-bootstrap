@@ -277,7 +277,7 @@ mov eax, [rbp-292]     ; the argument's depth: one deeper than the call's
 call exprd
 mov esi, 4194424+f_ls1
 call emitstr
-mov eax, 65436
+mov eax, 259900
 mov ecx, [rbp-168]
 add ecx, ecx
 add ecx, ecx
@@ -330,7 +330,7 @@ mov eax, [rbp-336]
 call emitarg
 mov esi, 4194424+f_cev
 call emitstr
-mov eax, 65436
+mov eax, 259900
 mov ecx, [rbp-336]
 add ecx, ecx
 add ecx, ecx
@@ -932,12 +932,20 @@ ex3call:
 ; registers, which is a different resource from the depth registers.
 mov eax, [rbp-70064]
 cmp eax, 1684104562      ; "read", four bytes little-endian
-jz ex3rdgo
+jz.l ex3rdgo
 cmp eax, 1953067639      ; "writ", four bytes little-endian
-jz ex3wrgo
+jz.l ex3wrgo
 cmp eax, 1953069157      ; "exit", four bytes little-endian
-jz ex3xtgo
+jz.l ex3xtgo
+cmp eax, 1920099703      ; "werr", four bytes little-endian
+jz.l ex3wego
 jmp.l ex3cgo
+ex3wego:
+lea rdx, [rbp-70064]
+mov eax, [rdx+4]
+cmp eax, 0               ; "werr" is four bytes
+jz.l ex3we
+jmp.l fail
 ex3xtgo:
 lea rdx, [rbp-70064]
 movzx eax, byte [rdx+4]
@@ -1128,6 +1136,60 @@ mov esi, 4194424+f_rpar
 call want
 ret
 
+ex3we:
+; `write(a, n)` -- SYS_write of n bytes from the array (or pointer) `a` to
+; stdout. The mirror of `read`, except that the count is an *expression*: a
+; compiler writes what it computed.
+;
+; The count is evaluated first and moved to rdx, because taking the address
+; needs rsi and the syscall needs eax and edi -- so the order is fixed by which
+; register each value has to be in.
+mov eax, 1
+call bump               ; '(' -- already consumed by the caller
+call ident
+call findvar
+mov [rbp-268], eax
+call isarr
+mov [rbp-308], eax
+cmp eax, 0
+jnz ex3weok
+ex3weok:
+mov esi, 4194424+f_comma
+call want
+call expr               ; the count, at depth 0
+mov esi, 4194424+f_mov
+call emitstr
+mov esi, 4194424+f_rdx
+call emitstr
+mov esi, 4194424+f_sep
+call emitstr
+mov esi, 4194424+f_rax
+call emitstr
+mov esi, 4194424+f_nl
+call emitstr
+mov eax, [rbp-308]
+cmp eax, 0
+jz ex3wep
+mov esi, 4194424+f_lea1
+jmp ex3web
+ex3wep:
+mov esi, 4194424+f_mov  ; a pointer: the buffer's address is its value
+ex3web:
+call emitstr
+mov esi, 4194424+f_rsi
+call emitstr
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-268]
+call varoff
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov esi, 4194424+f_we1
+call emitstr
+mov esi, 4194424+f_rpar
+call want
+ret
 ex3sub:
 ; `a[i]` -- the base goes into reg d and the index is computed at d+1, so the
 ; base survives: that is what the depth mechanism is for. d is saved in -288
@@ -1676,7 +1738,7 @@ mov eax, [rbp-320]
 mov [rbp-260], eax      ; this array's offset from rbp
 mov edx, [rbp-256]
 add eax, edx
-cmp eax, 64000
+cmp eax, 255000
 jb defabfit
 jmp.l fail              ; does not fit in the frame
 defabfit:
@@ -2365,12 +2427,18 @@ esdone:
 ret
 ; emitnum: eax (0..255) in decimal, no leading zeros
 emitnum:
-; eax (0..65535) in decimal, no leading zeros. One digit per place value, from
-; ten-thousands down to units, each emitted only if the value reaches it or a
+; eax (0..16777215) in decimal, no leading zeros. One digit per place value, from
+; ten-millions down to units, each emitted only if the value reaches it or a
 ; digit has already been printed -- `started` is what makes 100 print as 100.
 mov [rbp+64], eax        ; the value being printed
 mov eax, 0
 mov [rbp+68], eax        ; started
+mov eax, 10000000
+call en_dig
+mov eax, 1000000
+call en_dig
+mov eax, 100000
+call en_dig
 mov eax, 10000
 call en_dig
 mov eax, 1000
@@ -2644,16 +2712,16 @@ numend:
 mov eax, [rbp+84]
 cmp eax, 0
 jz.l fail               ; no digits at all
-mov ecx, 6
+mov ecx, 9
 cmp eax, ecx
 jb num3ok
-jmp.l fail              ; more than five digits
+jmp.l fail              ; more than eight digits
 num3ok:
 mov eax, [rbp+80]
-mov ecx, 65536
+mov ecx, 16777216
 cmp eax, ecx
 jb num2ok
-jmp.l fail              ; a value above 65535
+jmp.l fail              ; a value above 16777215
 num2ok:
 ret
 ret
@@ -2706,7 +2774,7 @@ db "push rbp"
 db 10
 db "mov rbp, rsp"
 db 10
-db "mov r10, 65536"
+db "mov r10, 260000"
 db 10
 db "sub rsp, r10"
 db 10
@@ -2798,19 +2866,19 @@ f_ccmp2:
 db 10
 db "cmp rcx, rax"
 db 10
-db "jb "
+db "jb.l "
 db 0
 f_cjb:
 db 10
-db "jb "
+db "jb.l "
 db 0
 f_cjz:
 db 10
-db "jz "
+db "jz.l "
 db 0
 f_cjnz:
 db 10
-db "jnz "
+db "jnz.l "
 db 0
 f_if:
 db "if"
@@ -3013,6 +3081,14 @@ f_wr1:
 db "mov eax, 1"
 db 10
 db "mov edi, 1"
+db 10
+db "syscall"
+db 10
+db 0
+f_we1:
+db "mov eax, 1"
+db 10
+db "mov edi, 2"
 db 10
 db "syscall"
 db 10

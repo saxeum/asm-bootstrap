@@ -2,7 +2,7 @@
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rax, 5
 mov [rbp-8], rax
@@ -16,7 +16,7 @@ mov rcx, [rbp-8]
 
 inc rcx
 cmp rax, rcx
-jb L1b
+jb.l L1b
 jmp.l L1e
 L1b:
 mov rax, [rbp-24]

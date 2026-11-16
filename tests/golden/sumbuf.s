@@ -2,7 +2,7 @@
 sumbuf:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -14,7 +14,7 @@ L1:
 mov rax, [rbp-32]
 mov rcx, [rbp-16]
 cmp rax, rcx
-jb L1b
+jb.l L1b
 jmp.l L1e
 L1b:
 mov rax, [rbp-24]
@@ -37,7 +37,7 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rcx, 0
 mov [rbp-328], rcx
@@ -61,11 +61,11 @@ mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 lea rcx, [rbp-408]
-mov [rbp-65436], rcx
+mov [rbp-259900], rcx
 mov rcx, 3
-mov [rbp-65428], rcx
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259892], rcx
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call sumbuf
 mov rdi, rax
 mov eax, 60

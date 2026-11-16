@@ -2,7 +2,7 @@
 putn:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -14,7 +14,7 @@ mov rax, 0
 mov [rbp-40], rax
 mov rax, [rbp-32]
 cmp rax, 0
-jz L1t
+jz.l L1t
 jmp.l L1e
 L1t:
 mov rcx, 0
@@ -33,7 +33,7 @@ L2:
 mov rax, [rbp-32]
 mov rcx, 0
 cmp rcx, rax
-jb L2b
+jb.l L2b
 jmp.l L2e
 L2b:
 mov rax, [rbp-32]
@@ -76,7 +76,7 @@ L3:
 mov rax, [rbp-48]
 mov rcx, [rbp-56]
 cmp rax, rcx
-jb L3b
+jb.l L3b
 jmp.l L3e
 L3b:
 mov rax, [rbp-16]
@@ -118,14 +118,14 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rcx, 4321
-mov [rbp-65436], rcx
+mov [rbp-259900], rcx
 lea rcx, [rbp-424]
-mov [rbp-65428], rcx
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259892], rcx
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call putn
 mov [rbp-16], rax
 mov rax, [rbp-16]

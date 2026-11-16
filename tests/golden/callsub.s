@@ -2,7 +2,7 @@
 sub2:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -15,14 +15,14 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rcx, 3
-mov [rbp-65436], rcx
+mov [rbp-259900], rcx
 mov rcx, 2
-mov [rbp-65428], rcx
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259892], rcx
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call sub2
 mov rdi, rax
 mov eax, 60

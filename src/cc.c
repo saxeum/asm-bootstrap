@@ -52,6 +52,20 @@ int pw(int m, int o, int v)
 	return 0;
 }
 
+int gd(int m, int o)
+{
+	return m[30708 + o] + m[30708 + o + 1] * 256 + m[30708 + o + 2] * 256 * 256 + m[30708 + o + 3] * 256 * 256 * 256;
+}
+
+int pd(int m, int o, int v)
+{
+	m[30708 + o] = v % 256;
+	m[30708 + o + 1] = v / 256 % 256;
+	m[30708 + o + 2] = v / 256 / 256 % 256;
+	m[30708 + o + 3] = v / 256 / 256 / 256 % 256;
+	return 0;
+}
+
 /* absolute 16-bit words: tables live at fixed offsets in mem, not inside ST */
 int gwa(int m, int o)
 {
@@ -319,7 +333,7 @@ int defarr(int m, int cnt)
 	int n = gb(m, 6);
 	if (n >= 32) { fail(m); }
 	int off = gw(m, 7);
-	if (off + bytes >= 64000) { fail(m); }
+	if (off + bytes >= 255000) { fail(m); }
 	pw(m, 7, off + bytes);
 	int k = 0;
 	while (k < 16) {
@@ -374,7 +388,7 @@ int ems(int m, int s)
 
 int emn(int m, int v)
 {
-	int place = 10000;
+	int place = 10000000;
 	int started = 0;
 	while (place > 0) {
 		int d = v / place;
@@ -845,8 +859,8 @@ int numval(int m)
 		else { go = 0; }
 	}
 	if (d == 0) { fail(m); }
-	if (d > 5) { fail(m); }
-	if (v > 65535) { fail(m); }
+	if (d > 8) { fail(m); }
+	if (v > 16777215) { fail(m); }
 	return v;
 }
 
@@ -870,7 +884,7 @@ int callargs(int m)
 			int ad = gb(m, 27);
 			exprd(m, ad);
 			ems(m, "mov [rbp-");
-			int off = 65436 - gb(m, 22) * 8;
+			int off = 259900 - gb(m, 22) * 8;
 			emn(m, off);
 			ems(m, "], ");
 			emreg(m, ad);
@@ -894,7 +908,7 @@ int callargs(int m)
 		ems(m, "mov ");
 		emarg(m, j);
 		ems(m, ", [rbp-");
-		emn(m, 65436 - j * 8);
+		emn(m, 259900 - j * 8);
 		ems(m, "]");
 		nl(m);
 	}
@@ -936,7 +950,7 @@ int ex3read(int m, int d)
 	return 0;
 }
 
-int ex3wr(int m, int d)
+int ex3wr(int m, int d, int fd)
 {
 	bump(m, 1);
 	ident(m);
@@ -958,7 +972,8 @@ int ex3wr(int m, int d)
 	nl(m);
 	ems(m, "mov eax, 1");
 	nl(m);
-	ems(m, "mov edi, 1");
+	ems(m, "mov edi, ");
+	emn(m, fd);
 	nl(m);
 	ems(m, "syscall");
 	nl(m);
@@ -987,13 +1002,17 @@ int ex3call(int m, int d)
 	}
 	else {
 		if (same(m, "write") != 0) {
-			ex3wr(m, d);
+			ex3wr(m, d, 1);
 		}
 		else {
-			if (same(m, "exit") != 0) {
-				ex3exit(m, d);
+			if (same(m, "werr") != 0) {
+				ex3wr(m, d, 2);
 			}
 			else {
+				if (same(m, "exit") != 0) {
+					ex3exit(m, d);
+				}
+				else {
 				if (gb(m, 24) != 0) { fail(m); }
 				int k = 0;
 				while (k < d) {
@@ -1020,6 +1039,7 @@ int ex3call(int m, int d)
 				}
 			}
 		}
+	}
 	}
 	return 0;
 }
@@ -1082,10 +1102,10 @@ int expr(int m)
 int condjump(int m, int k)
 {
 	nl(m);
-	if (k == 1) { ems(m, "jz "); }
+	if (k == 1) { ems(m, "jz.l "); }
 	else {
-		if (k == 2) { ems(m, "jnz "); }
-		else { ems(m, "jb "); }
+		if (k == 2) { ems(m, "jnz.l "); }
+		else { ems(m, "jb.l "); }
 	}
 	return 0;
 }
@@ -1101,14 +1121,14 @@ int cndbnd(int m)
 		bump(m, 1);
 		if (gcur(m) != 39) { fail(m); }
 		bump(m, 1);
-		pw(m, 12, v);
+		pd(m, 72, v);
 		pb(m, 14, 0);
 	}
 	else {
 		if (c >= 48) {
 			if (c <= 57) {
 				v = numval(m);
-				pw(m, 12, v);
+				pd(m, 72, v);
 				pb(m, 14, 0);
 			}
 			else {
@@ -1132,7 +1152,7 @@ int cndvar(int m)
 	ems(m, "]");
 	nl(m);
 	pb(m, 14, 1);
-	pw(m, 12, 0);
+	pd(m, 72, 0);
 	return 0;
 }
 
@@ -1141,7 +1161,7 @@ int cond(int m)
 	int b = 0;
 	expr(m);
 	pb(m, 11, 2);
-	pw(m, 12, 0);
+	pd(m, 72, 0);
 	pb(m, 14, 0);
 	skipws(m);
 	int c = gcur(m);
@@ -1158,9 +1178,9 @@ int cond(int m)
 				pb(m, 11, 0);
 			}
 			else {
-				b = gw(m, 12);
+				b = gd(m, 72);
 				if (b >= 255) { fail(m); }
-				pw(m, 12, b + 1);
+				pd(m, 72, b + 1);
 				pb(m, 11, 0);
 			}
 		}
@@ -1183,9 +1203,9 @@ int cond(int m)
 					pb(m, 11, 3);
 				}
 				else {
-					b = gw(m, 12);
+					b = gd(m, 72);
 					if (b == 0) { fail(m); }
-					pw(m, 12, b - 1);
+					pd(m, 72, b - 1);
 					pb(m, 11, 3);
 				}
 			}
@@ -1219,7 +1239,7 @@ int cond(int m)
 int condj(int m, int id, int lt)
 {
 	int k = gb(m, 11);
-	int b = gw(m, 12);
+	int b = gd(m, 72);
 	if (gb(m, 14) == 0) {
 		if (k == 3) {
 			ems(m, "mov rcx, ");
@@ -1588,7 +1608,7 @@ int func(int m)
 	nl(m);
 	ems(m, "mov rbp, rsp");
 	nl(m);
-	ems(m, "mov r10, 65536");
+	ems(m, "mov r10, 260000");
 	nl(m);
 	ems(m, "sub rsp, r10");
 	nl(m);

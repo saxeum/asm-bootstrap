@@ -21,7 +21,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 dis cc hello test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help test-port test-d2 test-cc-source
+.PHONY: all bootstrap asm1 dis cc hello test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help test-port test-d2 test-cc-source test-asm2
 help:
 	@echo 'make            build asm1 from seed/asm1, then the decoder (which needs it)'
 	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
@@ -35,6 +35,7 @@ help:
 	@echo 'make test-cc    the compiler: goldens, behaviour, refusals'
 	@echo 'make test-port  the port byte-identical to cc on every golden'
 	@echo 'make test-d2    the port compiles its own source to identical text'
+	@echo 'make test-asm2  the assembler in C reproduces asm1 on the corpus and itself'
 	@echo 'make test-cc-source  asm1 < src/cc.s still reproduces cc byte for byte'
 	@echo 'make fixpoint   the built asm1 must reproduce itself, byte for byte'
 	@echo 'make bootstrap-check  asm0a and seed/asm1 must agree on src/asm1.s'
@@ -132,7 +133,7 @@ verify-provenance: asm1 dis
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: test-tools test-tmp test-header test-cc-source test-port test-d2 asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
+check: test-tools test-tmp test-header test-cc-source test-port test-d2 test-asm2 asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -716,7 +717,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { int x = 1; x = x & 2; }'; \
 	refuse 'int main(void) { write(x); }'; \
 	refuse 'int main(void) { write("unterminated); }'; \
-	refuse 'int main(void) { int x = 70000; }'; \
+	refuse 'int main(void) { int x = 20000000; }'; \
 	refuse 'void main(void) {}'; \
 	refuse 'int main(void) { char b[8]; int i = 0; b[i][0] = 1; }'; \
 	refuse '/* unterminated'; \
@@ -742,7 +743,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { int a[4]; int y = a; }'; \
 	refuse 'int main(void) { char s[4]; int n = read(&s, 4); }'; \
 	refuse 'int main(void) { int a[4]; int b[4]; int y = a[b[0]]; }'; \
-	refuse 'int main(void) { int a[9000]; }'; \
+	refuse 'int main(void) { int a[40000]; }'; \
 	refuse 'int main(void) { int a[2]; int a[2]; }'; \
 	refuse 'int main(void) { char x = 65; }'; \
 	refuse 'int main(void) { char a[4]; a = 1; }'; \
@@ -777,6 +778,21 @@ test-d2: asm1 cc
 	  printf '  d2: the port is not yet a compiler: %s bytes emitted, expected %s\n' "$$(wc -c < $(WORK)/cc2.s)" "$$(wc -c < $(WORK)/cc1.s)"; \
 	  exit 1; \
 	fi
+
+# ---- D3: the assembler in C ------------------------------------------------
+# src/asm1.c is the assembler written in the subset cc compiles. cc makes the
+# text, asm1 makes asm2, and tools/asm2-check.sh requires asm2 to reproduce
+# asm1 on the whole corpus -- references, capability pairs, coverage forms,
+# refusals, exact messages, dis.s/cc.s/asm1.s, the 99 KB source -- and to
+# assemble the text of its own compiler to itself.
+test-asm2: asm1 cc
+	@mkdir -p $(WORK); \
+	if ! $(CC) < src/asm1.c > $(WORK)/asm1.c.s 2>$(WORK)/asm2.err; then \
+	  echo '  asm2: cc refuses src/asm1.c'; head -3 $(WORK)/asm2.err; exit 1; fi; \
+	if ! $(ASM1) < $(WORK)/asm1.c.s > $(WORK)/asm2 2>>$(WORK)/asm2.err; then \
+	  echo '  asm2: asm1 refuses the text for src/asm1.c'; head -3 $(WORK)/asm2.err; exit 1; fi; \
+	chmod +x $(WORK)/asm2; \
+	./tools/asm2-check.sh $(ASM1) $(WORK)/asm2 $(WORK)/asm1.c.s
 
 # ---- the port equals the dialect compiler on every golden --------------------
 # src/cc.c is the compiler written in the subset it compiles. Building it is not

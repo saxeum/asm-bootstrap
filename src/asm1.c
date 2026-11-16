@@ -20,18 +20,18 @@
  *
  * One buffer holds the world:
  *
- *   SRC    0      20000   input bytes, read once
- *   LBLN   20000  8192    512 labels, 16 bytes each
- *   LBLV   28200  2048    512 label values, 4 bytes each
- *   ST     30300  256     scalar state
- *   NAME   30560  16      the word being scanned
+ *   SRC    0      200000   input bytes, read once
+ *   LBLN   200000  8192    512 labels, 16 bytes each
+ *   LBLV   232800  2048    512 label values, 4 bytes each
+ *   ST     241000  256     scalar state
+ *   NAME   241260  16      the word being scanned
  *
  * Arrays now store their END (see src/cc.s), so mem's base is rbp-(end) and
  * its indices stay below rbp. Values wider than a byte are stored little
  * endian with gd/pd.
  */
 
-/* state offsets inside ST (base 30300):
+/* state offsets inside ST (base 241000):
  * CU 0(4) LN 4(4) PS 8 CNT 9(4) NL 13(2) ENT 15(4) HENT 19 FS 20(4)
  * O1 24: K +0 S +1 R +2 V +4(4) B +8 X +9 D +10(4)
  * O2 40: same; OP 56; T0 60(4); T1 64(4); T2 68(4)
@@ -40,43 +40,132 @@
 
 int gb(int m, int o)
 {
-	return m[30300 + o];
+	return m[241000 + o];
 }
 
 int pb(int m, int o, int v)
 {
-	m[30300 + o] = v % 256;
+	m[241000 + o] = v % 256;
 	return 0;
 }
 
 int gw(int m, int o)
 {
-	return m[30300 + o] + m[30300 + o + 1] * 256;
+	return m[241000 + o] + m[241000 + o + 1] * 256;
 }
 
 int pw(int m, int o, int v)
 {
-	m[30300 + o] = v % 256;
-	m[30300 + o + 1] = v / 256 % 256;
+	m[241000 + o] = v % 256;
+	m[241000 + o + 1] = v / 256 % 256;
 	return 0;
 }
 
 int gd(int m, int o)
 {
-	return m[30300 + o] + m[30300 + o + 1] * 256 + m[30300 + o + 2] * 256 * 256 + m[30300 + o + 3] * 256 * 256 * 256;
+	return m[241000 + o] + m[241000 + o + 1] * 256 + m[241000 + o + 2] * 256 * 256 + m[241000 + o + 3] * 256 * 256 * 256;
 }
 
 int pd(int m, int o, int v)
 {
-	m[30300 + o] = v % 256;
-	m[30300 + o + 1] = v / 256 % 256;
-	m[30300 + o + 2] = v / 256 / 256 % 256;
-	m[30300 + o + 3] = v / 256 / 256 / 256 % 256;
+	m[241000 + o] = v % 256;
+	m[241000 + o + 1] = v / 256 % 256;
+	m[241000 + o + 2] = v / 256 / 256 % 256;
+	m[241000 + o + 3] = v / 256 / 256 / 256 % 256;
+	return 0;
+}
+
+/* absolute 32-bit words: the label values live at a fixed offset in mem */
+int gda(int m, int o)
+{
+	return m[o] + m[o + 1] * 256 + m[o + 2] * 256 * 256 + m[o + 3] * 256 * 256 * 256;
+}
+
+int pda(int m, int o, int v)
+{
+	m[o] = v % 256;
+	m[o + 1] = v / 256 % 256;
+	m[o + 2] = v / 256 / 256 % 256;
+	m[o + 3] = v / 256 / 256 / 256 % 256;
 	return 0;
 }
 
 int fail(int m)
 {
+	char ob[32];
+	int d[8];
+	int len = 0;
+	ob[0] = 108;
+	ob[1] = 105;
+	ob[2] = 110;
+	ob[3] = 101;
+	ob[4] = 32;
+	len = 5;
+	int n = gd(m, 4);
+	int k = 0;
+	if (n == 0) {
+		d[0] = 0;
+		k = 1;
+	}
+	else {
+		while (n > 0) {
+			d[k] = n % 10;
+			n = n / 10;
+			k = k + 1;
+		}
+	}
+	while (k > 0) {
+		k = k - 1;
+		ob[len] = 48 + d[k];
+		len = len + 1;
+	}
+	ob[len] = 58;
+	len = len + 1;
+	ob[len] = 32;
+	len = len + 1;
+	int r = gb(m, 73);
+	if (r == 1) {
+		ob[len] = 114; len = len + 1;
+		ob[len] = 97; len = len + 1;
+		ob[len] = 110; len = len + 1;
+		ob[len] = 103; len = len + 1;
+		ob[len] = 101; len = len + 1;
+	}
+	else {
+		if (r == 2) {
+			ob[len] = 108; len = len + 1;
+			ob[len] = 97; len = len + 1;
+			ob[len] = 98; len = len + 1;
+			ob[len] = 101; len = len + 1;
+			ob[len] = 108; len = len + 1;
+		}
+		else {
+			if (r == 3) {
+				ob[len] = 100; len = len + 1;
+				ob[len] = 117; len = len + 1;
+				ob[len] = 112; len = len + 1;
+				ob[len] = 108; len = len + 1;
+				ob[len] = 105; len = len + 1;
+				ob[len] = 99; len = len + 1;
+				ob[len] = 97; len = len + 1;
+				ob[len] = 116; len = len + 1;
+				ob[len] = 101; len = len + 1;
+			}
+			else {
+				ob[len] = 114; len = len + 1;
+				ob[len] = 101; len = len + 1;
+				ob[len] = 106; len = len + 1;
+				ob[len] = 101; len = len + 1;
+				ob[len] = 99; len = len + 1;
+				ob[len] = 116; len = len + 1;
+				ob[len] = 101; len = len + 1;
+				ob[len] = 100; len = len + 1;
+			}
+		}
+	}
+	ob[len] = 10;
+	len = len + 1;
+	int w = werr(ob, len);
 	int z = exit(1);
 	return z;
 }
@@ -152,7 +241,7 @@ int word(int m)
 {
 	int k = 0;
 	while (k < 16) {
-		m[30560 + k] = 0;
+		m[241260 + k] = 0;
 		k = k + 1;
 	}
 	k = 0;
@@ -160,7 +249,7 @@ int word(int m)
 	while (go != 0) {
 		int c = gcur(m);
 		if (idchar(c) != 0) {
-			if (k < 16) { m[30560 + k] = c; }
+			if (k < 16) { m[241260 + k] = c; }
 			k = k + 1;
 			adv(m, 1);
 		}
@@ -176,12 +265,12 @@ int same(int m, int s)
 	int i = 0;
 	int eq = 1;
 	while (s[i] != 0) {
-		int a = m[30560 + i];
+		int a = m[241260 + i];
 		int b = s[i];
 		if (a != b) { eq = 0; }
 		i = i + 1;
 	}
-	if (m[30560 + i] != 0) { eq = 0; }
+	if (m[241260 + i] != 0) { eq = 0; }
 	return eq;
 }
 
@@ -195,8 +284,8 @@ int lfind(int m)
 		int k = 0;
 		int eq = 1;
 		while (k < 16) {
-			int a = m[20000 + i * 16 + k];
-			int b = m[30560 + k];
+			int a = m[200000 + i * 16 + k];
+			int b = m[241260 + k];
 			if (a != b) { eq = 0; }
 			k = k + 1;
 		}
@@ -209,17 +298,17 @@ int lfind(int m)
 int ldef(int m)
 {
 	int i = lfind(m);
-	if (i != 65535) { fail(m); }
+	if (i != 65535) { pb(m, 73, 3); fail(m); }
 	int n = gw(m, 13);
-	if (n >= 512) { fail(m); }
+	if (n >= 2048) { pb(m, 73, 3); fail(m); }
 	int k = 0;
 	while (k < 16) {
-		int c = m[30560 + k];
-		m[20000 + n * 16 + k] = c;
+		int c = m[241260 + k];
+		m[200000 + n * 16 + k] = c;
 		k = k + 1;
 	}
 	int v = gd(m, 9);
-	pd(m, 28200 + n * 4, v);
+	pda(m, 232800 + n * 4, v);
 	pw(m, 13, n + 1);
 	return 0;
 }
@@ -251,10 +340,10 @@ int term(int m)
 	word(m);
 	int i = lfind(m);
 	if (i != 65535) {
-		return gd(m, 28200 + i * 4);
+		return gda(m, 232800 + i * 4);
 	}
 	if (gb(m, 8) == 0) { return 0; }
-	fail(m);
+	pb(m, 73, 2); fail(m);
 	return 0;
 }
 
@@ -360,6 +449,22 @@ int regno(int m)
 	if (same(m, "r13")) { pb(m, 57, 8); return 13; }
 	if (same(m, "r14")) { pb(m, 57, 8); return 14; }
 	if (same(m, "r15")) { pb(m, 57, 8); return 15; }
+	if (same(m, "r8d")) { pb(m, 57, 4); return 8; }
+	if (same(m, "r9d")) { pb(m, 57, 4); return 9; }
+	if (same(m, "r10d")) { pb(m, 57, 4); return 10; }
+	if (same(m, "r11d")) { pb(m, 57, 4); return 11; }
+	if (same(m, "r12d")) { pb(m, 57, 4); return 12; }
+	if (same(m, "r13d")) { pb(m, 57, 4); return 13; }
+	if (same(m, "r14d")) { pb(m, 57, 4); return 14; }
+	if (same(m, "r15d")) { pb(m, 57, 4); return 15; }
+	if (same(m, "r8b")) { pb(m, 57, 1); return 8; }
+	if (same(m, "r9b")) { pb(m, 57, 1); return 9; }
+	if (same(m, "r10b")) { pb(m, 57, 1); return 10; }
+	if (same(m, "r11b")) { pb(m, 57, 1); return 11; }
+	if (same(m, "r12b")) { pb(m, 57, 1); return 12; }
+	if (same(m, "r13b")) { pb(m, 57, 1); return 13; }
+	if (same(m, "r14b")) { pb(m, 57, 1); return 14; }
+	if (same(m, "r15b")) { pb(m, 57, 1); return 15; }
 	return 65535;
 }
 
@@ -518,10 +623,27 @@ int modrm(int m, int mod, int reg, int rm)
 
 int chk8(int m, int v)
 {
-	int t = v + 128;
-	if (t < 0) { fail(m); }
-	if (t < 256) { return 0; }
-	fail(m);
+	if (v < 128) { return 0; }
+	int hi = v / 256;
+	int lo = v % 256;
+	int hw = 65535 * 256 + 255;
+	if (hi == hw) {
+		if (lo > 127) { return 0; }
+	}
+	pb(m, 73, 1); fail(m);
+	return 0;
+}
+
+int chk8u(int m, int v)
+{
+	if (v < 256) { return 0; }
+	int hi = v / 256;
+	int lo = v % 256;
+	int hw = 65535 * 256 + 255;
+	if (hi == hw) {
+		if (lo > 127) { return 0; }
+	}
+	pb(m, 73, 1); fail(m);
 	return 0;
 }
 
@@ -534,10 +656,15 @@ int dispform(int m, int o)
 		if (x == 0) {
 			if (b % 8 != 5) { return 0; }
 		}
+		return 1;
 	}
-	int t = d + 128;
-	if (t < 0) { t = 9999; }
-	if (t < 256) { return 1; }
+	if (d < 128) { return 1; }
+	int hi = d / 256;
+	int lo = d % 256;
+	int hw = 65535 * 256 + 255;
+	if (hi == hw) {
+		if (lo > 127) { return 1; }
+	}
 	return 2;
 }
 
@@ -559,11 +686,7 @@ int emitmem(int m, int o, int regfield)
 		if (x != 0) { ib = (x - 1) % 8; }
 		ex(m, ib * 8 + b % 8);
 	}
-	if (mod == 1) {
-		int t = d + 128;
-		if (t < 0) { fail(m); }
-		if (t < 256) { ex(m, d % 256); }
-	}
+	if (mod == 1) { ex(m, d % 256); }
 	if (mod == 2) { ex4(m, d); }
 	return 0;
 }
@@ -616,6 +739,14 @@ int enc_alu(int m, int base)
 		}
 		if (k2 == 2) {
 			if (s1 == 1) {
+				chk8(m, v2);
+				if (r1 == 0) {
+					if (base == 0) {
+						ex(m, base + 4);
+						ex(m, v2 % 256);
+						return 0;
+					}
+				}
 				rex(m, 0, 0, 0*2+0);
 				ex(m, 128);
 				modrm(m, 3, digit, r1);
@@ -626,20 +757,10 @@ int enc_alu(int m, int base)
 			if (s1 == 8) { w = 1; }
 			bb = 0;
 			if (r1 > 7) { bb = 1; }
-			t = v2 + 128;
-			if (t < 0) { t = 9999; }
-			if (t < 256) {
-				rex(m, w, 0, 0*2+bb);
-				ex(m, 131);
-				modrm(m, 3, digit, r1);
-				ex(m, v2 % 256);
-			}
-			else {
-				rex(m, w, 0, 0*2+bb);
-				ex(m, 129);
-				modrm(m, 3, digit, r1);
-				ex4(m, v2);
-			}
+			rex(m, w, 0, 0*2+bb);
+			ex(m, 129);
+			modrm(m, 3, digit, r1);
+			ex4(m, v2);
 			return 0;
 		}
 		if (k2 == 1) {
@@ -678,25 +799,18 @@ int enc_alu(int m, int base)
 			bb = 0;
 			if (gb(m, 32) > 7) { bb = 1; }
 			if (s == 1) {
+				chk8(m, v2);
 				rex(m, 0, 0, 0*2+bb);
 				ex(m, 128);
 				emitmem(m, 24, digit);
 				ex(m, v2 % 256);
 				return 0;
 			}
-			t = v2 + 128;
-			if (t < 0) { t = 9999; }
+			t = 0;
 			rex(m, w, 0, 0*2+bb);
-			if (t < 256) {
-				ex(m, 131);
-				emitmem(m, 24, digit);
-				ex(m, v2 % 256);
-			}
-			else {
-				ex(m, 129);
-				emitmem(m, 24, digit);
-				ex4(m, v2);
-			}
+			ex(m, 129);
+			emitmem(m, 24, digit);
+			ex4(m, v2);
 			return 0;
 		}
 	}
@@ -722,6 +836,7 @@ int enc_mov(int m)
 	if (k1 == 0) {
 		if (k2 == 2) {
 			if (s1 == 1) {
+				chk8u(m, v2);
 				rex(m, 0, 0, 0*2+0);
 				ex(m, 176 + r1 % 8);
 				ex(m, v2 % 256);
@@ -795,6 +910,7 @@ int enc_mov(int m)
 			bb = 0;
 			if (gb(m, 32) > 7) { bb = 1; }
 			if (s == 1) {
+				chk8u(m, v2);
 				rex(m, 0, 0, 0*2+bb);
 				ex(m, 198);
 				emitmem(m, 24, 0);
@@ -814,7 +930,7 @@ int enc_mov(int m)
 	return 0;
 }
 
-int enc_un(int m, int digit)
+int enc_un(int m, int base, int digit)
 {
 	int w = 0;
 	int bb = 0;
@@ -827,8 +943,8 @@ int enc_un(int m, int digit)
 		bb = 0;
 		if (r > 7) { bb = 1; }
 		rex(m, w, 0, 0*2+bb);
-		if (s == 1) { ex(m, 246); }
-		else { ex(m, 247); }
+		if (s == 1) { ex(m, base); }
+		else { ex(m, base + 1); }
 		modrm(m, 3, digit, r);
 		return 0;
 	}
@@ -840,12 +956,82 @@ int enc_un(int m, int digit)
 		bb = 0;
 		if (gb(m, 32) > 7) { bb = 1; }
 		rex(m, w, 0, 0*2+bb);
-		if (s2 == 1) { ex(m, 246); }
-		else { ex(m, 247); }
+		if (s2 == 1) { ex(m, base); }
+		else { ex(m, base + 1); }
 		emitmem(m, 24, digit);
 		return 0;
 	}
 	fail(m);
+	return 0;
+}
+
+int enc_test(int m)
+{
+	int w = 0;
+	int rr = 0;
+	int bb = 0;
+	int k1 = gb(m, 24);
+	int k2 = gb(m, 40);
+	int s1 = gb(m, 25);
+	int s2 = gb(m, 41);
+	int r1 = gb(m, 26);
+	int r2 = gb(m, 42);
+	int v2 = gd(m, 44);
+	if (k1 == 0) {
+		if (k2 == 0) {
+			if (s1 != s2) { fail(m); }
+			w = 0;
+			if (s1 == 8) { w = 1; }
+			rr = 0;
+			if (r2 > 7) { rr = 1; }
+			bb = 0;
+			if (r1 > 7) { bb = 1; }
+			rex(m, w, rr, 0*2+bb);
+			if (s1 == 1) { ex(m, 132); }
+			else { ex(m, 133); }
+			modrm(m, 3, r2, r1);
+			return 0;
+		}
+		if (k2 == 2) {
+			if (s1 == 1) {
+				chk8u(m, v2);
+				ex(m, 246);
+				modrm(m, 3, 0, r1);
+				ex(m, v2 % 256);
+				return 0;
+			}
+			w = 0;
+			if (s1 == 8) { w = 1; }
+			bb = 0;
+			if (r1 > 7) { bb = 1; }
+			rex(m, w, 0, 0*2+bb);
+			ex(m, 247);
+			modrm(m, 3, 0, r1);
+			ex4(m, v2);
+			return 0;
+		}
+	}
+	fail(m);
+	return 0;
+}
+
+int enc_imul(int m)
+{
+	int k2 = gb(m, 40);
+	int s1 = gb(m, 25);
+	int r1 = gb(m, 26);
+	int r2 = gb(m, 42);
+	if (k2 != 0) { fail(m); }
+	int w = 0;
+	if (s1 == 8) { w = 1; }
+	int rr = 0;
+	if (r1 > 7) { rr = 1; }
+	int bb = 0;
+	if (r2 > 7) { bb = 1; }
+	rex(m, w, rr, 0*2+bb);
+	ex(m, 15);
+	ex(m, 175);
+	modrm(m, 3, r1, r2);
 	return 0;
 }
 
@@ -924,8 +1110,10 @@ int enc_lea(int m)
 	int rr = 0;
 	if (r1 > 7) { rr = 1; }
 	int bb = 0;
-	if (gb(m, 32) > 7) { bb = 1; }
-	rex(m, w, rr, 0*2+bb);
+	if (gb(m, 48) > 7) { bb = 1; }
+	int xx = 0;
+	if (gb(m, 49) > 8) { xx = 1; }
+	rex(m, w, rr, xx*2+bb);
 	ex(m, 141);
 	emitmem(m, 40, r1);
 	return 0;
@@ -955,22 +1143,25 @@ int enc_jmp(int m, int cc, int lng)
 {
 	int t = reloc(m);
 	int at = gd(m, 9);
-	int rel = t - at - 2;
 	if (lng == 0) {
+		if (gb(m, 8) == 0) {
+			if (cc == 0) { ex(m, 235); }
+			else { ex(m, 112 + cc); }
+			ex(m, 0);
+			return 0;
+		}
 		int r8 = t - at - 2;
 		int q = r8 + 128;
-		if (q < 0) { lng = 1; }
-		else {
-			if (q < 256) {
-				if (cc == 0) { ex(m, 235); }
-				else { ex(m, 112 + cc); }
-				ex(m, r8 % 256);
-				return 0;
-			}
-			lng = 1;
+		if (q < 0) { pb(m, 73, 1); fail(m); }
+		if (q < 256) {
+			if (cc == 0) { ex(m, 235); }
+			else { ex(m, 112 + cc); }
+			ex(m, r8 % 256);
+			return 0;
 		}
+		pb(m, 73, 1); fail(m);
 	}
-	rel = t - at - 5;
+	int rel = t - at - 5;
 	if (cc == 0) { ex(m, 233); }
 	else {
 		rel = t - at - 6;
@@ -1074,9 +1265,9 @@ int pdb(int m)
 	if (gcur(m) == 34) { return dbstr(m); }
 	int v = expr(m);
 	int t = v + 128;
-	if (t < 0) { fail(m); }
+	if (t < 0) { pb(m, 73, 1); fail(m); }
 	if (t < 384) { ex(m, v % 256); }
-	else { fail(m); }
+	else { pb(m, 73, 1); fail(m); }
 	return 0;
 }
 
@@ -1117,6 +1308,7 @@ int opcode(int m)
 	if (same(m, "db")) { op = 32; }
 	if (same(m, "space")) { op = 33; }
 	if (same(m, "entry")) { op = 34; }
+	if (same(m, "imul")) { op = 35; }
 	return op;
 }
 
@@ -1134,6 +1326,14 @@ int two(int m)
 int one(int m)
 {
 	parseop(m, 24);
+	return 0;
+}
+
+int reltarget(int m)
+{
+	pb(m, 24, 2);
+	int v = expr(m);
+	pd(m, 28, v);
 	return 0;
 }
 
@@ -1187,12 +1387,12 @@ int parse(int m)
 					if (op == 7) { two(m); enc_alu(m, 40); }
 					if (op == 8) { two(m); enc_alu(m, 48); }
 					if (op == 9) { two(m); enc_alu(m, 56); }
-					if (op == 10) { two(m); enc_alu(m, 64); }
-					if (op == 11) { one(m); enc_un(m, 0); }
-					if (op == 12) { one(m); enc_un(m, 1); }
-					if (op == 13) { one(m); enc_un(m, 2); }
-					if (op == 14) { one(m); enc_un(m, 3); }
-					if (op == 15) { one(m); enc_un(m, 6); }
+					if (op == 10) { two(m); enc_test(m); }
+					if (op == 11) { one(m); enc_un(m, 254, 0); }
+					if (op == 12) { one(m); enc_un(m, 254, 1); }
+					if (op == 13) { one(m); enc_un(m, 246, 2); }
+					if (op == 14) { one(m); enc_un(m, 246, 3); }
+					if (op == 15) { one(m); enc_un(m, 246, 6); }
 					if (op == 16) { two(m); enc_shift(m, 4); }
 					if (op == 17) { two(m); enc_shift(m, 5); }
 					if (op == 18) { two(m); enc_shift(m, 7); }
@@ -1200,15 +1400,15 @@ int parse(int m)
 					if (op == 20) { two(m); enc_lea(m); }
 					if (op == 21) { one(m); enc_pushpop(m, 0); }
 					if (op == 22) { one(m); enc_pushpop(m, 1); }
-					if (op == 23) { one(m); enc_call(m); }
-					if (op == 24) { one(m); enc_jmp(m, 0, 0); }
-					if (op == 25) { one(m); enc_jmp(m, 0, 1); }
-					if (op == 26) { one(m); enc_jmp(m, 4, 0); }
-					if (op == 27) { one(m); enc_jmp(m, 4, 1); }
-					if (op == 28) { one(m); enc_jmp(m, 5, 0); }
-					if (op == 29) { one(m); enc_jmp(m, 5, 1); }
-					if (op == 30) { one(m); enc_jmp(m, 2, 0); }
-					if (op == 31) { one(m); enc_jmp(m, 2, 1); }
+					if (op == 23) { reltarget(m); enc_call(m); }
+					if (op == 24) { reltarget(m); enc_jmp(m, 0, 0); }
+					if (op == 25) { reltarget(m); enc_jmp(m, 0, 1); }
+					if (op == 26) { reltarget(m); enc_jmp(m, 4, 0); }
+					if (op == 27) { reltarget(m); enc_jmp(m, 4, 1); }
+					if (op == 28) { reltarget(m); enc_jmp(m, 5, 0); }
+					if (op == 29) { reltarget(m); enc_jmp(m, 5, 1); }
+					if (op == 30) { reltarget(m); enc_jmp(m, 2, 0); }
+					if (op == 31) { reltarget(m); enc_jmp(m, 2, 1); }
 					if (op == 32) {
 						pdb(m);
 						int g = 1;
@@ -1228,6 +1428,7 @@ int parse(int m)
 						pd(m, 15, e);
 						pb(m, 19, 1);
 					}
+					if (op == 35) { two(m); enc_imul(m); }
 				}
 			}
 		}
@@ -1237,13 +1438,13 @@ int parse(int m)
 }
 int main(void)
 {
-	char mem[31000];
+	char mem[250000];
 	int m = &mem;
-	int n = read(mem, 20000);
+	int n = read(mem, 200000);
 	if (n <= 0) {
 		int z = exit(1);
 	}
-	if (n >= 20000) {
+	if (n >= 200000) {
 		int z2 = exit(1);
 	}
 	pd(m, 61, n);
@@ -1268,6 +1469,7 @@ int main(void)
 	pb(m, 8, 2);
 	int ev = gd(m, 15);
 	header(m, fs, ev);
+	pd(m, 9, 0);
 	parse(m);
 	return 0;
 }

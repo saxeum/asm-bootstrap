@@ -2,7 +2,7 @@
 fill:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov rax, 0
@@ -10,7 +10,7 @@ mov [rbp-24], rax
 L1:
 mov rax, [rbp-24]
 cmp rax, 900
-jb L1b
+jb.l L1b
 jmp.l L1e
 L1b:
 mov rcx, [rbp-24]
@@ -38,13 +38,13 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rax, 7
 mov [rbp-8], rax
 mov rcx, 0
-mov [rbp-65436], rcx
-mov rdi, [rbp-65436]
+mov [rbp-259900], rcx
+mov rdi, [rbp-259900]
 call fill
 mov [rbp-16], rax
 mov rax, [rbp-8]
