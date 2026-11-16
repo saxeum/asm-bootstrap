@@ -87,9 +87,76 @@ Two findings the query produced that are worth keeping:
    this — recorded as a wave-2b requirement, since adding `cmp` operands without the range
    check is exactly the "plausible wrong bytes" failure this standard exists to prevent.
 
-## How to re-verify
+## How to re-verify, without Python
 
-The query is a 40-line Python read-only script over the XML: it walks `<one-byte>`/`<two-byte>`,
-matches `value` and `<opcd_ext>`, prefers `mode="e"`, and compares the `<mnem>` to the expected
-mnemonic. It was run as a one-off and is deliberately not committed: this project's build path
-stays free of other languages, and the table above is the artefact that has to stay true.
+`xmllint` is enough; no other language enters the repo. One form:
+
+```bash
+X=.refcache/x86reference.xml
+xmllint --xpath 'string(//one-byte/pri_opcd[@value="83"]/entry[opcd_ext="7"]/syntax/mnem)' "$X"
+# CMP
+xmllint --xpath 'string(//one-byte/pri_opcd[@value="83"]/entry[opcd_ext="7"]/syntax/src/a)' "$X"
+# E      <- operand shape: modrm r/m
+```
+
+Mode-dependent opcodes need the filter, and the trap is easy to reproduce:
+
+```bash
+xmllint --xpath 'string(//two-byte/pri_opcd[@value="05"]/entry[1]/syntax/mnem)' "$X"   # LOADALL
+xmllint --xpath 'string(//two-byte/pri_opcd[@value="05"]/entry[@mode="e"]/syntax/mnem)' "$X"  # SYSCALL
+```
+
+The 29-row table above was produced with a loop of exactly this shape (container, opcode,
+extension, expected mnemonic → compare), preferring `entry[@mode="e"]` whenever it exists.
+Verified output of the shell version on six representative forms, including the mode trap:
+
+```
+  OK   05   -  SYSCALL  SYSCALL
+  OK   83   7  CMP      CMP
+  OK   B8   -  MOV      MOV
+  OK   31   -  XOR      XOR
+  OK   F6   6  DIV      DIV
+  OK   73   -  JNB      JNB
+--- without the mode filter ---
+LOADALL
+```
+
+## Consequences for the plan
+
+What this standard buys, precisely: **opcode selection** (primary opcode, group `/digit`,
+alias, and the operand *shape* implied by `<a>`/`<t>`), plus **mode validity**. What it does not
+buy: any of our ModRM/REX/SIB/displacement bits, the ELF container, or the parser. It is rung 3
+of the ladder in `docs/oracles.md`, and it does not replace the decoder, the machine, or `as`.
+
+Concretely, four changes:
+
+1. **A new form's checklist is now six steps**, not five: (a) look up the reference entry and
+   record opcode + ext + operand shape in this file, (b) implement, (c) `objdump` the bytes
+   back, (d) a behavioural fixture whose *value* changes if the form is wrong, (e) byte-compare
+   against a hand-emitted reference, (f) a mutation test where it is cheap. The lookup happens
+   *before* implementation, so the encoder is written against an authority rather than recalled.
+
+2. **A real implementation requirement surfaced: narrow-form selection.** Arithmetic and
+   branch instructions have two widths, and the narrow one is only valid when the value fits:
+   `83 /7 ib` (sign-extended byte) vs `81 /7 iz`; `6B /r ib` vs `69 /r iz`; `EB cb` (±127) vs
+   `E9 cd`. Policy, chosen for simplicity: **emit the narrow form and `fail` if the value does
+   not fit**, rather than silently widening. One mechanism, an explicit error, and no second
+   encoding convention invented on the fly. Widening gets added when a fixture actually needs
+   it — no mechanism without a present user.
+
+3. **Wave 2b scope is unchanged**, because labels and `jmp rel8` are exactly where the range
+   check is needed immediately: a forward label past +127 must fail loudly rather than wrap.
+   `ref/jmp` keeps `+5` well inside range, and a new negative fixture will pin the failure.
+
+4. **This file is a maintained artefact.** It is regenerated when a form is added and it is part
+   of the wave gate, not a one-off record. A row that is documented but not implemented is a
+   spec; a form that is implemented but not rowed here is a defect.
+
+What it deliberately does **not** change: the shape of `asm0a`. The standard constrains the
+*specification*, not the code structure — the handlers keep their hardcoded bytes, because a
+table-driven encoder is a mechanism with no present user.
+
+Honest scorecard so far: the check has confirmed 29 forms that were already right, and it has
+*caught* nothing except my own query bug (LOADALL vs SYSCALL). Its value today is confirmation;
+its value later is that the table will roughly triple, and the `/digit` and width-rule errors it
+prevents are exactly the ones that produce plausible wrong bytes.
