@@ -229,3 +229,41 @@ One defect did slip through, and it was a **repeat** of an earlier mistake: `mov
 written `4c 89 cb`, which is `mov rbx,r9` — the destination `r11` needs REX.B. Caught by
 decoding the instruction, not by re-checking the arithmetic. The lesson stands: arithmetic is
 verified by decoding, never by re-reading.
+
+## Wave 2b-2 — PASS: `jmp rel8`, comments, and the range check
+
+Artifact: `asm0a`, 1371 bytes, sha `4ddab4e1bcd0e886cda1332fbb93bcf5142b994ba672d519ac8a86c23edc5a93`, entry `0x400110`, filesz `0x55b`.
+
+Blocks appended from segment 0x3CC: `disp2` (dispatch tail: `j` → `do_jmp`, `;` →
+`do_comment`, else `fail`), `do_jmp` (name into a scratch at `rsp+0x1F7F0`, then an 8-byte
+compare walk of the symbol table), `found` (compute `rel = target - (here + 2)`, range-check,
+emit `EB rel`), `notfound`, `do_comment`. The dispatch's `jmp fail` was retargeted to `disp2`
+— a same-size rel32 patch, the only change to existing code.
+
+### Gate
+
+```
+src/jmp.s -> 139 bytes, byte-identical to ref/jmp        PASS
+the produced binary exits 7, not 99                      PASS
+exit42, hello_num                                        byte-identical (regressions)
+jump of +120 bytes (24 instructions)  -> eb 78           accepted, exactly at the limit
+jump of +132 bytes (26 instructions)  -> exit 1          refused by the range check
+undefined label                       -> exit 1
+backward jump top:...jmp top          -> b8 3c 00 00 00 eb f9   correct negative rel8
+```
+
+### The pass-1 / pass-2 asymmetry, which is the subtle part
+
+A forward `jmp` cannot be resolved in pass 1, because the label has not been seen yet. So
+`notfound` does not fail unconditionally: it tests `r9d` (the pass flag) and, in pass 1, emits
+a `EB 00` placeholder and advances `r15` by 2 — the correct width, so pass-1 offsets match
+pass-2 offsets — then continues. In pass 2, an unresolved label is a hard error. Without this,
+assembling any program with a forward jump died in pass 1, which is exactly what the first
+attempt did.
+
+### Verification
+
+All 21 branch targets in the new blocks were decoded with `objdump` and compared against the
+intended label offsets before running anything: 21/21. Combined with 2b-1's 15/15, that is 36
+consecutive hand-laid branches verified correct at emission, against six defects in the earlier
+single-block attempt. The decode-before-test step is now the standard, not an improvisation.

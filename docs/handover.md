@@ -48,7 +48,7 @@ sufficient on its own.
 
 | # | Condition | State |
 |---|---|---|
-| 1 | No red oracles | **GREEN as of 2b-1**: 1a, 1b, 2a and 2b-1 all pass (labels, symbol table, two-pass flip). 2b-2 (`jmp`) is not implemented and therefore not claimed — a red result there would block again. |
+| 1 | No red oracles | **GREEN**: 1a, 1b, 2a, 2b-1 and 2b-2 all pass. Labels, symbol table, two-pass flip and `jmp rel8` with a verified ±127 range check. |
 | 2 | Dialect closure | Unknown — `asm0b.s` does not exist yet. Foreseeable needs: `entry` directive (not implemented), more than 32 labels, names > 7 chars. |
 | 3 | Per-form verification | 4 forms verified end to end (`mov r32,imm`, `xor r32,r32`, `syscall`, `db`). 25 more are documented in `docs/encodings.md` but not exercised by any fixture. |
 | 4 | Loud failure | Partial. Unknown mnemonic and unknown register exit 1. But `mov eax,` with no operand assembles as `mov eax, 0` and exits 0, and the `83 /7` immediate range is unenforced. |
@@ -164,6 +164,17 @@ Why the weaker requirement is the right one: it means the source does not have t
 fixpoint then proves the loop is closed. Requiring `X == asm0a` would demand re-deriving a
 1351-byte layout byte for byte, which is a transcription exercise with no verification value.
 
+### Remaining before `asm0a.s` can be written
+
+2c (conditional jumps, `inc`/`dec`, `cmp r32,imm8`, hex literals), then 2d (memory operands
+with SIB/disp8, `movzx`, `div`, `lea`, `test`, `imul`, numeric `db`, `entry`). Then:
+
+   write asm0a.s (~400-600 lines transcribed from the byte listings)
+   X  = asm0a(asm0a.s)      must be a working assembler
+   X' = X(asm0a.s)          must equal X  (fixpoint)
+
+Then every later version is an edit to `asm0a.s`.
+
 ### The next step is therefore unchanged in substance, but re-scoped
 
 2b is split, because the failure mode was hand-laying 441 bytes with 30-odd hand-computed
@@ -172,7 +183,7 @@ displacements:
 | Wave | Content | Gate |
 |---|---|---|
 | **2b-1** | label definitions, label table, pass 1 / pass 2 flip. **No jumps.** | `exit42` and `hello_num` still byte-identical; a program with labels but no jumps assembles identically to the same program without them |
-| **2b-2** | `jmp rel8` with the ±127 check | `src/jmp.s` byte-identical to `ref/jmp` **and** the produced binary exits 7, not 99 |
+| ~~**2b-2**~~ | ~~`jmp rel8` with the ±127 check~~ | **DONE** — `src/jmp.s` byte-identical to `ref/jmp`, binary exits 7, +120 accepted, +132 refused |
 | **2c** | `jz/jnz/jb/ja`, `inc`/`dec r32`, `cmp r32,imm8`, hex literals | a loop fixture whose exit status is the iteration count |
 | **2d** | the remaining forms `asm0a.s` will need: `movzx`, `div`, memory operands with SIB/disp8, `lea`, `sub r64`, `add r8,imm8`, `test`, `imul`, `entry` | `src/count10.s` → `ref/count10` (`e61a23c9…`), then `asm0a.s` self-hosts |
 
