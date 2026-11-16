@@ -314,3 +314,41 @@ double-emitted the ELF header. Caught because the references are executed, not j
 Both were caught by the decode-and-compare step, not by re-reading arithmetic. That step is
 now applied to *patches* as well as new blocks: three patched sites plus 21 new branches were
 verified against intended targets before any test ran.
+
+## Wave 2d-1 — PASS: the 8-bit register class, `mov r8,imm8`, `movzx r32,r8`
+
+Wave 2d is split into four because it is the last and largest: eleven forms stand between here
+and `count10`. 2d-1 installs the machinery the rest of 2d needs — a **register class** — and
+proves it with the two forms that use it.
+
+Artifact: `asm0a`, 1841 bytes, sha `dfd580678c20e17e40d9fc5cb84721a2bc9a6eff3044ca2e959060273279493d`, entry `0x400110`, filesz `0x731`.
+
+New blocks: `mdisp` (disambiguates `mov`/`movzx`/`mov r8` by looking at character 3 and 6),
+`do_mov8`, `do_movzx`, `lookup8` (an 8-entry table `al cl dl bl ah ch dh bh`, compared with a
+**16-bit** `cmp ax,[rcx]` because 8-bit names are 2 characters), and the `R8TAB` data.
+
+`lookup8` leaves `rbx` past the name and past a following comma *if there is one* — the
+conditional skip is load-bearing: a fixed skip of 3 stepped over the newline for
+`movzx edi, bl` (last operand on the line), and `eol3` then ate the following instruction.
+
+### Gate
+
+```
+snapshot  asm0a exit  byte-identical  behaviour
+r8        0           yes             exit 7
+exit42, hello_num, jmp, loop, jz — all byte-identical (regressions)
+```
+
+### Defects found this sub-wave
+
+1. **`66 3B 01` is 3 bytes, not 4** (16-bit `cmp`), so `lookup8` was 44 not 45 and the table,
+   its address and two displacements were each one byte off.
+2. **`do_mov8` never advanced past the register name**, so the number parser started at `'b'`
+   and every immediate came out 0 — `mov bl, 7` assembled to `b3 00`. Caught by byte comparison
+   against the reference, not by reading the code.
+3. **Address computed from a *file* offset as if it were a segment offset**: `0x400078 + 0x711`
+   instead of `0x400000 + 0x711`. The table pointer was 0x78 too high and every lookup missed.
+4. **The `0F 84` patch at opcode+1 again** (rel32 is at opcode+2), which clobbered the `84` and
+   made `asm0a` itself `SIGILL` on every input — including five previously-passing ones. That
+   loud, total failure is the only reason it took seconds to find; the same mistake inside a
+   rarely-taken branch would have been invisible.
