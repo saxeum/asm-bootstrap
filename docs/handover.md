@@ -192,3 +192,43 @@ branch in it with `objdump` and compare its target against the intended label of
 mechanical check, before appending the next block. Six of six 2b defects were displacement or
 REX arithmetic that decoding would have caught immediately; none were caught by re-reading the
 hex.
+
+## Next: rel32 branches (the last item before `asm1.s`)
+
+Why it is needed: a self-hosted assembler's source will exceed ±127 bytes between a branch and
+its label many times over. Every fixture so far fits in rel8, which is why this has not bitten.
+
+Why it is not free: rel8 and rel32 must **coexist**. `ref/count10` contains `72 cc` (`jb`, rel8)
+and `ref/jmp` contains `eb 05`; if the dialect emitted rel32 always, all 15 fixtures would
+mismatch. So the width must be explicit in the source, not guessed.
+
+### Design (decided; not implemented)
+
+Syntax: a `.l` suffix — `jmp.l`, `jz.l`, `jnz.l`, `jb.l`. Explicit beats automatic here:
+auto-widening makes instruction size depend on distance, which is the branch-relaxation problem
+and needs iteration to a fixpoint; a suffix is deterministic in both passes.
+
+Mechanism, using the fact that `r11d` already carries the short opcode:
+
+- long op blocks set `r11d = 0x100 | opcode` (jcc) or `0x300 | opcode` (jmp), and `add rbx,6`
+  instead of `4` (the mnemonic is `jXX.l`, five characters plus the space);
+- `do_br`'s found path tests `r11d & 0x100` and jumps to an appended `found_long` when set, so
+  the existing short path is untouched — additive, no relayout;
+- `found_long` computes `rel = target − (here + 5)` for `E9` and `− (here + 6)` for `0F 8x`,
+  skips the ±127 check (rel32 covers the whole address space we use), and emits
+  1 byte (`E9`) or 2 bytes (`0F`, `r11b+0x10`) followed by 4 displacement bytes.
+
+Suffix detection is the awkward part and needs three equal-size patches: `jdisp` dispatches on
+`[rbx+1]` (`m`/`n`/`z` → jmp/jnz/jz) *before* anything could notice a `.l`, so each of its three
+`je` sites (6-byte rel32) retargets to a small shim that tests `[rbx+3] == '.'` and then jumps
+either to the short op block or the long one. `jb` lives in a second chain and needs the same
+treatment.
+
+### Rules this wave must obey, learned expensively
+
+1. Patch at **opcode + 2 for `0F 8x`**, opcode + 1 for `E9`/`EB`/`74`/`75`/`72`. Nine defects in
+   2d-11 were this.
+2. Never mix file and segment offsets. They differ by `0x78`. Six defects were this.
+3. Run `tools/check-branches.sh` **after every patch**, not after the wave. It caught two of
+   nine in 2d-11 only because it was run at all; it would have caught all nine if run per write.
+4. Re-pin `docs/branches.tsv` after a verified wave, and re-run `--selftest`.
