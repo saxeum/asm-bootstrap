@@ -448,34 +448,66 @@ cmp al, 108
 jnz.l d_j
 jmp.l plea
 d_j:
+; The mnemonic must be matched in full. Deciding on the first two characters
+; alone turned `jbe` into `jb`, `jnb` into `jnz` and `jno` into `jnz`: a wrong
+; instruction, assembled silently. That is asm0a's `and`-as-`add` defect in this
+; assembler, and it was found by using `jbe` in my own compiler -- the coverage
+; gate noticed the mnemonic and the build refused it.
 cmp al, 106
 jnz.l d_r
 movzx edx, byte [rbx+1]
 cmp dl, 98
-jz.l jb3
+jz jb3
 cmp dl, 122
-jz.l jz3
+jz jz3
 cmp dl, 110
-jz.l jnz4
+jnz d_jmp
+movzx edx, byte [rbx+2]
+cmp dl, 122
+jnz.l fail
+jmp jnz4
+d_jmp:
 cmp dl, 109
-jz.l jmp4
-jmp.l fail
+jnz.l fail
+movzx edx, byte [rbx+2]
+cmp dl, 112
+jnz.l fail
+jmp jmp4
 jb3:
+movzx eax, byte [rbx+2]
+call jend
 mov eax, 114
 mov [rbp+92], eax
 jmp.l jscn
 jz3:
+movzx eax, byte [rbx+2]
+call jend
 mov eax, 116
 mov [rbp+92], eax
 jmp.l jscn
 jnz4:
+movzx eax, byte [rbx+3]
+call jend
 mov eax, 117
 mov [rbp+92], eax
 jmp.l jscn
 jmp4:
+movzx eax, byte [rbx+3]
+call jend
 mov eax, 235
 mov [rbp+92], eax
 jmp.l jscn
+jend:
+; the byte after a mnemonic must be a delimiter: space, tab, or the dot of the
+; `.l` form. Anything else means the mnemonic was longer than what was matched.
+cmp al, 32
+jz jendx
+cmp al, 9
+jz jendx
+cmp al, 46
+jnz.l fail
+jendx:
+ret
 psp:
 lea rbx, [rbx+1]
 jmp.l pline
@@ -549,16 +581,34 @@ call expr
 mov [rbp+36], ecx
 mov eax, 0
 mov [rbp-64], eax
-movzx eax, byte [rbp+10]
-mov [rbp+11], al
+mov [rbp-72], eax
 mov eax, [rbp+32]
 mov [rbp-68], eax
+movzx eax, byte [rbp+10]
+mov [rbp+11], al
 call rex
+; A 64-bit destination CANNOT use B8+rd: with REX.W that opcode takes an
+; eight-byte immediate, so `mov rax, 1` as `48 b8 01000000` is a nine-byte
+; instruction whose immediate swallows the next four bytes of the program.
+; The narrow form for a value that fits in 32 bits is C7 /0 id, sign-extended.
+movzx eax, byte [rbp+10]
+cmp eax, 0
+jz pmv32
+mov eax, 199            ; C7 /0
+call emital
+mov eax, [rbp+32]
+and eax, 7
+mov edx, 192
+add eax, edx
+call emital
+jmp pmvimm
+pmv32:
 mov eax, [rbp+32]
 and eax, 7
 mov edx, 184
 add eax, edx
 call emital
+pmvimm:
 movzx eax, byte [rbp+36]
 call emital
 movzx eax, byte [rbp+37]

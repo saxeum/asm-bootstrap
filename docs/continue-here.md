@@ -15,15 +15,16 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | | bytes | sha256 (16) | notes |
 |---|---|---|---|
 | `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
-| `asm1` | 7 506 | `9ae3db24b9d814dd` | built by `seed/asm1` from `src/asm1.s` |
-| `seed/asm1` | 7 506 | `9ae3db24b9d814dd` | the promoted stage; identical to `asm1` |
+| `asm1` | 7 623 | `0ea314055fc9d3f5` | built by `seed/asm1` from `src/asm1.s` |
+| `seed/asm1` | 7 623 | `0ea314055fc9d3f5` | the promoted stage; identical to `asm1` |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
-| `src/asm1.s` | 28 535 | — | 2 049 lines, 192 labels (limit 256, 7 of them duplicated dead code) |
+| `src/asm1.s` | 29 886 | — | 2 099 lines, 196 labels (limit 256, 7 of them duplicated dead code) |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
+| `cc` | 2 917 | `bd287ed7e43e65b5` | built by `asm1` from `src/cc.s` (928 lines) — C to dialect TEXT |
 
 Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 12 reject sources · **30 capability
-pairs** · **5 superiority cases** (byte-level) + 3 behavioural · 5 exact messages · 38 decoder cases ·
-**88 coverage forms** · **5 cc gates** · 290 branch pins · 36 provenance records.
+pairs** · **5 superiority cases** (byte-level) + 3 behavioural · 7 exact messages · 38 decoder cases ·
+**88 coverage forms** · **6 cc gates** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 
@@ -32,9 +33,9 @@ make clean && make && make check
 ```
 
 `make check` must print, in order: **forbidden tools: none invoked** · **coverage 88/88 forms
-exercised** · fixpoint holds · bootstrap NOT APPLICABLE · 12/12 rejections · 5/5 exact messages ·
+exercised** · fixpoint holds · bootstrap NOT APPLICABLE · 12/12 rejections · 7/7 exact messages ·
 30/30 capability pairs · 5/5 superiority cases (plus the 99 KB, `entry` and r8d cases) · 38/38 decoder
-cases · cc 5 gates · 36 provenance records · SHAS match · `asm1.sha` match · and a real **`branch pins: 290/290`**
+cases · cc 6 gates · 36 provenance records · SHAS match · `asm1.sha` match · and a real **`branch pins: 290/290`**
 line naming both the subject's sha and the decoder's. If any line is missing or red, stop and fix
 that first.
 
@@ -88,6 +89,24 @@ own golden and runs.
 was rejected because the lexer did not stop a symbol at `+` or `-` (fixed, pinned by the pair
 `expr-nospace`). `docs/cc.md` lists the other seven edges the first client hit and the gate for
 each thing that comes next.
+
+## Stage 1 of the compiler: variables and a loop
+
+`cc` 2 030 -> 2 917 bytes. The subset now has `int x = N;`, `x = x ± N;` and `while (x) { … }`,
+with one local at `[rbp-8]` and the prologue a person would write. `make test-cc` grew a
+sixth gate, and it is a new kind of oracle: the compiled loop's **output** is compared with
+the output of `tests/oracle/dots.s`, the same program written by hand in the dialect. Two
+sources, one behaviour, neither produced by the other.
+
+That gate found two wrong answers the same day, both in `docs/encodings.md`:
+
+- **`mov r64, imm` was one byte short.** `B8+rd` with `REX.W` takes an eight-byte immediate;
+  `mov rax, 1` emitted nine bytes and the immediate ate the next four bytes of the program.
+  Now `C7 /0 id`. My own hand-computed expectation had the same error, so the byte gate was
+  satisfied — the oracle program segfaulted, and the CPU was the only witness that disagreed.
+- **`jbe` assembled as `jb`**, `jnb`/`jno`/`jns` as `jnz`: the dispatcher decided on two
+  characters. That is `asm0a`'s `and`-as-`add` defect inside `asm1`. Mnemonics are matched in
+  full now, followed by a delimiter, and `jbe x` is a pinned rejection.
 
 ## The next assembler work: `.data`, then disp32
 

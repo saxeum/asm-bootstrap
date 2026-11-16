@@ -11,6 +11,6 @@
 488903        # mov [rbx], rax  48 89 /r
 01d8          # add eax, ebx    01 /r         the 32-bit control
 8b03          # mov eax, [rbx]  8B /r         the 32-bit control
-48b801000000  # mov rax, 1      48 B8+rd id
+48c7c001000000 # mov rax, 1      48 C7 /0 id, sign-extended: B8+rd would take 8 bytes
 4839d8        # cmp rax, rbx    48 39 /r      reg=rbx rm=rax
 48f7d8        # neg rax         48 F7 /3

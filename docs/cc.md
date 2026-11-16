@@ -112,8 +112,9 @@ make test-cc
 | 1 | `cc < helloworld.c` is byte-identical to `tests/golden/hello.s` | the emitted text changes shape |
 | 2 | `asm1 < tests/golden/hello.s` produces a binary | the golden is not assemblable |
 | 3 | that binary writes exactly `Hello, World!\n` and exits 0 | the semantics are wrong |
-| 4 | eight inputs outside the subset are refused: exit 1, **no output at all** | the front end guesses |
-| 5 | a second program (two writes, `return 255`) matches its own golden and runs | only one case ever works |
+| 4 | a second program (two writes, `return 255`) matches its own golden and runs | only one case ever works |
+| 5 | a compiled `while` loop matches its golden **and** the output of a hand-written dialect program | the compiler emits plausible wrong code, or the loop is wrong |
+| 6 | ten inputs outside the subset are refused, with no output | the front end guesses |
 
 Gate 3 is what makes gate 1 mean anything. The golden cannot be an *oracle* for its own text — it is
 a regression pin, and its validity rests on the machine judging the binary it assembles to. That is
@@ -191,3 +192,55 @@ registers were assigned differently.
 
 But it *is* the whole pipeline, gated, with a program at the end that prints the right bytes — and the
 list above is what the next gates have to be.
+
+## Stage 1: variables and a loop
+
+The subset grew by exactly what the next program needed, and no more:
+
+```
+stmt := 'int' 'x' '=' num ';'                 one local, once
+      | 'x' '=' 'x' ('+'|'-') num ';'         arithmetic on it
+      | 'while' '(' 'x' ')' block             loop while it is non-zero
+      | 'write' '(' string ')' ';'
+      | 'return' num ';'                      last
+```
+
+The emitted code is what a person would write: a prologue (`push rbp` / `mov rbp, rsp`), the local at
+`[rbp-8]`, `mov ecx, N` + `add eax, ecx` because `add r32, imm32` does not exist, and loops with
+`.l` branches because a loop body can exceed rel8's 127 bytes and the assembler refuses rather than
+wraps:
+
+```
+L1:
+mov eax, [rbp-8]
+cmp eax, 0
+jz.l L1e
+<body>
+jmp.l L1
+L1e:
+```
+
+### The gate for it is a second implementation
+
+`tests/golden/loop.c ` is compiled and compared byte for byte against its golden; the golden is
+assembled and **run**; and the compiled program's output is compared against the output of
+`tests/oracle/dots.s` — the same program written **by hand in the dialect**, assembled by the same
+assembler. Two sources, one behaviour, and neither is produced by the other:
+
+```
+  cc    a while loop: same output as the hand-written dialect program
+```
+
+That is a different kind of oracle from `ref/`: it does not compare bytes, it compares *meaning*, and
+it is the only gate that would notice a compiler bug that emits wrong-but-plausible code for a
+construct. It earned its place immediately — the hand-written program segfaulted on `mov r12, 10`,
+which is how the `B8+rd`/`REX.W` defect above was found.
+
+## Still not there
+
+- **No expressions.** `x = x + 1 + 1` is not parsed; the right-hand side is exactly `x ± number`.
+- **One variable**, named `x`, at a fixed slot.
+- **Unsigned semantics only.** `while (x)` is `cmp eax, 0` + `jz`, which is exact for the 0..255 the
+  subset allows and would be wrong for negatives — so negatives are not in the subset.
+- **No functions, no calls, no `if`.** `write` is still a statement because there is no calling
+  convention to call anything with.

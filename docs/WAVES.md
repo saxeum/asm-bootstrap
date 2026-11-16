@@ -2021,3 +2021,51 @@ and the first one is the interesting one:
 The general lesson is the same one the gates keep teaching: if a step can be skipped by someone
 following the instructions, then the instructions are part of the system, and the fix belongs in the
 system rather than in a stronger warning.
+
+## Variables, a loop, and two wrong answers that only *using* the assembler could find
+
+The compiler grew by what the next program needed: one local (`int x = N;`), arithmetic on it
+(`x = x ± N;`), and `while (x) { … }`. `cc` 2030 → 2917 bytes. The emitted code is what a person
+would write — a prologue, `[rbp-8]`, `mov ecx, N` + `add eax, ecx` because `add r32, imm32` does not
+exist, and `.l` loop branches because a body can exceed rel8.
+
+The gate is the interesting part: a **hand-written dialect program** doing the same thing
+(`tests/oracle/dots.s`), and the compiled program's output compared against the oracle's. Two
+sources, one behaviour, neither produced by the other. It is not a byte comparison; it compares
+meaning, and it is the only thing that would catch plausible-but-wrong codegen.
+
+It earned its place on first use, by segfaulting.
+
+### `mov r64, imm` was one byte too short, and my hand-computed expectation agreed with it
+
+`B8+rd` with `REX.W` takes an **eight-byte** immediate. `mov rax, 1` was emitted as
+`48 b8 01 00 00 00` — nine bytes where the CPU reads ten, so the immediate swallowed the next four
+bytes of the program. The narrow form is `C7 /0 id`, sign-extended.
+
+`tests/superior/width64.hex` had `48b801000000` *hand-computed* as correct. Encoder and expectation
+shared one misunderstanding, so `cmp` was satisfied and the fixture passed. What caught it was the
+oracle program using `mov r12, 10` and segfaulting: sixty bytes of code, one candidate, and the CPU
+as the only disagreeing witness. Fixed in `pmov`, and all three affected expectations recomputed by
+hand.
+
+This is the strongest argument yet for the split the compiler gates are built on: **bytes are pinned
+by hand, meaning is pinned by execution**, and a shared misunderstanding defeats the first while the
+machine defeats both.
+
+### `jbe` assembled as `jb`
+
+The branch dispatcher decided on the first two characters after `j`, so `jbe` → `jb`, `jnb` → `jnz`,
+`jno` → `jnz`, `jns` → `jnz`. Silent wrong instructions — literally `asm0a`'s `and`-as-`add` defect,
+in `asm1`, five waves after that defect was written up as the bootstrap's worst property.
+
+Two gates caught each other here. The *coverage* gate noticed the mnemonic `jbe` in a corpus file (my
+compiler used it) and demanded a claim; the *build* then refused it. Mnemonics are now matched in
+full (`jn` must be followed by `z`, `jm` by `p`) and terminated by a delimiter (`jend`: space, tab,
+`.`), so `jne`, `jnb`, `jno`, `jns`, `jbe` are rejections, pinned by `make test-msg-exact` (now 7
+cases). And `cc`'s own loop bound, which had relied on `jbe`, became `mov ecx, 10` + `jb`.
+
+### Also fixed while passing through
+
+`tools/shape.awk` did not strip labels containing capitals (`f_L:` in `cc.s`), so the coverage census
+reported a mnemonic called `f_L:`; the label character class is now `[A-Za-z_0-9]`, matching what
+`lcpy` actually accepts.

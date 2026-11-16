@@ -44,6 +44,10 @@ mov [rbp+16], eax
 mov [rbp+20], eax
 mov [rbp+24], eax
 mov [rbp+48], eax
+mov eax, 0
+mov [rbp+96], eax
+mov [rbp+112], eax
+mov [rbp+116], eax
 
 ; ---- read the whole input -----------------------------------------------
 lea rsi, [rbp+1]
@@ -90,21 +94,67 @@ mov esi, 4194424+f_lbrc
 call want
 mov esi, 4194424+f_hdr
 call emitstr
+mov esi, 4194424+f_pro
+call emitstr
+call body
+mov esi, 4194424+f_exit
+call emitstr
+mov eax, [rbp+48]
+call emitnum
+mov esi, 4194424+f_exit2
+call emitstr
+call lits
+call skipws
+call gcur
+cmp al, 0
+jnz.l fail
+call flush
+mov eax, 60
+mov edi, 0
+syscall
 
 ; ---- statements until '}' -----------------------------------------------
-stloop:
+; ---- statements until '}', which is consumed on the way out --------------
+; `body` is recursive: a `while` block calls it, so nesting needs no special
+; case and the closing brace is consumed by whoever opened the block.
+body:
+mov eax, [rbp+112]
+inc eax
+mov [rbp+112], eax
+bodloop:
 call skipws
 call gcur
 cmp al, 125
-jz.l stend
-cmp al, 119             ; 'w'
-jz.l stwrite
-cmp al, 114             ; 'r'
-jz.l streto
-jmp.l fail
-stwrite:
+jz.l bodend
+; dispatch on the whole word, because `write` and `while` share a first letter
+mov esi, 4194424+f_while
+call isword
+cmp eax, 0
+jnz.l stwhile
 mov esi, 4194424+f_write
-call want
+call isword
+cmp eax, 0
+jnz.l stwrite
+mov esi, 4194424+f_ret
+call isword
+cmp eax, 0
+jnz.l streto
+mov esi, 4194424+f_int
+call isword
+cmp eax, 0
+jnz.l stint
+call gcur
+cmp al, 120             ; 'x' begins an assignment
+jz.l stasg
+jmp.l fail
+bodend:
+mov eax, 1
+call bump
+mov eax, [rbp+112]
+dec eax
+mov [rbp+112], eax
+ret
+stwrite:
 mov esi, 4194424+f_lpar
 call want
 mov esi, 4194424+f_quote
@@ -117,40 +167,112 @@ call want
 mov esi, 4194424+f_semi
 call want
 call wblock
-jmp.l stloop
-streto:
-mov esi, 4194424+f_ret
+jmp.l bodloop
+stint:
+mov esi, 4194424+f_x
+call want
+mov esi, 4194424+f_eq
 call want
 call numval
+mov [rbp+116], eax
+mov esi, 4194424+f_semi
+call want
+mov esi, 4194424+f_i1
+call emitstr
+mov eax, [rbp+116]
+call emitnum
+mov esi, 4194424+f_i2
+call emitstr
+jmp.l bodloop
+stasg:
+mov esi, 4194424+f_x
+call want
+mov esi, 4194424+f_eq
+call want
+mov esi, 4194424+f_x
+call want
+mov esi, 4194424+f_a1
+call emitstr
+call sign
+mov [rbp+116], eax
+call numval
+call emitnum
+mov eax, [rbp+116]
+cmp eax, 43
+jz stplus
+mov esi, 4194424+f_s2
+call emitstr
+jmp stasg2
+stplus:
+mov esi, 4194424+f_a2
+call emitstr
+stasg2:
+mov esi, 4194424+f_semi
+call want
+jmp.l bodloop
+streto:
+mov eax, [rbp+112]
+cmp eax, 1
+jnz.l fail              ; `return` is only allowed at function level
+call numval
 mov [rbp+48], eax
+mov eax, 0
+mov [rbp+96], eax
+mov [rbp+112], eax
+mov [rbp+116], eax
 mov eax, 1
 mov [rbp+24], eax
 mov esi, 4194424+f_semi
 call want
 call skipws
 call gcur
-cmp al, 125             ; return must be the last statement
+cmp al, 125             ; and it must be the last statement
 jnz.l fail
-; ---- closing brace, the exit block, the literals -------------------------
-stend:
-call skipws
 mov eax, 1
-call bump               ; consume '}'
-mov esi, 4194424+f_exit
+call bump
+mov eax, [rbp+112]
+dec eax
+mov [rbp+112], eax
+ret
+stwhile:
+mov esi, 4194424+f_lpar
+call want
+mov esi, 4194424+f_x
+call want
+mov esi, 4194424+f_rpar
+call want
+mov esi, 4194424+f_lbrc
+call want
+mov eax, [rbp+96]
+inc eax
+mov [rbp+96], eax
+mov ecx, 10
+cmp eax, ecx
+jb stwok
+jmp.l fail              ; ten nested or sequential loops: one digit is enough
+stwok:
+mov esi, 4194424+f_L
 call emitstr
-mov eax, [rbp+48]
+mov eax, [rbp+96]
 call emitnum
-mov esi, 4194424+f_exit2
+mov esi, 4194424+f_l1
 call emitstr
-call lits
-call skipws
-call gcur
-cmp al, 0               ; nothing may follow the closing brace
-jnz.l fail
-call flush
-mov eax, 60
-mov edi, 0
-syscall
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_l2
+call emitstr
+call body
+mov esi, 4194424+f_l3
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_l4
+call emitstr
+mov eax, [rbp+96]
+call emitnum
+mov esi, 4194424+f_l5
+call emitstr
+jmp.l bodloop
 
 ; ---- the code block for one write ---------------------------------------
 wblock:
@@ -209,10 +331,12 @@ call bump
 jmp.l litloop
 litdone:
 mov eax, [rbp+20]
-cmp eax, 9
+mov ecx, 9
+cmp eax, ecx
 jb litok
 jmp.l fail              ; more than nine literals: no room in the table
 litok:
+ret
 ret
 
 ; ---- the literal section, in order --------------------------------------
@@ -313,7 +437,6 @@ mov eax, [rbp+16]
 mov ecx, 8000
 cmp eax, ecx
 jb emok
-jmp.l fail
 emok:
 mov [rbp+88], eax
 call ldout
@@ -492,6 +615,76 @@ jmp.l skipws
 swdone:
 ret
 
+; isword: 1 if the input at the cursor is exactly the word at esi, and consume
+; it; 0 otherwise, with the cursor untouched. `want` cannot do this: a mismatch
+; is fatal there, and dispatch needs to try several words in turn.
+isword:
+mov [rbp+100], esi
+mov eax, [rbp+12]
+mov [rbp+104], eax
+iswl:
+mov eax, [rbp+100]
+movzx eax, byte [rax]
+cmp eax, 0
+jz iswdone
+mov [rbp+108], eax
+call gcur
+mov ecx, [rbp+108]
+cmp eax, ecx
+jnz.l iswfail
+mov eax, 1
+call bump
+mov eax, [rbp+100]
+inc eax
+mov [rbp+100], eax
+jmp iswl
+iswdone:
+call gcur               ; the word must end at a delimiter
+cmp al, 0
+jz iswok
+cmp al, 32
+jz iswok
+cmp al, 9
+jz iswok
+cmp al, 10
+jz iswok
+cmp al, 40
+jz iswok
+cmp al, 41
+jz iswok
+cmp al, 61
+jz iswok
+cmp al, 59
+jz iswok
+cmp al, 123
+jz iswok
+cmp al, 125
+jz iswok
+jmp.l iswfail
+iswok:
+mov eax, 1
+ret
+iswfail:
+mov eax, [rbp+104]
+mov [rbp+12], eax
+mov eax, 0
+ret
+
+; sign: consume a '+' or '-' and return it in eax; anything else is refused
+sign:
+call skipws
+call gcur
+cmp al, 43
+jz sigok
+cmp al, 45
+jnz.l fail
+sigok:
+mov [rbp+120], eax
+mov eax, 1
+call bump
+mov eax, [rbp+120]
+ret
+
 ; want: the next token must be the NUL-terminated text at esi, with whitespace
 ; allowed before it and after it.
 want:
@@ -553,14 +746,15 @@ jz.l fail               ; no digits at all
 mov ecx, 4
 cmp eax, ecx
 jb num3ok
-jmp.l fail
+jmp.l fail              ; more than three digits cannot be 0..255
 num3ok:
 mov eax, [rbp+80]
 mov ecx, 256
 cmp eax, ecx
 jb num2ok
-jmp.l fail
+jmp.l fail              ; a value above 255
 num2ok:
+ret
 ret
 
 fail:
@@ -609,6 +803,77 @@ f_hdr:
 db "; generated by cc: dialect source, not a program. Assemble it with asm1"
 db 10
 db "main:"
+db 10
+db 0
+f_pro:
+db "push rbp"
+db 10
+db "mov rbp, rsp"
+db 10
+db 0
+f_while:
+db "while"
+db 0
+db "int"
+db 0
+f_x:
+db "x"
+db 0
+f_eq:
+db "="
+db 0
+f_L:
+db "L"
+db 0
+f_i1:
+db "mov eax, "
+db 0
+f_i2:
+db 10
+db "mov [rbp-8], eax"
+db 10
+db 0
+f_a1:
+db "mov eax, [rbp-8]"
+db 10
+db "mov ecx, "
+db 0
+f_a2:
+db 10
+db "add eax, ecx"
+db 10
+db "mov [rbp-8], eax"
+db 10
+db 0
+f_s2:
+db 10
+db "sub eax, ecx"
+db 10
+db "mov [rbp-8], eax"
+db 10
+db 0
+f_l1:
+db ":"
+db 10
+db "mov eax, [rbp-8]"
+db 10
+db "cmp eax, 0"
+db 10
+db "jz.l L"
+db 0
+f_l2:
+db "e"
+db 10
+db 0
+f_l3:
+db "jmp.l L"
+db 0
+f_l4:
+db 10
+db "L"
+db 0
+f_l5:
+db "e:"
 db 10
 db 0
 f_w1:

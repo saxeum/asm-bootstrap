@@ -305,6 +305,19 @@ test-cc: cc asm1
 	    printf '  cc    two writes and return 255: prints ABB, exits 255\n'; \
 	  else echo "  twowrites exited $$got, wrote [$$(cat $$tmp/two)]"; fail=1; fi; \
 	else echo "  asm1 refuses tests/golden/twowrites.s"; fail=1; fi; \
+	if $(CC) < tests/golden/loop.c > $$tmp/loop.s 2>/dev/null && cmp -s $$tmp/loop.s tests/golden/loop.s; then :; \
+	else echo "  loop.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/loop.s > $$tmp/loop 2>/dev/null && $(ASM1) < tests/oracle/dots.s > $$tmp/dots 2>/dev/null; then \
+	  chmod +x $$tmp/loop $$tmp/dots; \
+	  if $$tmp/loop > $$tmp/a; then g1=0; else g1=$$?; fi; \
+	  if $$tmp/dots > $$tmp/b; then g2=0; else g2=$$?; fi; \
+	  printf '..........' > $$tmp/ten; \
+	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ] && cmp -s $$tmp/a $$tmp/ten && cmp -s $$tmp/a $$tmp/b; then \
+	    printf '  cc    a while loop: same output as the hand-written dialect program\n'; \
+	  else \
+	    echo "  loop case: exits $$g1/$$g2, [$$(cat $$tmp/a)] vs [$$(cat $$tmp/b)]"; fail=1; fi; \
+	else \
+	  echo "  the loop case does not assemble"; fail=1; fi; \
 	refuse() { \
 	  n=$$((n+1)); \
 	  printf '%s' "$$1" > $$tmp/bad.c; \
@@ -320,6 +333,8 @@ test-cc: cc asm1
 	refuse 'void main(void) {}'; \
 	refuse 'int main(void) { write("a"); write("b"); write("c"); write("d"); write("e"); write("f"); write("g"); write("h"); write("i"); write("j"); }'; \
 	refuse '/* unterminated'; \
+	refuse 'int main(void) { x = 1; }'; \
+	refuse 'int main(void) { while (y) { } }'; \
 	if [ $$ok -ne $$n ]; then echo "  cc: $$ok/$$n refusals"; fail=1; fi; \
 	printf '  cc    %s/%s rejections outside the subset, with no output\n' $$ok $$n; \
 	exit $$fail
@@ -484,5 +499,7 @@ test-msg-exact: asm1
 	check "line 1: label" "db nosuch"; \
 	check "line 1: label" "jmp nosuch"; \
 	check "line 2: rejected" "mov eax, 1\nfrobnicate 1"; \
-	printf '  messages %s/5 exact: line number and reason\n' $$ok; \
+	check "line 1: rejected" "jbe x"; \
+	check "line 1: rejected" "jnb x"; \
+	printf '  messages %s/7 exact: line number and reason\n' $$ok; \
 	exit $$fail

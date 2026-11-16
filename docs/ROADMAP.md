@@ -1119,3 +1119,29 @@ the lexer did not stop a symbol at `+` or `-`.
 The next two items are unchanged and now have a user: `.data`, then disp32. After those, the C subset
 grows by the thing it is missing most: a calling convention, with a fixture whose output is wrong if
 the register assignment is wrong.
+
+## Stage 1 of the compiler: variables, a loop, and the oracle that found two bugs
+
+`cc` 2 030 → 2 917 bytes. Subset: `int x = N;`, `x = x ± N;`, `while (x) { … }`, plus what stage 0
+had. Emitted code is a prologue, one local at `[rbp-8]`, `mov ecx, N` + `add eax, ecx` (no
+`add r32,imm32`), and `.l` loop branches (rel8 is 127 bytes and a body exceeds it).
+
+The sixth gate is a new *kind* of oracle for this project: the compiled loop's output is compared
+against the output of `tests/oracle/dots.s` — the same program written by hand in the dialect. Two
+sources, one behaviour, neither derived from the other. It is the only gate that catches
+plausible-but-wrong codegen, and it caught two real defects on first use:
+
+- **`mov r64, imm` was one byte short.** `B8+rd` with `REX.W` takes an eight-byte immediate, so
+  `mov rax, 1` as `48 b8 01000000` swallowed the next four bytes of the program. Now `C7 /0 id`.
+  My own hand-computed expectation in `tests/superior/width64.hex` contained the same error and the
+  byte gate passed; the oracle program segfaulted and the CPU disagreed. **A shared misunderstanding
+  is invisible to the encoder and to its expectation, and obvious to the machine.**
+- **`jbe` assembled as `jb`** — and `jnb`/`jno`/`jns` as `jnz` — because the branch dispatcher
+  decided on two characters. That is `asm0a`'s `and`-as-`add` defect reproduced in `asm1`. Mnemonics
+  are matched in full now, followed by a delimiter; five more mnemonics are pinned rejections.
+
+The coverage gate and the build caught each other here: the census noticed the mnemonic `jbe` in
+`src/cc.s` and demanded a claim, and the build then refused it.
+
+Next for the compiler: expressions (`x = x + 1 + 1`), then `if`, then a second variable. Next for the
+assembler, unchanged and still without a pressing user: `.data`, then disp32.

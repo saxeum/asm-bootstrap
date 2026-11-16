@@ -225,7 +225,7 @@ byte, one place to look.
 | `add`/`sub`/`and`/`or`/`test`/`cmp` r,r | `01`/`29`/`21`/`09`/`85`/`39` `/r` | `48` + same |
 | `add`/`and`/`or`/`test`/`cmp` r,imm32 | `81` or `F7` `/digit` | `48` + same |
 | `mov r,r` / `mov [mem],r` / `mov r,[mem]` | `89`/`89`/`8B` `/r` | `48` + same |
-| `mov r,imm32` | `B8+rd` | `48 B8+rd` |
+| `mov r64, imm32` | `48 C7 /0 id` | `C7` | 0 | `MOV Evqp, Ivqp` (`REX.W` + sign-extended imm32; **not** `48 B8+rd`, which takes eight immediate bytes) |
 | `inc`/`dec`/`neg`/`not` | `FF`/`F7` `/digit` | `48` + same |
 | `shl`/`shr`/`sar r,imm8` | `C1` `/digit ib` | `48` + same |
 | `imul r,r` | `0F AF /r` | `48 0F AF /r` |
@@ -312,3 +312,50 @@ exist. It exists now, so the case assembled and `make test-reject` failed — th
 premise had changed. It now holds `mov r7, 1` and `mov r16, 1`, which are still not registers. A
 reject case that passes for a reason nobody intended is a hole, and the fix is to replace the input,
 never to delete the case.
+
+## Two wrong answers found by *using* the assembler, not by reading it
+
+Both were found in one session by writing a compiler against this dialect. Neither was visible in
+the test suite, and one of them was actively *blessed* by a hand-computed expectation that contained
+the same misunderstanding.
+
+### `mov r64, imm` was nine bytes long where the CPU reads ten
+
+`B8+rd` with `REX.W` is `MOV r64, imm64`: the immediate is **eight** bytes. `mov rax, 1` was emitted
+as `48 b8 01 00 00 00` — a nine-byte instruction whose immediate swallows the next four bytes of the
+program, so every instruction after it is misread.
+
+The narrow form for a value that fits in 32 bits is `C7 /0 id`, sign-extended:
+
+```
+before                          after
+mov rax, 1  -> 48 b8 01000000   mov rax, 1  -> 48 c7 c0 01000000
+mov r12, 10 -> 49 bc 0a000000   mov r12, 10 -> 49 c7 c4 0a000000
+mov eax, 1  -> b8 01000000      unchanged: 32-bit keeps B8+rd, and that is what
+                                every hand-emitted ref/ fixture contains
+```
+
+**`tests/superior/width64.hex` had `48b801000000` hand-computed as correct**, so the byte comparison
+agreed with the defect. What caught it was the *machine*: a hand-written dialect program that used
+`mov r12, 10` segfaulted, and the sixty-byte program had one candidate. This is the strongest
+evidence in the repo for running what you build — a shared misunderstanding between encoder and
+expectation is invisible to both, and visible immediately to the CPU.
+
+### `jbe` assembled as `jb`, `jnb` and `jno` as `jnz`
+
+The branch dispatcher decided on the first two characters after `j`: `b` → `jb`, `z` → `jz`, `n` →
+`jnz`, `m` → `jmp`. Anything longer that *started* that way was silently the shorter instruction:
+
+```
+jbe x -> 72 fe   (jb)      jnb x -> 75 fe   (jnz)      jno x -> 75 fe   (jnz)
+```
+
+That is `asm0a`'s `and`-as-`add` defect, in `asm1`, five waves after it was written up as the
+bootstrap's worst property. The mnemonics are now matched in full (`jn` must be followed by `z`, `jm`
+by `p`) and followed by a delimiter (`jend`: space, tab or `.`), so a longer mnemonic is refused
+instead of being truncated. `jne`, `jnb`, `jno`, `jns`, `jbe` are all rejections now, pinned by
+`make test-msg-exact`.
+
+It was found by the coverage gate noticing the mnemonic `jbe` in a corpus file — my own compiler used
+it — and the build then refusing it. Two gates catching each other's blind spots is the arrangement
+working.

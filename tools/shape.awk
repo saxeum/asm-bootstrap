@@ -64,7 +64,7 @@ function operand(t) {
 	line = $0
 	sub(/;.*/, "", line)
 	gsub(/^[ \t]+|[ \t]+$/, "", line)
-	while (line ~ /^[a-z_0-9]+:[ \t]*/) sub(/^[a-z_0-9]+:[ \t]*/, "", line)
+	while (line ~ /^[A-Za-z_0-9]+:[ \t]*/) sub(/^[A-Za-z_0-9]+:[ \t]*/, "", line)
 	if (line == "") next
 	if (line ~ /^db[ \t]+"/) { print "db str"; next }
 	n = split(line, a, /[ \t,]+/)
