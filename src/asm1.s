@@ -34,6 +34,7 @@ mov [rbp+28], eax       ; n
 mov eax, 0
 mov [rbp+16], eax       ; pass = 0 (count)
 mov [rbp+20], eax       ; count = 0
+mov [rbp+80], eax       ; label count = 0  (never rely on stack garbage)
 lea rbx, [rbp+120]
 mov ecx, [rbp+28]
 term:
@@ -112,6 +113,8 @@ jnz.l hdr2
 
 mov eax, 1              ; pass 1: emit
 mov [rbp+16], eax
+mov eax, 0
+mov [rbp+20], eax       ; the header is not part of the body offset
 lea rbx, [rbp+120]
 call parse
 mov eax, 60
@@ -133,6 +136,9 @@ mov edi, 1
 lea rsi, [rbp+8]
 mov edx, 1
 syscall
+mov eax, [rbp+20]       ; pass 1 keeps the offset counter current too
+inc eax
+mov [rbp+20], eax
 ret
 
 parse:
@@ -212,8 +218,15 @@ mov [rbp+48], eax
 jmp.l prr
 d_l:
 cmp al, 108             ; 'l'  lea
-jnz.l fail
+jnz.l d_j
 jmp.l plea
+d_j:
+cmp al, 106             ; 'j'  (only jb so far)
+jnz.l lblscn
+movzx edx, byte [rbx+1]
+cmp dl, 98              ; 'b'
+jnz.l fail
+jmp.l pjb
 psp:
 lea rbx, [rbx+1]
 jmp.l pline
@@ -659,6 +672,118 @@ plea2:
 mov eax, 141            ; 8D /r
 call emital
 call emitmem
+jmp.l pline
+
+lblscn:                 ; catch-all: a label definition has ':' before any delimiter
+lea rdx, [rbx]
+ls1:
+movzx eax, byte [rdx]
+cmp al, 58              ; ':'
+jz.l lbldef
+cmp al, 32
+jz.l fail
+cmp al, 10
+jz.l fail
+cmp al, 59              ; ';'
+jz.l fail
+cmp al, 0
+jz.l fail
+lea rdx, [rdx+1]
+jmp.l ls1
+
+lbldef:
+call lcpy               ; name -> [rbp+72] zero padded
+lea rbx, [rbx+1]        ; past ':'
+movzx eax, byte [rbp+16]
+cmp al, 0
+jnz.l pline             ; pass 1: the label was recorded in pass 0
+mov eax, [rbp+80]
+cmp eax, 8
+jb.l lok
+jmp.l fail
+lok:
+lea rcx, [rbp+1]        ; rbp-120 without negative displacements, and without
+mov esi, 121            ; [rbp] at disp 0, which the encoder gets wrong (see
+sub rcx, rsi            ; docs/encodings.md: mod=00/rm=101 is RIP-relative)
+mov edx, [rbp+80]
+lget:
+cmp edx, 0
+jz.l lgoth
+lea rcx, [rcx+12]
+dec edx
+jmp.l lget
+lgoth:
+mov eax, [rbp+72]
+mov [rcx], eax
+mov eax, [rbp+76]
+mov [rcx+4], eax
+mov eax, [rbp+20]
+mov [rcx+8], eax
+mov eax, [rbp+80]
+inc eax
+mov [rbp+80], eax
+jmp.l pline
+
+lcpy:                   ; name at rbx -> [rbp+72], zero padded ; stops at a delimiter
+mov eax, 0
+mov [rbp+72], eax
+mov [rbp+76], eax
+lea rcx, [rbp+72]
+xor edx, edx
+lcpyl:
+movzx eax, byte [rbx]
+cmp al, 58
+jz.l lcpyd
+cmp al, 32
+jz.l lcpyd
+cmp al, 10
+jz.l lcpyd
+cmp al, 0
+jz.l lcpyd
+cmp edx, 8
+jz.l fail
+mov [rcx], al
+lea rcx, [rcx+1]
+inc edx
+lea rbx, [rbx+1]
+jmp.l lcpyl
+lcpyd:
+ret
+
+pjb:                    ; jb name -> 72 rel8
+lea rbx, [rbx+3]
+call skipsp
+call lcpy
+lea rcx, [rbp+1]        ; rbp-120 without negative displacements, and without
+mov esi, 121            ; [rbp] at disp 0, which the encoder gets wrong (see
+sub rcx, rsi            ; docs/encodings.md: mod=00/rm=101 is RIP-relative)
+mov edx, [rbp+80]
+lfind:
+cmp edx, 0
+jz.l fail
+mov eax, [rcx]
+mov esi, [rbp+72]
+xor eax, esi
+mov edi, [rcx+4]
+mov esi, [rbp+76]
+xor edi, esi
+add eax, edi
+cmp eax, 0
+jz.l lbfnd
+lea rcx, [rcx+12]
+dec edx
+jmp.l lfind
+lbfnd:
+mov eax, [rcx+8]
+mov edx, [rbp+20]
+mov esi, 2
+add edx, esi            ; no add r32,imm32 in the dialect
+sub rax, rdx
+mov [rbp+84], eax
+mov eax, 114            ; 0x72
+call emital
+mov eax, [rbp+84]
+call emital
 jmp.l pline
 
 fail:
