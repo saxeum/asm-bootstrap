@@ -2,15 +2,15 @@
 main:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
 mov eax, 1
 mov edi, 1
 mov esi, 4194424+m1
 mov edx, m1end-m1
 syscall
-mov eax, 0
-mov edi, eax
+mov rax, 0
+mov rdi, rax
 mov eax, 60
 syscall
 entry main

@@ -2,7 +2,7 @@
 main:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
 mov eax, 1
 mov edi, 1
@@ -14,8 +14,8 @@ mov edi, 1
 mov esi, 4194424+m2
 mov edx, m2end-m2
 syscall
-mov eax, 255
-mov edi, eax
+mov rax, 255
+mov rdi, rax
 mov eax, 60
 syscall
 entry main

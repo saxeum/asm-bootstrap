@@ -20,11 +20,11 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
 | `src/asm1.s` | 31 236 | — | 2 150 lines, 199 labels (limit 256), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
-| `cc` | 5 949 | `b68d5a299dc7ea56` | built by `asm1` from `src/cc.s` (1 924 lines) — C to dialect TEXT |
+| `cc` | 6 434 | `cf423fd41ae7ace8` | built by `asm1` from `src/cc.s` (2 039 lines) — C to dialect TEXT |
 
 Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **30 capability
-pairs** · **5 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
-**94 coverage forms** · **6 cc gates** · 290 branch pins · 36 provenance records.
+pairs** · **6 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
+**94 coverage forms** · **cc: 13 checks, 23 refusals** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 
@@ -197,15 +197,21 @@ Then **immediately**: `make` (check exit code and sha changed), fixtures 18/18, 
 | `tools/shape.awk` | how two source lines are decided to reach the same encoder path |
 | `docs/toolchain.tsv`, `docs/provenance.tsv`, `docs/SHAS`, `docs/branches.tsv` | the records |
 
-## Next task: the nesting bug, properly
+## Next task: arrays with a computed index
 
-`cc` refuses a nested `expr` with `cc: internal: nested expression`. That is a guard against an
-unexplained corruption, not a fix: the trigger and symptom are recorded, the mechanism is not
-(`docs/cc.md`, and `docs/WAVES.md` for the two probes that were themselves broken).
+Pointers landed (`&x`, `*p`, `*p = v`, 64-bit values, two exact gates). The next thing a self-hosting
+`cc` needs is `int a[N];` and `a[i]` where `i` is a variable — a symbol-table entry is a name plus a
+value in parallel arrays, and today a name is one of eight slots and there is no array at all.
 
-The next probe must be **appended as a self-contained block and anchored on content** — never spliced
-by line number. Suggested shape: a routine that dumps the name buffer (fixed 16 bytes, fixed-length
-write) at *three* points — after `ident` returns, at `findvar` entry, and inside `ex1` — so the first
-diverge is visible. If that does not find it, take the structural route: give the expression parser
-per-level state (a stack of depth/operator slots) instead of the fixed `[rbp-128]`/`[rbp-132]` pair,
-which is the shape `argexpr` already uses.
+Expressible already, with these forms: `lea rax, [rbp-B]`, load the index, `add rax, rax` three times
+for the eight-byte stride, `add rax, rcx`, `mov rax, [rax]`. So the work is parser and layout, not
+codegen: a declaration that allocates N slots from one base, and a postfix `[expr]` in `ex3`.
+
+Still open, and *not* the next task: the nested-`expr` corruption, which stays guarded
+(`cc: internal: nested expression`). Its trigger and symptom are recorded in `docs/cc.md`, the
+mechanism is not, and a probe must be **appended as a block anchored on content** — never spliced by
+line number. Arrays will need an index expression, which is *not* a nested `expr`, so the guard does
+not block this step.
+
+The longer list — `div`, `char`, `.data`, string literals, a struct-free symbol table — is in
+`docs/ROADMAP.md`.

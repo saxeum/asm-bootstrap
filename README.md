@@ -22,7 +22,7 @@ included; `docs/continue-here.md` is where a session starts.
 | self-hosted | `asm1` | 7 731 | `ac80d9f9094d7051` | `seed/asm1` from `src/asm1.s` |
 | seed | `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted previous stage |
 | decoder | `dis` | 1 343 | `2d2eb451d7c7a9a9` | `asm1` from `src/dis.s` |
-| compiler | `cc` | 5 949 | `b68d5a299dc7ea56` | `asm1` from `src/cc.s` |
+| compiler | `cc` | 6 434 | `cf423fd41ae7ace8` | `asm1` from `src/cc.s` |
 
 Past the bootstrap. `asm1` is self-hosting, reaches its fixpoint, and is demonstrably better than
 what built it — 6 byte-level cases where `asm0a` answers wrongly and 30 syntax pairs it cannot parse.
@@ -30,12 +30,14 @@ what built it — 6 byte-level cases where `asm0a` answers wrongly and 30 syntax
 `make bootstrap-check` says **NOT APPLICABLE** out loud rather than passing quietly.
 
 The compiler is real and small: `int x = 3`, `while`, `if`/`else`, eight variables, expressions with
-precedence, function calls with a calling convention, and recursion. It emits text, not bytes, and
-every gate the assembler has applies to that text.
+precedence, function calls with a calling convention, recursion, and pointers (`&x`, `*p`, `*p = v`)
+over a 64-bit value model. It emits text, not bytes, and every gate the assembler has applies to that
+text.
 
-What is next is in `docs/ROADMAP.md`. The two hard open items: a call inside a larger expression
-(`n * f(n-1)`) — blocked by an unexplained parser corruption that is now *guarded* rather than fixed —
-and `.data`, the one assembler feature with no user yet.
+What is next is in `docs/ROADMAP.md`. The immediate next step is `int a[N]` with a computed index —
+a self-hosting compiler needs parallel arrays before it can hold a symbol table. The one hard open
+item is a call inside a larger expression (`n * f(n-1)`), blocked by an unexplained parser corruption
+that is *guarded* rather than fixed.
 
 ## Use it
 
@@ -85,19 +87,23 @@ anything that tries to run it directly.
 | 4 | expressions with precedence, one register per depth | `(2 + 3*4) - 10 + 14` exits 18 |
 | 5 | a calling convention: args in `rdi`/`rsi`/`rdx`/`rcx`, return in `eax` | `add(2,3)` exits 5, `sub2(3,2)` exits 1 |
 | 6 | `return` anywhere, arguments as `+`/`-` terms, recursion | `f(10,0)` with an accumulator exits 10 |
+| 7 | 64-bit values, then `&x`, `*p`, `*p = v` — addresses, with no type system yet | `*p = 33` after `int y = *p` exits 40; a callee writing through `&x` exits 42 |
 
 The subset, exactly: `int` declarations, assignment, `while`, `if`/`else`, `return`, six comparisons,
-`+ - *` with precedence, function definitions with up to four arguments, calls, and recursion.
-Boundaries are refusals with no output, and all **20** are pinned in `make test-cc`: `int main()`
+`+ - *` with precedence, `&`/`*` on a name, function definitions with up to four arguments, calls, and
+recursion. Values are 64-bit; an `int` may hold an address and the compiler neither knows nor checks
+which.
+
+Boundaries are refusals with no output, and all **23** are pinned in `make test-cc`: `int main()`
 without `void`, `void main`, an undeclared name (three spellings), a duplicate declaration, a ninth
 variable, a name of eight characters, an assignment inside a condition, `else if`, `x <= 255`,
 division, an unterminated string, an unterminated comment, `return 300`, five arguments, a call inside
-an argument list, ten `write` calls in one function. `docs/cc.md` gives the reason for each — most are
-consequences of a choice, not of an omission.
+an argument list, `&5`, `*q` with `q` undeclared, `&nope`, ten `write` calls in one function.
+`docs/cc.md` gives the reason for each — most are consequences of a choice, not of an omission.
 
 Three kinds of check, because each sees something the others cannot:
 
-- **text goldens** — 10 C sources whose emitted dialect is pinned byte for byte. A regression pin,
+- **text goldens** — 12 C sources whose emitted dialect is pinned byte for byte. A regression pin,
   not an oracle: it cannot tell a plausible mistake from a correct answer, which is what the next two
   are for.
 - **behaviour** — each one is assembled and run; the exact exit code or stdout is asserted. This is
@@ -242,8 +248,8 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1` |
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div` (8-bit form: `div bl`, quotient in `al`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `add`/`sub` with an immediate, `imul r,r,imm`, `div r32` (only the 8-bit form), `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 7 characters |
-| compiler | `cc`, 5 949 bytes, built by `asm1` from `src/cc.s` (1 924 lines): C subset → dialect **text** → `asm1` → executable. 10 text goldens, 3 output oracles, 20 refusals (`make test-cc`, `docs/cc.md`) |
-| `make check` | 37 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 11 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| compiler | `cc`, 6 434 bytes, built by `asm1` from `src/cc.s` (2 039 lines): C subset → dialect **text** → `asm1` → executable. 12 text goldens, 3 output oracles, 23 refusals (`make test-cc`, `docs/cc.md`) |
+| `make check` | 39 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 13 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.

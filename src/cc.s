@@ -424,6 +424,10 @@ mov esi, 4194424+f_semi
 call want
 jmp.l bodloop
 stasg:
+call skipws
+call gcur
+cmp al, 42
+jz.l stptr
 call ident
 call skipws
 call gcur
@@ -549,6 +553,10 @@ ret
 ex3:
 call skipws
 call gcur
+cmp al, 38
+jz.l ex3addr
+cmp al, 42
+jz.l ex3deref
 cmp al, 48
 jb.l ex3var
 cmp al, 58
@@ -591,6 +599,96 @@ ex3fin:
 call callargs
 ret
 
+ex3addr:
+; `&name`: the address of a variable, 64-bit because an address is
+mov eax, 1
+call bump
+call ident
+call findvar
+call varoff
+mov [rbp-140], eax
+mov esi, 4194424+f_lea1
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-140]
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+ret
+
+ex3deref:
+; `*name`: load the pointer, then load through it
+mov eax, 1
+call bump
+call ident
+call findvar
+call varoff
+mov [rbp-140], eax
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-140]
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_dref1
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_le2
+call emitstr
+ret
+
+stptr:
+; `*name = expr;` -- the pointer is parked in the scratch slot while the value
+; is computed, because the expression owns every depth register
+mov eax, 1
+call bump
+call ident
+call findvar
+call varoff
+mov [rbp-140], eax
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, 0
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-140]
+call emitnum
+mov esi, 4194424+f_le2
+call emitstr
+mov esi, 4194424+f_msav1
+call emitstr
+mov esi, 4194424+f_rax
+call emitstr
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_eq
+call want
+call expr
+mov esi, 4194424+f_mlod
+call emitstr
+mov esi, 4194424+f_lst1
+call emitstr
+mov esi, 4194424+f_rax
+call emitstr
+mov esi, 4194424+f_nl
+call emitstr
+mov esi, 4194424+f_semi
+call want
+jmp.l bodloop
+
 ex3num:
 call numval
 mov [rbp-140], eax
@@ -625,9 +723,11 @@ mov [rbp-144], eax
 mov eax, 0
 mov [rbp-148], eax
 ergl:
-mov eax, [rbp-148]
-mov ecx, 3
-cmp eax, ecx
+mov eax, [rbp-144]
+mov ecx, [rbp-148]
+add eax, ecx
+movzx eax, byte [rax]
+cmp eax, 0              ; names are null-terminated: r8 is two characters
 jz ergd
 mov eax, [rbp-144]
 mov ecx, [rbp-148]
@@ -1638,7 +1738,7 @@ db "push rbp"
 db 10
 db "mov rbp, rsp"
 db 10
-db "mov ecx, 64"
+db "mov rcx, 64"
 db 10
 db "sub rsp, rcx"
 db 10
@@ -1694,30 +1794,30 @@ f_L:
 db "L"
 db 0
 f_i1:
-db "mov eax, "
+db "mov rax, "
 db 0
 f_i2:
 db 10
-db "mov [rbp-8], eax"
+db "mov [rbp-8], rax"
 db 10
 db 0
 f_a1:
-db "mov eax, [rbp-8]"
+db "mov rax, [rbp-8]"
 db 10
-db "mov ecx, "
+db "mov rcx, "
 db 0
 f_a2:
 db 10
-db "add eax, ecx"
+db "add rax, rcx"
 db 10
-db "mov [rbp-8], eax"
+db "mov [rbp-8], rax"
 db 10
 db 0
 f_s2:
 db 10
-db "sub eax, ecx"
+db "sub rax, rcx"
 db 10
-db "mov [rbp-8], eax"
+db "mov [rbp-8], rax"
 db 10
 db 0
 f_jl:
@@ -1759,18 +1859,18 @@ db "x:"
 db 10
 db 0
 f_cmov:
-db "mov eax, [rbp-8]"
+db "mov rax, [rbp-8]"
 db 10
 db 0
 f_ccmp:
-db "cmp eax, "
+db "cmp rax, "
 db 0
 f_cmov2:
-db "mov ecx, "
+db "mov rcx, "
 db 0
 f_ccmp2:
 db 10
-db "cmp ecx, eax"
+db "cmp rcx, rax"
 db 10
 db "jb "
 db 0
@@ -1793,18 +1893,18 @@ f_else:
 db "else"
 db 0
 f_mi1:
-db "mov eax, "
+db "mov rax, "
 db 0
 f_mi2:
 db 10
 db "mov [rbp-"
 db 0
 f_ls2:
-db "], eax"
+db "], rax"
 db 10
 db 0
 f_le1:
-db "mov eax, [rbp-"
+db "mov rax, [rbp-"
 db 0
 f_le2:
 db "]"
@@ -1815,12 +1915,12 @@ db "mov [rbp-"
 db 0
 f_aadd:
 db 10
-db "add eax, ecx"
+db "add rax, rcx"
 db 10
 db 0
 f_asub:
 db 10
-db "sub eax, ecx"
+db "sub rax, rcx"
 db 10
 db 0
 f_mov:
@@ -1845,29 +1945,25 @@ f_imul:
 db "imul "
 db 0
 f_edi:
-db "mov edi, eax"
+db "mov rdi, rax"
 db 10
 db "mov eax, 60"
 db 10
 db "syscall"
 db 10
 db 0
-f_zero:
-db "mov eax, 0"
-db 10
-db 0
 regnames:
-db "eax"
+db "rax"
 db 0
-db "ecx"
+db "rcx"
 db 0
-db "edx"
+db "rdx"
 db 0
-db "esi"
+db "rsi"
 db 0
-db "edi"
+db "rdi"
 db 0
-db "r8d"
+db "r8"
 db 0
 f_w1:
 db "mov eax, 1"
@@ -1891,7 +1987,7 @@ db 0
 f_exit:
 db "mov eax, 60"
 db 10
-db "mov edi, "
+db "mov rdi, "
 db 0
 f_exit2:
 db 10
@@ -1921,4 +2017,23 @@ db 10
 f_nest:
 db "cc: internal: nested expression"
 db 10
+db 0
+f_lea1:
+db "lea "
+db 0
+f_dref1:
+db ", ["
+db 0
+f_msav1:
+db "mov [rbp-224], "
+db 0
+f_mlod:
+db "mov rcx, [rbp-224]"
+db 10
+db 0
+f_lst1:
+db "mov [rcx], "
+db 0
+f_rax:
+db "rax"
 db 0

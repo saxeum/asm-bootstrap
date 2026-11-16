@@ -2,13 +2,13 @@
 main:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
-mov eax, 10
-mov [rbp-8], eax
+mov rax, 10
+mov [rbp-8], rax
 L1:
-mov eax, [rbp-8]
-cmp eax, 0
+mov rax, [rbp-8]
+cmp rax, 0
 jnz L1b
 jmp.l L1e
 L1b:
@@ -17,14 +17,14 @@ mov edi, 1
 mov esi, 4194424+m1
 mov edx, m1end-m1
 syscall
-mov eax, [rbp-8]
-mov ecx, 1
-sub eax, ecx
-mov [rbp-8], eax
+mov rax, [rbp-8]
+mov rcx, 1
+sub rax, rcx
+mov [rbp-8], rax
 jmp.l L1
 L1e:
-mov eax, 0
-mov edi, eax
+mov rax, 0
+mov rdi, rax
 mov eax, 60
 syscall
 entry main

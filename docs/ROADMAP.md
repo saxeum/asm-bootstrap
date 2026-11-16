@@ -1301,3 +1301,19 @@ symbol-name buffer — a bug whose symptom is understood and whose mechanism is 
 What that blocks, and what comes next: **a call inside a larger expression** (`n * f(n - 1)`), which
 needs the nesting bug fixed for real. After that: pointers and arrays, which need `.data` and disp32
 (disp32 exists; `.data` does not), and a `crt`-ish runtime.
+
+## Compiler stage 7: 64-bit values and addresses
+
+The value model moved from `eax` to `rax` in one step that changed no behaviour — same exit codes,
+same output bytes, every gate green — and then `&x`, `*p` and `*p = v` landed on top, with no type
+system. Two exact gates: 40 (`*p = 33` after `int y = *p`) and 42 (a callee writing through the
+caller's pointer). Three refusals added, 23 now.
+
+Next, and the reason this mattered: **`int a[N]` with a computed index.** A symbol table is parallel
+arrays, and `a[i]` is `lea rax, [rbp-B]` + the index + three `add rax, rax` for the stride + `add rax,
+rcx` + `mov rax, [rax]` — all forms the dialect already has. So it is parser and layout work, not
+codegen.
+
+After that: `div` (both the 8-bit dialect form's limitations and `/` in `cc`), `char` and byte
+strings, then `.data` for mutable globals — the point at which `cc` could hold a string table, which
+is what compiling its own source needs.

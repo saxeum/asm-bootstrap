@@ -2,27 +2,27 @@
 sub2:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
 mov [rbp-8], rdi
 mov [rbp-16], rsi
-mov eax, [rbp-8]
-mov ecx, [rbp-16]
-sub eax, ecx
+mov rax, [rbp-8]
+mov rcx, [rbp-16]
+sub rax, rcx
 mov rsp, rbp
 pop rbp
 ret
 main:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
-mov eax, 3
+mov rax, 3
 mov rdi, rax
-mov eax, 2
+mov rax, 2
 mov rsi, rax
 call sub2
-mov edi, eax
+mov rdi, rax
 mov eax, 60
 syscall
 entry main

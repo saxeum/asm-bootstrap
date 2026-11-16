@@ -2,29 +2,29 @@
 f:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
 mov [rbp-8], rdi
 mov [rbp-16], rsi
-mov eax, [rbp-8]
-cmp eax, 0
+mov rax, [rbp-8]
+cmp rax, 0
 jz L1t
 jmp.l L1e
 L1t:
-mov eax, [rbp-16]
+mov rax, [rbp-16]
 mov rsp, rbp
 pop rbp
 ret
 L1e:
-mov eax, [rbp-8]
-mov ecx, 1
+mov rax, [rbp-8]
+mov rcx, 1
 
-sub eax, ecx
+sub rax, rcx
 mov rdi, rax
-mov eax, [rbp-16]
-mov ecx, 1
+mov rax, [rbp-16]
+mov rcx, 1
 
-add eax, ecx
+add rax, rcx
 mov rsi, rax
 call f
 mov rsp, rbp
@@ -33,14 +33,14 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
-mov eax, 10
+mov rax, 10
 mov rdi, rax
-mov eax, 0
+mov rax, 0
 mov rsi, rax
 call f
-mov edi, eax
+mov rdi, rax
 mov eax, 60
 syscall
 entry main

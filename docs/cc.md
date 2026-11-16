@@ -562,3 +562,50 @@ fixed frame slots. `argexpr` shows the shape: two registers, no recursion, nothi
 argument goes through the recursive expression parser), the symptom (the value `1` where a variable's
 name should be), and one closed line of suspicion (no aliasing between `[rbp-208]` and `[rbp-16064]`).
 Nothing else. Two probe runs claimed more and both were the probe's own defect — see `docs/WAVES.md`.
+
+## Stage 7: 64-bit values, and addresses
+
+A pointer is an address, and an address does not fit in 32 bits. So the value model moved from
+32-bit to 64-bit registers in one step that changed **no behaviour at all** — every gate, every exit
+code, every byte of output identical — before anything new was built on it:
+
+| | before | after |
+|---|---|---|
+| value registers | `eax ecx edx esi edi r8d` | `rax rcx rdx rsi rdi r8` |
+| a variable | `mov eax, [rbp-8]` | `mov rax, [rbp-8]` |
+| combine | `add eax, ecx` | `add rax, rcx` |
+| return | `mov edi, eax` | `mov rdi, rax` |
+| frame | `mov ecx, 64` / `sub rsp, rcx` | `mov rcx, 64` / `sub rsp, rcx` |
+
+The slots were already eight bytes apart, so nothing moved; only the width of every access changed.
+The syscall registers stay as the kernel defines them (`mov eax, 60`, `mov edi, 1`) — those are not
+values, they are the ABI.
+
+Then, with 64-bit values, three forms and no type system:
+
+| source | emitted |
+|---|---|
+| `&x` | `lea rax, [rbp-8]` |
+| `*p` | `mov rax, [rbp-16]` / `mov rax, [rax]` |
+| `*p = 33` | `mov rax, [rbp-16]` / `mov [rbp-224], rax` / `mov rax, 33` / `mov rcx, [rbp-224]` / `mov [rcx], rax` |
+
+`*p = expr` parks the pointer in a fixed scratch slot while the value is computed, because the
+expression owns every depth register. That is the same problem the call-argument parser hit, and the
+same size of answer: an expression is not reentrant, so a second thing that needs storage gets its
+own.
+
+There is **no pointer type**: an `int` may hold an address, and the compiler neither knows nor checks
+which. That is a deliberate deferral — the mechanism (load, store, address-of) is what arrays and a
+symbol table need, and the type system is a separate job that changes no emitted code.
+
+Two gates, both exact:
+
+- `int x = 7; int p = &x; int y = *p; *p = 33; return x + y;` → **40**. A wrong stride, a wrong slot or
+  a store that misses gives anything else.
+- `bump(&x)` where the callee does `*p = *p + 1;` → **42**. The address crosses a call and the callee
+  writes into the caller's frame — the thing that makes a pointer useful and the thing an off-by-eight
+  frame breaks.
+
+Also fixed while here: `emitreg` copied exactly three characters per register name, so `r8` was
+emitted as `r8 ` and `mov r8 , rax` is not a line any assembler should accept. The table is
+null-terminated now.

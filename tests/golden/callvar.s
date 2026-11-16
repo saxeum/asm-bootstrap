@@ -2,26 +2,26 @@
 f:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
 mov [rbp-8], rdi
-mov eax, [rbp-8]
-mov ecx, 1
-add eax, ecx
+mov rax, [rbp-8]
+mov rcx, 1
+add rax, rcx
 mov rsp, rbp
 pop rbp
 ret
 main:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
-mov eax, 41
-mov [rbp-8], eax
-mov eax, [rbp-8]
+mov rax, 41
+mov [rbp-8], rax
+mov rax, [rbp-8]
 mov rdi, rax
 call f
-mov edi, eax
+mov rdi, rax
 mov eax, 60
 syscall
 entry main

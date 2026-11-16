@@ -2362,3 +2362,25 @@ unknown mechanism, and `docs/cc.md` should be read that way.
 The next probe should be built by *appending a self-contained block* and anchoring on content, never
 by splicing lines by number — the rule this repo already had for `src/asm1.s` and which was not
 applied to `src/cc.s`.
+
+## 64-bit values, then addresses
+
+`cc`'s values were 32-bit (`eax`, `ecx`, …) and a pointer is 64. Rather than special-case addresses,
+the value model moved wholesale, in a step that changed no behaviour: same exit codes, same output
+bytes, every gate green, and only the *text* of the emitted dialect different. Then `&x`, `*p` and
+`*p = v` were added on top, with no type system — an `int` may hold an address.
+
+Two things worth recording beyond the feature:
+
+- The goldens had to be regenerated, which is only legitimate because they are *pins*: the exact
+  exit codes and the three output-oracle comparisons are what say the emitted code still works, and
+  they were unchanged.
+- `emitreg` copied three characters per name, so `r8` came out as `r8 ` and `mov r8 , rax` would have
+  been emitted as soon as an expression nested five deep. That is a latent defect of exactly the kind
+  this project has been bitten by: correct for every depth that had ever been exercised. Found while
+  writing the new register table, fixed by null-terminating the names.
+
+Two gates: `&x`/`*p`/`*p = 33` exits 40, and `bump(&x)` — the callee writing through the caller's
+pointer — exits 42. Three refusals added (`&5`, `*q` with `q` undeclared, `&nope`): 23 now.
+
+`cc` 5 937 → 6 434 bytes.

@@ -2,28 +2,28 @@
 main:
 push rbp
 mov rbp, rsp
-mov ecx, 64
+mov rcx, 64
 sub rsp, rcx
-mov eax, 2
-mov [rbp-8], eax
-mov eax, 3
-mov [rbp-16], eax
-mov eax, [rbp-8]
-mov ecx, [rbp-16]
-mov edx, 4
-imul ecx, edx
-add eax, ecx
-mov [rbp-24], eax
-mov eax, [rbp-24]
-mov ecx, 5
-mov edx, 2
-imul ecx, edx
-sub eax, ecx
-mov [rbp-32], eax
-mov eax, [rbp-24]
-mov ecx, [rbp-32]
-add eax, ecx
-mov edi, eax
+mov rax, 2
+mov [rbp-8], rax
+mov rax, 3
+mov [rbp-16], rax
+mov rax, [rbp-8]
+mov rcx, [rbp-16]
+mov rdx, 4
+imul rcx, rdx
+add rax, rcx
+mov [rbp-24], rax
+mov rax, [rbp-24]
+mov rcx, 5
+mov rdx, 2
+imul rcx, rdx
+sub rax, rcx
+mov [rbp-32], rax
+mov rax, [rbp-24]
+mov rcx, [rbp-32]
+add rax, rcx
+mov rdi, rax
 mov eax, 60
 syscall
 entry main
