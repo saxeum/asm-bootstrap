@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1000" width="1500" height="1000" role="img" aria-labelledby="title desc">
+  <title id="title">From hand-written machine code to a running Lisp</title>
+  <desc id="desc">The bootstrap chain: asm0a hand-written machine code, the dialect assembler, the dialect compiler, the C-only rebuild, and lisp.c compiled and assembled into an executable that reads s-expressions and prints values.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#394348"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2f5d8a"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3d7a4a"/>
+    </marker>
+    <style>
+      .title { font: 700 30px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #1f2426; }
+      .subtitle { font: 400 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #5b666b; }
+      .band { font: 700 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #5b666b; letter-spacing: 1.5px; }
+      .box { fill: #ffffff; stroke: #394348; stroke-width: 1.6; }
+      .bootstrap { fill: #f7f3e8; }
+      .cbox { fill: #eef5fb; stroke: #2f5d8a; }
+      .fix { fill: #f6f0fa; stroke: #6b4c8a; stroke-dasharray: 7 5; }
+      .prog { fill: #eef7ee; stroke: #3d7a4a; }
+      .out { fill: #fff8e8; stroke: #9a6a2f; }
+      .label { font: 700 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #1f2426; }
+      .small { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #394348; }
+      .tiny { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #5b666b; }
+      .arrow { fill: none; stroke: #394348; stroke-width: 2; marker-end: url(#arrow); }
+      .arrow-blue { fill: none; stroke: #2f5d8a; stroke-width: 2; marker-end: url(#arrow-blue); }
+      .arrow-green { fill: none; stroke: #3d7a4a; stroke-width: 2; marker-end: url(#arrow-green); }
+      .note { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #5b666b; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1500" height="1000" fill="#fbfbf8"/>
+  <text x="40" y="46" class="title">From hand-written machine code to Lisp</text>
+  <text x="40" y="70" class="subtitle">one chain, two witnesses, one C-only build</text>
+
+  <!-- ===================== bootstrap ===================== -->
+  <text x="40" y="105" class="band">BOOTSTRAP / HISTORICAL WITNESSES</text>
+
+  <rect x="40" y="120" width="250" height="96" rx="10" class="box bootstrap"/>
+  <text x="56" y="148" class="label">asm0a</text>
+  <text x="56" y="170" class="small">3,745 bytes</text>
+  <text x="56" y="189" class="small">hand-written x86-64</text>
+  <text x="56" y="207" class="tiny">no compiler / assembler / linker</text>
+
+  <rect x="370" y="120" width="250" height="96" rx="10" class="box bootstrap"/>
+  <text x="386" y="148" class="label">src/asm1.s</text>
+  <text x="386" y="170" class="small">frozen dialect source</text>
+  <text x="386" y="189" class="tiny">8,053 B; frozen witness</text>
+
+  <rect x="700" y="120" width="230" height="96" rx="10" class="box bootstrap"/>
+  <text x="716" y="148" class="label">asm1</text>
+  <text x="716" y="170" class="small">stage-1 assembler</text>
+  <text x="716" y="189" class="tiny">the historical witness</text>
+
+  <rect x="1010" y="120" width="230" height="96" rx="10" class="box bootstrap"/>
+  <text x="1026" y="148" class="label">src/cc.s</text>
+  <text x="1026" y="170" class="small">frozen dialect compiler</text>
+  <text x="1026" y="189" class="tiny">source, 3,108 lines</text>
+
+  <rect x="1320" y="120" width="140" height="96" rx="10" class="box bootstrap"/>
+  <text x="1336" y="148" class="label">seed/cc</text>
+  <text x="1336" y="170" class="small">10,429 B</text>
+  <text x="1336" y="189" class="tiny">dialect witness</text>
+
+  <path d="M 290 168 L 370 168" class="arrow"/>
+  <text x="300" y="158" class="tiny">assembles</text>
+  <path d="M 620 168 L 700 168" class="arrow"/>
+  <text x="630" y="158" class="tiny">output</text>
+  <path d="M 930 168 L 1010 168" class="arrow"/>
+  <text x="940" y="158" class="tiny">assembles</text>
+  <path d="M 1240 168 L 1320 168" class="arrow"/>
+  <text x="1250" y="158" class="tiny">output</text>
+
+  <text x="40" y="252" class="note">asm0a built the first dialect assembler; that assembler built the first dialect compiler.</text>
+
+  <!-- ===================== C-only build ===================== -->
+  <text x="40" y="292" class="band">C-ONLY BUILD / CURRENT CANONICAL</text>
+
+  <!-- row 1: assembler -->
+  <rect x="40" y="308" width="230" height="86" rx="10" class="box cbox"/>
+  <text x="56" y="336" class="label">src/asm1.c</text>
+  <text x="56" y="357" class="small">assembler in C</text>
+  <text x="56" y="375" class="tiny">the live source</text>
+
+  <rect x="330" y="308" width="170" height="86" rx="10" class="box cbox"/>
+  <text x="346" y="336" class="label">seed/cc1</text>
+  <text x="346" y="357" class="small">C compiler seed</text>
+  <text x="346" y="375" class="tiny">44,154 B</text>
+
+  <rect x="560" y="308" width="190" height="86" rx="10" class="box cbox"/>
+  <text x="576" y="336" class="label">dialect text</text>
+  <text x="576" y="357" class="small">readable .s output</text>
+  <text x="576" y="375" class="tiny">not machine code</text>
+
+  <rect x="810" y="308" width="170" height="86" rx="10" class="box cbox"/>
+  <text x="826" y="336" class="label">seed/asm1</text>
+  <text x="826" y="357" class="small">C assembler seed</text>
+  <text x="826" y="375" class="tiny">54,416 B</text>
+
+  <rect x="1040" y="308" width="230" height="86" rx="10" class="box cbox"/>
+  <text x="1056" y="336" class="label">asm1</text>
+  <text x="1056" y="357" class="small">C assembler</text>
+  <text x="1056" y="375" class="tiny">54,416 B · sha ccb1607d…</text>
+
+  <path d="M 270 351 L 330 351" class="arrow-blue"/>
+  <text x="276" y="341" class="tiny">compiles</text>
+  <path d="M 500 351 L 560 351" class="arrow-blue"/>
+  <text x="506" y="341" class="tiny">emits</text>
+  <path d="M 750 351 L 810 351" class="arrow-blue"/>
+  <text x="756" y="341" class="tiny">assembles</text>
+  <path d="M 980 351 L 1040 351" class="arrow-blue"/>
+  <text x="986" y="341" class="tiny">output</text>
+
+  <!-- row 2: compiler -->
+  <rect x="40" y="432" width="230" height="86" rx="10" class="box cbox"/>
+  <text x="56" y="460" class="label">src/cc.c</text>
+  <text x="56" y="481" class="small">compiler in C</text>
+  <text x="56" y="499" class="tiny">the live source</text>
+
+  <rect x="330" y="432" width="170" height="86" rx="10" class="box cbox"/>
+  <text x="346" y="460" class="label">seed/cc1</text>
+  <text x="346" y="481" class="small">same compiler seed</text>
+  <text x="346" y="499" class="tiny">one file, two rows</text>
+
+  <rect x="560" y="432" width="190" height="86" rx="10" class="box cbox"/>
+  <text x="576" y="460" class="label">dialect text</text>
+  <text x="576" y="481" class="small">readable .s output</text>
+  <text x="576" y="499" class="tiny">not machine code</text>
+
+  <rect x="810" y="432" width="170" height="86" rx="10" class="box cbox"/>
+  <text x="826" y="460" class="label">asm1</text>
+  <text x="826" y="481" class="small">built in row above</text>
+  <text x="826" y="499" class="tiny">the C assembler</text>
+
+  <rect x="1040" y="432" width="230" height="86" rx="10" class="box cbox"/>
+  <text x="1056" y="460" class="label">cc</text>
+  <text x="1056" y="481" class="small">C compiler</text>
+  <text x="1056" y="499" class="tiny">44,154 B · sha 5e9ad682…</text>
+
+  <path d="M 270 475 L 330 475" class="arrow-blue"/>
+  <text x="276" y="465" class="tiny">compiles</text>
+  <path d="M 500 475 L 560 475" class="arrow-blue"/>
+  <text x="506" y="465" class="tiny">emits</text>
+  <path d="M 750 475 L 810 475" class="arrow-blue"/>
+  <text x="756" y="465" class="tiny">assembles</text>
+  <path d="M 980 475 L 1040 475" class="arrow-blue"/>
+  <text x="986" y="465" class="tiny">output</text>
+
+  <!-- ===================== fixpoint ===================== -->
+  <rect x="40" y="558" width="1440" height="90" rx="10" class="box fix"/>
+  <text x="60" y="584" class="label">Both tools must reproduce themselves</text>
+  <text x="60" y="607" class="small">cc &lt; src/cc.c &gt; text ; asm1 &lt; text &gt; cc2&#160;&#160;&#160;&#160;cc2 == cc1</text>
+  <text x="60" y="628" class="small">cc1 &lt; src/asm1.c &gt; text ; asm2 &lt; text &gt; asm2b&#160;&#160;&#160;&#160;asm2b == asm2</text>
+  <text x="960" y="607" class="tiny">make test-d2 · make from-c</text>
+  <text x="960" y="628" class="tiny">the same bytes after a cold rebuild</text>
+
+  <path d="M 1155 518 L 1155 558" class="arrow-blue"/>
+  <text x="1165" y="544" class="tiny">verify</text>
+
+  <!-- ===================== lisp ===================== -->
+  <text x="40" y="700" class="band">PROGRAM / LISP</text>
+
+  <rect x="40" y="716" width="240" height="98" rx="10" class="box prog"/>
+  <text x="56" y="744" class="label">tests/programs/lisp.c</text>
+  <text x="56" y="766" class="small">reader · arena · eval</text>
+  <text x="56" y="785" class="tiny">29 values, 17 refusals</text>
+  <text x="56" y="802" class="tiny">one expression per line</text>
+
+  <rect x="330" y="716" width="140" height="98" rx="10" class="box prog"/>
+  <text x="346" y="744" class="label">cc</text>
+  <text x="346" y="766" class="small">compiles C</text>
+  <text x="346" y="785" class="tiny">to dialect text</text>
+
+  <rect x="520" y="716" width="180" height="98" rx="10" class="box prog"/>
+  <text x="536" y="744" class="label">lisp.s</text>
+  <text x="536" y="766" class="small">dialect text</text>
+  <text x="536" y="785" class="tiny">readable and diffable</text>
+
+  <rect x="750" y="716" width="140" height="98" rx="10" class="box prog"/>
+  <text x="766" y="744" class="label">asm1</text>
+  <text x="766" y="766" class="small">assembles</text>
+  <text x="766" y="785" class="tiny">only byte-producer</text>
+
+  <rect x="940" y="716" width="220" height="98" rx="10" class="box prog"/>
+  <text x="956" y="744" class="label">lisp</text>
+  <text x="956" y="766" class="small">ELF executable</text>
+  <text x="956" y="785" class="tiny">no interpreter in the loop</text>
+
+  <rect x="1210" y="716" width="250" height="98" rx="10" class="box out"/>
+  <text x="1226" y="744" class="label">stdin → values</text>
+  <text x="1226" y="766" class="small">(+ 1 2) → 3</text>
+  <text x="1226" y="785" class="small">(cons 1 (cons 2 ())) → (1 2)</text>
+  <text x="1226" y="802" class="tiny">errors: lisp: error, exit 1</text>
+
+  <path d="M 280 765 L 330 765" class="arrow-green"/>
+  <text x="286" y="755" class="tiny">compiles</text>
+  <path d="M 470 765 L 520 765" class="arrow-green"/>
+  <text x="476" y="755" class="tiny">emits</text>
+  <path d="M 700 765 L 750 765" class="arrow-green"/>
+  <text x="706" y="755" class="tiny">assembles</text>
+  <path d="M 890 765 L 940 765" class="arrow-green"/>
+  <text x="896" y="755" class="tiny">output</text>
+  <path d="M 1160 765 L 1210 765" class="arrow-green"/>
+  <text x="1166" y="755" class="tiny">runs</text>
+
+  <text x="40" y="858" class="small">The C-only chain repeats the last two steps with cc1 + asm2. For lisp.c the emitted text and the executable are byte-identical:</text>
+  <text x="40" y="878" class="tiny">cmp .work/lisp.s .work/from-c/lisp.s&#160;&#160;&#160;&#160;cmp .work/lisp .work/from-c/lisp</text>
+
+  <rect x="40" y="906" width="230" height="46" rx="8" class="box prog"/>
+  <text x="56" y="935" class="small">wc.c · calc.c</text>
+  <rect x="290" y="906" width="230" height="46" rx="8" class="box prog"/>
+  <text x="306" y="935" class="small">sort.c · lisp.c</text>
+  <text x="550" y="935" class="tiny">all four are built and run by both chains; the C-only bytes match.</text>
+
+  <text x="40" y="982" class="note">No /tmp. No system assembler, compiler, disassembler or debugger in the verification path.</text>
+</svg>
