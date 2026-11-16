@@ -8,13 +8,13 @@
  *
  * One buffer holds everything:
  *
- *   SRC   0      26100   input bytes, read once
- *   SYM   26100  512     32 symbol names, 16 bytes each
- *   SOFF  26612  64      32 array offsets, 16 bits each
- *   SKND  26676  32      32 kinds: 0 scalar, 1 char array, 8 int array
- *   LIT   26708  4000    999 literals, offset16 + length16
- *   ST    30708  512     scalar state (see the state offsets below)
- *   NAME  31224  16      the name being scanned
+ *   SRC   0      200000   input bytes, read once
+ *   SYM   200000  512     32 symbol names, 16 bytes each
+ *   SOFF  200512  128     32 array offsets, 32 bits each
+ *   SKND  200640  32      32 kinds: 0 scalar, 1 char array, 8 int array
+ *   LIT   200676  4000    999 literals, offset16 + length16
+ *   ST    204700  512     scalar state (see the state offsets below)
+ *   NAME  205216  16      the name being scanned
  *
  * Everything is addressed through one int pointer, so a subscript is a byte
  * subscript in every routine. Values wider than a byte are stored as two
@@ -25,44 +25,44 @@
  * this reason, and this file implements the same builtin when it compiles.
  */
 
-/* state offsets inside ST (base 30708):
+/* state offsets inside ST (base 204700):
  * CU 0, SZ 2, LC 4, NC 6, NA 7, BI 9, CK 11, CB 12, CV 14,
  * LO 16, LL 18, IM 20, SR 21, AR 22, IA 24, IS 25, ES 26, AD 27-28, EM 29 */
 
 int gb(int m, int o)
 {
-	return m[30708 + o];
+	return m[204700 + o];
 }
 
 int pb(int m, int o, int v)
 {
-	m[30708 + o] = v % 256;
+	m[204700 + o] = v % 256;
 	return 0;
 }
 
 int gw(int m, int o)
 {
-	return m[30708 + o] + m[30708 + o + 1] * 256;
+	return m[204700 + o] + m[204700 + o + 1] * 256;
 }
 
 int pw(int m, int o, int v)
 {
-	m[30708 + o] = v % 256;
-	m[30708 + o + 1] = v / 256;
+	m[204700 + o] = v % 256;
+	m[204700 + o + 1] = v / 256;
 	return 0;
 }
 
 int gd(int m, int o)
 {
-	return m[30708 + o] + m[30708 + o + 1] * 256 + m[30708 + o + 2] * 256 * 256 + m[30708 + o + 3] * 256 * 256 * 256;
+	return m[204700 + o] + m[204700 + o + 1] * 256 + m[204700 + o + 2] * 256 * 256 + m[204700 + o + 3] * 256 * 256 * 256;
 }
 
 int pd(int m, int o, int v)
 {
-	m[30708 + o] = v % 256;
-	m[30708 + o + 1] = v / 256 % 256;
-	m[30708 + o + 2] = v / 256 / 256 % 256;
-	m[30708 + o + 3] = v / 256 / 256 / 256 % 256;
+	m[204700 + o] = v % 256;
+	m[204700 + o + 1] = v / 256 % 256;
+	m[204700 + o + 2] = v / 256 / 256 % 256;
+	m[204700 + o + 3] = v / 256 / 256 / 256 % 256;
 	return 0;
 }
 
@@ -76,6 +76,20 @@ int pwa(int m, int o, int v)
 {
 	m[o] = v % 256;
 	m[o + 1] = v / 256;
+	return 0;
+}
+
+int gda(int m, int o)
+{
+	return m[o] + m[o + 1] * 256 + m[o + 2] * 256 * 256 + m[o + 3] * 256 * 256 * 256;
+}
+
+int pda(int m, int o, int v)
+{
+	m[o] = v % 256;
+	m[o + 1] = v / 256 % 256;
+	m[o + 2] = v / 256 / 256 % 256;
+	m[o + 3] = v / 256 / 256 / 256 % 256;
 	return 0;
 }
 
@@ -223,12 +237,12 @@ int same(int m, int s)
 {
 	int i = 0;
 	while (s[i] != 0) {
-		int a = m[31224 + i];
+		int a = m[205216 + i];
 		int b = s[i];
 		if (a != b) { return 0; }
 		i = i + 1;
 	}
-	if (m[31224 + i] == 0) { return 1; }
+	if (m[205216 + i] == 0) { return 1; }
 	return 0;
 }
 
@@ -257,7 +271,7 @@ int ident(int m)
 {
 	int k = 0;
 	while (k < 16) {
-		m[31224 + k] = 0;
+		m[205216 + k] = 0;
 		k = k + 1;
 	}
 	skipws(m);
@@ -270,7 +284,7 @@ int ident(int m)
 				if (c >= 48) { if (c <= 57) { fail(m); } }
 			}
 			if (n >= 16) { fail(m); }
-			m[31224 + n] = c;
+			m[205216 + n] = c;
 			n = n + 1;
 			bump(m, 1);
 		}
@@ -290,8 +304,8 @@ int idfind(int m)
 		int k = 0;
 		int same1 = 1;
 		while (k < 16) {
-			int a = m[26100 + i * 16 + k];
-			int b = m[31224 + k];
+			int a = m[200000 + i * 16 + k];
+			int b = m[205216 + k];
 			if (a != b) { same1 = 0; }
 			k = k + 1;
 		}
@@ -315,11 +329,11 @@ int defvar(int m)
 	if (n >= 32) { fail(m); }
 	int k = 0;
 	while (k < 16) {
-		int c = m[31224 + k];
-		m[26100 + n * 16 + k] = c;
+		int c = m[205216 + k];
+		m[200000 + n * 16 + k] = c;
 		k = k + 1;
 	}
-	m[26676 + n] = 0;
+	m[200640 + n] = 0;
 	pb(m, 6, n + 1);
 	return n;
 }
@@ -332,30 +346,30 @@ int defarr(int m, int cnt)
 	if (idfind(m) != 65535) { fail(m); }
 	int n = gb(m, 6);
 	if (n >= 32) { fail(m); }
-	int off = gw(m, 7);
+	int off = gd(m, 76);
 	if (off + bytes >= 255000) { fail(m); }
-	pw(m, 7, off + bytes);
+	pd(m, 76, off + bytes);
 	int k = 0;
 	while (k < 16) {
-		int c = m[31224 + k];
-		m[26100 + n * 16 + k] = c;
+		int c = m[205216 + k];
+		m[200000 + n * 16 + k] = c;
 		k = k + 1;
 	}
-	pwa(m, 26612 + n * 2, off + bytes);
-	m[26676 + n] = es;
+	pda(m, 200512 + n * 4, off + bytes);
+	m[200640 + n] = es;
 	pb(m, 6, n + 1);
 	return n;
 }
 
 int isarr(int m, int i)
 {
-	return m[26676 + i];
+	return m[200640 + i];
 }
 
 int varoff(int m, int i)
 {
-	if (m[26676 + i] != 0) {
-		return gwa(m, 26612 + i * 2);
+	if (m[200640 + i] != 0) {
+		return gda(m, 200512 + i * 4);
 	}
 	return (i + 1) * 8;
 }
@@ -437,8 +451,8 @@ int emarg(int m, int k)
 int emname(int m)
 {
 	int i = 0;
-	while (m[31224 + i] != 0) {
-		emc(m, m[31224 + i]);
+	while (m[205216 + i] != 0) {
+		emc(m, m[205216 + i]);
 		i = i + 1;
 	}
 	return 0;
@@ -514,8 +528,8 @@ int litent(int m, int i)
 {
 	int o = gw(m, 16);
 	int l = gw(m, 18);
-	pwa(m, 26708 + i * 4, o);
-	pwa(m, 26708 + i * 4 + 2, l);
+	pwa(m, 200676 + i * 4, o);
+	pwa(m, 200676 + i * 4 + 2, l);
 	return 0;
 }
 
@@ -552,8 +566,8 @@ int lits(int m)
 		nl(m);
 		ems(m, "db ");
 		emc(m, 34);
-		int off = gwa(m, 26708 + i * 4);
-		int len = gwa(m, 26708 + i * 4 + 2);
+		int off = gwa(m, 200676 + i * 4);
+		int len = gwa(m, 200676 + i * 4 + 2);
 		int k = 0;
 		while (k < len) {
 			emc(m, m[off + k]);
@@ -870,7 +884,7 @@ int callargs(int m)
 	char nm[16];
 	int k = 0;
 	while (k < 16) {
-		int c1 = m[31224 + k];
+		int c1 = m[205216 + k];
 		nm[k] = c1;
 		k = k + 1;
 	}
@@ -918,7 +932,7 @@ int callargs(int m)
 	k = 0;
 	while (k < 16) {
 		int c2 = nm[k];
-		m[31224 + k] = c2;
+		m[205216 + k] = c2;
 		k = k + 1;
 	}
 	return 0;
@@ -1652,13 +1666,13 @@ int parse(int m)
 
 int main(void)
 {
-	char mem[31500];
+	char mem[210000];
 	int m = &mem;
-	int n = read(mem, 26000);
+	int n = read(mem, 200000);
 	if (n <= 0) {
 		int z = exit(1);
 	}
-	if (n >= 26000) {
+	if (n >= 200000) {
 		/* a full buffer cannot be told from a truncated one: refuse it, as
 		 * the assembler refuses an input that fills its read buffer. */
 		int z2 = exit(1);
@@ -1667,13 +1681,13 @@ int main(void)
 	pw(m, 0, 0);
 	pb(m, 4, 0);
 	pw(m, 9, 0);
-	pw(m, 7, 400);
+	pd(m, 76, 400);
 	pb(m, 29, 0);
 	parse(m);
 	pw(m, 0, 0);
 	pb(m, 4, 0);
 	pw(m, 9, 0);
-	pw(m, 7, 400);
+	pd(m, 76, 400);
 	pb(m, 29, 1);
 	parse(m);
 	return 0;

@@ -13,15 +13,16 @@ corpus and assembles the text of its own compiler into itself.
 | `seed/asm1` | 8 053 | `71c5dbdba797ed40` | the witness and the builder |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` |
 | `cc` | 10 429 | `a81345ad5a67490d` | built by `asm1` from `src/cc.s` |
-| `asm2` | 51 776 | `3804b0269d7a165d` | `cc` + `asm1` from `src/asm1.c`; the D3 artifact |
-| `src/asm1.c` | 27 969 | — | 1 475 lines, the assembler in the subset |
-| `src/cc.c` | 24 742 | — | 1 680 lines, the compiler in the subset |
+| `seed/cc` | 10 429 | `a81345ad5a67490d` | the frozen C compiler seed; from `cc` |
+| `asm2` | 51 783 | `aa9e992e912f95b6` | `cc` + `asm1` from `src/asm1.c`; the D3 artifact |
+| `src/asm1.c` | 27 984 | — | 1 476 lines, the assembler in the subset |
+| `src/cc.c` | 25 066 | — | 1 694 lines, the compiler in the subset |
 | `src/cc.s` | 58 892 | — | 3 108 lines |
 | `src/asm1.s` | 34 496 | — | 2 269 lines |
 | `src/dis.s` | 11 108 | — | 467 lines |
 
-`cc1.s` (the text `cc` emits for `src/cc.c`) is 135 839 bytes; `asm1.c.s` (the text for
-`src/asm1.c`) is 158 806 bytes. Frames are 260 000 bytes, arrays 255 000, `cc` buffers 200 000,
+`cc1.s` (the text `cc` emits for `src/cc.c`) is 137 953 bytes; `asm1.c.s` (the text for
+`src/asm1.c`) is 158 841 bytes. Frames are 260 000 bytes, arrays 255 000, `cc` buffers 200 000,
 labels 2 048, literals 999, numeric literals up to 16 777 215.
 
 43 compiler goldens (42 in `tests/golden/` plus `helloworld.c`) · 9 reject sources · 36 capability
@@ -34,11 +35,19 @@ pairs · 8 byte-level superiority cases · 8 exact messages · 38 decoder cases 
 make clean && make && make check
 ```
 
-`make check` must print: forbidden tools · nothing outside the tree · header · `cc source invariant` ·
-`port: 43/43` · `d2: THE PORT COMPILES ITSELF` · **`asm2: 220 checks, 0 failures -- corpus and
-self-assembly`** · coverage 100/100 · fixpoint · bootstrap NOT APPLICABLE · 9/9 rejections · 8/8
-messages · 36/36 capability · superiority · 38/38 decoder · 45 cc gates · 36 provenance records ·
-SHAS · `asm1.sha` · `branch pins: 290/290`.
+`make check` must print: forbidden tools · **`frozen: 160 assembly sources unchanged`** · nothing
+outside the tree · header · `cc source invariant` · `port: 43/43` · `d2: THE PORT COMPILES ITSELF` ·
+**`asm2: 220 checks, 0 failures -- corpus and self-assembly`** · coverage 100/100 · fixpoint ·
+bootstrap NOT APPLICABLE · 9/9 rejections · 8/8 messages · 36/36 capability · superiority · 38/38
+decoder · 45 cc gates · 36 provenance records · SHAS · `asm1.sha` · `branch pins: 290/290`.
+
+The C bootstrap from the frozen seeds, on its own:
+
+```
+make from-c
+  from-c: asm2 51783 bytes sha aa9e992e912f95b6, cc1 43418 bytes sha 74e4dd9725169c08
+  from-c: cc2 == cc1 and asm2b == asm2 -- both .c artifacts reproduce
+```
 
 The D3 command on its own:
 
@@ -69,20 +78,37 @@ own compiler text assembles to itself.
 missing while the condition bound had been moved to a 32-bit slot; and the array allocator's 16-bit
 offset would not survive the larger limits. Both are fixed.
 
+**The C bootstrap is reproducible from the frozen seeds.** `seed/cc` (the frozen C compiler) and
+`seed/asm1` (the frozen assembler) build the C assembler first, then the C compiler, then each
+rebuilds the other (`make from-c`):
+
+```
+seed/cc < asm1.c -> asm1.c.s ; seed/asm1 -> asm2
+seed/cc < cc.c   -> cc1.s    ; asm2        -> cc1
+cc1     < cc.c   -> cc2.s    ; asm2        -> cc2      cc2 == cc1
+cc1     < asm1.c -> asm1b.s  ; asm2        -> asm2b    asm2b == asm2
+```
+
+`docs/frozen.tsv` pins all **160 assembly sources** under `src/` and `tests/`; `make test-frozen`
+fails on any change and `make freeze` is the only writer. The assembly implementations are frozen,
+not deleted.
+
 ## The port's constraints, which are the subset's
 
 - Arrays store their **end**; base = `rbp-end`, index `i` at `rbp-end+i`.
 - A subscript in the right side of an array store clobbers `[rbp-308]`; read through a temporary.
 - A call inside an argument list is refused; stage through a local.
 - `exit(n)` and `werr(buf, n)` are the only ways out / to stderr.
-- The port's own input cap is 26 000; `src/cc.c` is 24 742.
+- The port's own input cap is 200 000; `src/cc.c` is 25 066.
 
 ## What is left
 
-1. **Promote `asm2` or keep `asm1` as the witness.** `asm1` is still the thing the hand-emitted
-   references and all historical records were checked against; it must not be deleted. The next
-   decision is whether `make` should build the assembler from `src/asm1.c` (with `cc` + `asm1`) and
-   what `seed/` means after that — recorded, not assumed.
+1. **Promote `asm2` / `cc1` or keep the assembly-built artifacts as the canonical ones.**
+   `seed/cc` and `seed/asm1` now exist and `make from-c` is green; the default `make` still builds
+   `asm1`/`cc` from the frozen assembly sources. Installing the C-built artifacts as `asm1`/`cc` is a
+   deliberate decision with `seed/` and `docs/toolchain.tsv` consequences — record it, do not assume
+   it. `asm1` must never be deleted; it is the witness the hand-emitted references were checked
+   against.
 2. **`.data`** — a second read-write `PT_LOAD`, and string literals in memory.
 3. **Assembler gaps**: `add r32, imm32`, `cmp`/`mov` with `[mem]`, signed condition codes,
    `[base+index*scale]`.

@@ -30,3 +30,10 @@ parse. Until then, both paths are checked and must agree.
 `docs/toolchain.tsv` records every promotion: the new stage's sha256, the builder that produced it,
 and that builder's sha256. The chain runs back to `asm0a`, which is the one link with no builder —
 `docs/toolchain.tsv` says so explicitly rather than leaving the column blank.
+
+## `seed/cc`
+
+`seed/cc` (10 429 bytes, sha256 `a81345ad5a67490d…`) is the frozen C compiler seed: `cc` built by
+`asm1` from `src/cc.s`. It is what `make from-c` uses, together with `seed/asm1`, to compile
+`src/asm1.c` and `src/cc.c` from scratch. It is a copy of the recorded `cc` artifact, not a new
+implementation; `docs/SHAS` pins it.
