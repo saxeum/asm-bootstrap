@@ -547,11 +547,20 @@ test-cc: cc asm1
 	else echo "  putn.c does not compile to its golden"; fail=1; fi; \
 	if $(ASM1) < tests/golden/putn.s > $$tmp/pu 2>/dev/null; then \
 	  chmod +x $$tmp/pu; \
-	  printf '1234\n' > $$tmp/want9; \
+	  printf '4321\n' > $$tmp/want9; \
 	  $$tmp/pu > $$tmp/got9; g1=$$?; \
 	  if [ $$g1 -eq 0 ] && cmp -s $$tmp/got9 $$tmp/want9; then \
-	    printf '  cc    a number formatted by a compiled program: putn(1234) prints 1234\n'; \
-	  else echo "  putn wrote [$$(cat $$tmp/got9)], wanted [1234]"; fail=1; fi; \
+	    printf '  cc    a number formatted by a compiled program: putn(4321) prints 4321\n'; \
+	if $(CC) < tests/golden/chrltrl.c > $$tmp/cl.s 2>/dev/null && cmp -s $$tmp/cl.s tests/golden/chrltrl.s; then :; \
+	else echo "  chrltrl.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/chrltrl.s > $$tmp/cl 2>/dev/null; then \
+	  chmod +x $$tmp/cl; \
+	  if $$tmp/cl; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 9 ]; then \
+	    printf '  cc    character literals: b[0] = a quote A quote compares, exits 9\n'; \
+	  else echo "  chrltrl exited $$g1, wanted 9"; fail=1; fi; \
+	else echo "  asm1 refuses chrltrl.s"; fail=1; fi; \
+	  else echo "  putn wrote [$$(cat $$tmp/got9)], wanted [4321]"; fail=1; fi; \
 	else echo "  asm1 refuses putn.s"; fail=1; fi; \
 	  else echo "  middecl exited $$g1, wanted 7"; fail=1; fi; \
 	else echo "  asm1 refuses middecl.s"; fail=1; fi; \

@@ -20,11 +20,11 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
 | `src/asm1.s` | 33 892 | — | 2244 lines, 212 labels (limit 512), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
-| `cc` | 9 238 | `f23dccfda9bfbc22` | built by `asm1` from `src/cc.s` (2 794 lines) — C to dialect TEXT |
+| `cc` | 9 452 | `8e3278b50a5b3abe` | built by `asm1` from `src/cc.s` (2 847 lines) — C to dialect TEXT |
 
 Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 9 reject sources · **36 capability
 pairs** · **6 superiority cases** (byte-level) + 3 behavioural · 8 exact messages · 38 decoder cases ·
-**100 coverage forms** · **cc: 37 checks, 36 refusals** · 290 branch pins · 36 provenance records.
+**100 coverage forms** · **cc: 38 checks, 36 refusals** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 

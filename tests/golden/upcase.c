@@ -5,8 +5,8 @@ int main(void)
 	while (n > 0) {
 		int i = 0;
 		while (i < n) {
-			if (b[i] == 97) { b[i] = 65; }
-			if (b[i] == 98) { b[i] = 66; }
+			if (b[i] == 'a') { b[i] = 'A'; }
+			if (b[i] == 'b') { b[i] = 'B'; }
 			i = i + 1;
 		}
 		int k = write(b, n);

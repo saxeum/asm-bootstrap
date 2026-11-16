@@ -119,7 +119,7 @@ push rbp
 mov rbp, rsp
 mov rcx, 8200
 sub rsp, rcx
-mov rcx, 1234
+mov rcx, 4321
 mov rdi, rcx
 lea rcx, [rbp-264]
 mov rsi, rcx

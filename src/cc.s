@@ -472,6 +472,8 @@ cmp al, 91
 jz.l stsub
 call skipws
 call gcur
+cmp al, 39
+jz.l ex3chr
 cmp al, 40
 jz stcall
 call findvar
@@ -781,6 +783,8 @@ ret
 ex3:
 call skipws
 call gcur
+cmp al, 39
+jz.l ex3chr
 cmp al, 40
 jz.l ex3paren
 cmp al, 38
@@ -1126,6 +1130,35 @@ call want
 mov eax, 0
 mov [rbp-236], eax
 ret
+
+ex3chr:
+; `'a'` -- a character literal, which is a number with better manners. The
+; dialect has no escapes, so the character is whatever byte is between the
+; quotes, and cc's own source needs only the printable ones.
+mov eax, 1
+call bump               ; the opening quote
+call gcur
+mov [rbp-140], eax
+mov eax, 1
+call bump               ; the character itself
+call gcur
+cmp al, 39
+jnz chrbad
+mov eax, 1
+call bump               ; the closing quote
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, [rbp-128]
+call emitreg
+mov esi, 4194424+f_sep
+call emitstr
+mov eax, [rbp-140]
+call emitnum
+mov esi, 4194424+f_nl
+call emitstr
+ret
+chrbad:
+jmp.l fail              ; a character followed by more characters
 
 ex3paren:
 ; `( expr )` -- grouping. The inner expression is parsed one depth deeper so it
@@ -1720,10 +1753,30 @@ cndbnd:
 ; path until something needs them.
 call skipws
 call gcur
+cmp al, 39
+jz cndbchr
 cmp al, 48
 jb cndbv
 cmp al, 58
-jb cndbn
+jb.l cndbn
+jmp.l cndbv             ; not a digit and not a quote: a variable
+cndbchr:
+mov eax, 1
+call bump               ; the opening quote
+call gcur
+mov [rbp-140], eax
+mov eax, 1
+call bump
+call gcur
+cmp al, 39
+jnz.l fail              ; a character followed by more characters
+mov eax, 1
+call bump
+mov eax, [rbp-140]
+mov [rbp+124], eax
+mov eax, 0
+mov [rbp-316], eax
+ret
 cndbv:
 call ident
 call findvar

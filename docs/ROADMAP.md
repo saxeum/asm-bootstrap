@@ -1608,3 +1608,15 @@ What the port still wants, in the order `putn`'s neighbours will hit them:
    `int` and a string is a buffer plus a length.
 4. Then the port itself, one routine at a time, starting with the ones that have no dependencies:
    `putn` (done), then `emitname`, then the literal table.
+
+## Compiler: character literals
+
+`'a'` works in expressions and as a comparison bound, so the subset's programs can be written the way C
+is written: `p[len] = '0' + (m - d * 10)`, `if (b[i] == 'a')`.
+
+Next for the port, in the order it will need them:
+
+1. **`&&` and `||`** — a compiler's conditions are usually two comparisons, and today `cond` handles
+   exactly one.
+2. **A way to return a pointer** — `emit(char *s)` has no equivalent: a string is a buffer and a length.
+3. Routines ported one at a time, `putn` and the filter having shown the way.

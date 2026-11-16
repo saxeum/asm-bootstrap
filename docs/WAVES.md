@@ -2941,3 +2941,28 @@ it now clears as soon as the index is parsed — the value is a fresh expression
 subscript. `a[b[0]]` is still refused, and still for the right reason.
 
 `cc` 9 126 → 9 238 bytes. 37 checks, 36 refusals, 34 goldens.
+
+## Character literals
+
+`'a'` is a number with better manners, and every line of C source uses one. `ex3chr` reads the byte
+between the quotes and emits it as an immediate; `cndbnd` accepts one as a comparison bound, so
+`if (b[i] == 'a')` works. The dialect has no escapes, so `'\n'` is refused — a newline is `10`, and
+the gate program says so in a comment.
+
+Two programs are now written in ordinary C style rather than in the subset's dialect of C:
+
+```c
+if (b[i] == 'a') { b[i] = 'A'; }         /* the filter */
+p[len] = '0' + (m - d * 10);             /* putn */
+```
+
+Two defects on the way, both the same shape and both caught by the gates rather than by reading:
+
+- The dispatch for `'` went in *after* the parenthesis check had already been reached for a quote, and
+  the routine it jumped to was placed before `ex3paren` — so the labels were right and the *order* was
+  wrong for a quote that was also a paren. Fixed by putting `ex3chr` first.
+- `cndbnd`'s new char branch was inserted *in front of* `cndbv`, which the variable path reached by
+  falling through. Every variable bound became a character literal, and five gates went red at once —
+  which is what a shared dispatcher is for.
+
+`cc` 9 238 → 9 452 bytes. 38 checks, 36 refusals, 34 goldens.

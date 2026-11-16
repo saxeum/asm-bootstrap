@@ -3,10 +3,10 @@ int putn(int n, int p)
 	int len = 0;
 	int m = n;
 	int d = 0;
-	if (m == 0) { p[0] = 48; return 1; }
+	if (m == 0) { p[0] = '0'; return 1; }
 	while (m > 0) {
 		d = m / 10;
-		p[len] = 48 + (m - d * 10);
+		p[len] = '0' + (m - d * 10);
 		len = len + 1;
 		m = d;
 	}
@@ -24,9 +24,9 @@ int putn(int n, int p)
 int main(void)
 {
 	char out[20];
-	int l = putn(1234, &out);
+	int l = putn(4321, &out);
 	int k = write(out, l);
-	out[0] = 10;
+	out[0] = 10;   /* a newline: escapes are not in the subset */
 	int k2 = write(out, 1);
 	return 0;
 }
