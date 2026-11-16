@@ -3155,3 +3155,42 @@ segfault at the first byte read.
 
 `src/cc.c`'s slice 2 is therefore not attempted. Slice 1 stands, gated, and this is the next thing to
 fix — with these four probes as the acceptance test, since each one must pass.
+
+## A collision nobody would have looked for: the compiler's scratch inside the array region
+
+The four probes from the previous entry all passed after **one constant changed**: the array allocator's
+counter started at 264, and `cc`'s own scratch slots for *generated code* — the parked index at `-328`,
+the base index at `-324`, and the subscript slots from `-268` — live in 264…332. So `t[0] = "ab"` parked
+its index at `-328`, which is *inside the array being stored into*, and the store landed at
+`rbp-328+index` instead of `rbp-offset+index`. Every array whose offset happened to fall in that window
+was silently corrupted, and the symptom was a segfault on the first byte read.
+
+The counter now starts at 400, above every scratch slot the generated code uses. Gate: a pointer element
+as a call argument inside a loop prints `abcd`.
+
+This is the third defect of the same family in this project — a fixed frame slot shared by two things
+that run at different times — and the first where the sharing is with the *allocator* rather than with
+another part of the parser. `docs/cc.md`'s slot table needs the allocator's range in it.
+
+## And the next one, found immediately: the same call, inside a function with parameters
+
+Slice 2 (the prologue emitted from a table) is blocked again, and the A/B is clean:
+
+| shape | result |
+|---|---|
+| `while (i < 2) { len = ll(p, len, t[i]); }` in **main** | prints `abcd` |
+| `while (i < n) { len = l2(p, len, t[i]); }` in a **function with parameters** | SIGSEGV |
+
+Same call shape, same arguments; the only difference is whether the *caller* has parameters of its own.
+A second instance: `char b[64]; int t[4];` beside each other with `p[i] = t[i]` also segfaults, so the
+common factor may be two arrays in one frame rather than parameters.
+
+Not chased: this session has already found and fixed three defects of one family and the tree should be
+handed over green. Both reproductions are in this file; the next step is to diff the emitted code for
+those two rows, which is now a five-minute job with a known-good comparison rather than a search.
+
+**The attempted slice 2 is preserved as `docs/selfhost-slice2-blocked.c.txt`** — it emits the same bytes
+from two tables of literal addresses walked by loops, and it crashes because of the caller-with-parameters
+defect above. It is kept rather than deleted so that the next session can run it, see the failure, fix the
+defect and watch it start passing; `src/cc.c` stays at slice 1, which passes, because a tree handed over
+with a red gate is worth less than one handed over green with the failing attempt on the record beside it.

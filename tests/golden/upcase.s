@@ -6,7 +6,7 @@ mov rcx, 16500
 sub rsp, rcx
 mov eax, 0
 mov edi, 0
-lea rsi, [rbp-264]
+lea rsi, [rbp-400]
 mov edx, 100
 syscall
 mov [rbp-16], rax
@@ -26,7 +26,7 @@ cmp rax, rcx
 jb L2b
 jmp.l L2e
 L2b:
-lea rax, [rbp-264]
+lea rax, [rbp-400]
 mov rcx, [rbp-24]
 add rax, rcx
 movzx rax, byte [rax]
@@ -37,12 +37,12 @@ L3t:
 mov rcx, [rbp-24]
 mov [rbp-328], rcx
 mov rax, 65
-lea rcx, [rbp-264]
+lea rcx, [rbp-400]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 L3e:
-lea rax, [rbp-264]
+lea rax, [rbp-400]
 mov rcx, [rbp-24]
 add rax, rcx
 movzx rax, byte [rax]
@@ -53,7 +53,7 @@ L4t:
 mov rcx, [rbp-24]
 mov [rbp-328], rcx
 mov rax, 66
-lea rcx, [rbp-264]
+lea rcx, [rbp-400]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
@@ -66,14 +66,14 @@ jmp.l L2
 L2e:
 mov rax, [rbp-16]
 mov rdx, rax
-lea rsi, [rbp-264]
+lea rsi, [rbp-400]
 mov eax, 1
 mov edi, 1
 syscall
 mov [rbp-32], rax
 mov eax, 0
 mov edi, 0
-lea rsi, [rbp-264]
+lea rsi, [rbp-400]
 mov edx, 100
 syscall
 mov [rbp-16], rax

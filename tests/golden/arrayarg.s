@@ -24,11 +24,11 @@ add rcx, rcx
 add rcx, rcx
 mov [rbp-328], rcx
 mov rax, 41
-lea rcx, [rbp-264]
+lea rcx, [rbp-400]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], rax
-lea rcx, [rbp-264]
+lea rcx, [rbp-400]
 mov rdx, [rbp-16]
 add rdx, rdx
 add rdx, rdx

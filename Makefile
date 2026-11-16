@@ -584,6 +584,16 @@ test-cc: cc asm1
 	  printf 'ab\ncd\n' > $$tmp/st.want; \
 	  if [ $$g1 -eq 0 ] && cmp -s $$tmp/st.out $$tmp/st.want; then \
 	    printf '  cc    literals are zero-terminated: two strings walked to their ends\n'; \
+	if $(CC) < tests/golden/ptrelem.c > $$tmp/pe.s 2>/dev/null && cmp -s $$tmp/pe.s tests/golden/ptrelem.s; then :; \
+	else echo "  ptrelem.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/ptrelem.s > $$tmp/pe 2>/dev/null; then \
+	  chmod +x $$tmp/pe; \
+	  $$tmp/pe > $$tmp/pe.out; g1=$$?; \
+	  printf 'abcd' > $$tmp/pe.want; \
+	  if [ $$g1 -eq 0 ] && cmp -s $$tmp/pe.out $$tmp/pe.want; then \
+	    printf '  cc    a pointer element as an argument, in a loop, prints abcd\n'; \
+	  else echo "  ptrelem wrote [$$(cat $$tmp/pe.out)]"; fail=1; fi; \
+	else echo "  asm1 refuses ptrelem.s"; fail=1; fi; \
 	  else echo "  strterm wrote [$$(cat $$tmp/st.out)]"; fail=1; fi; \
 	else echo "  asm1 refuses strterm.s"; fail=1; fi; \
 	  else echo "  twoloops exited $$g1, wanted 5"; fail=1; fi; \

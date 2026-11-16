@@ -9,11 +9,11 @@ mov [rbp-16], rax
 mov rcx, [rbp-16]
 mov [rbp-328], rcx
 mov rax, 65
-lea rcx, [rbp-264]
+lea rcx, [rbp-400]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
-lea rax, [rbp-264]
+lea rax, [rbp-400]
 mov rcx, [rbp-16]
 add rax, rcx
 movzx rax, byte [rax]

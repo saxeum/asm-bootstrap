@@ -122,13 +122,13 @@ mov rcx, 16500
 sub rsp, rcx
 mov rcx, 4321
 mov rdi, rcx
-lea rcx, [rbp-264]
+lea rcx, [rbp-400]
 mov rsi, rcx
 call putn
 mov [rbp-16], rax
 mov rax, [rbp-16]
 mov rdx, rax
-lea rsi, [rbp-264]
+lea rsi, [rbp-400]
 mov eax, 1
 mov edi, 1
 syscall
@@ -136,13 +136,13 @@ mov [rbp-24], rax
 mov rcx, 0
 mov [rbp-328], rcx
 mov rax, 10
-lea rcx, [rbp-264]
+lea rcx, [rbp-400]
 mov rdx, [rbp-328]
 add rcx, rdx
 mov [rcx], al
 mov rax, 1
 mov rdx, rax
-lea rsi, [rbp-264]
+lea rsi, [rbp-400]
 mov eax, 1
 mov edi, 1
 syscall

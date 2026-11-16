@@ -54,8 +54,8 @@ mov [rbp+96], eax
 mov [rbp-108], eax      ; no variables declared yet
 mov [rbp-208], eax      ; not inside an argument list
 mov [rbp-236], eax      ; not inside a subscript
-mov eax, 264
-mov [rbp-320], eax      ; the first free byte above the scalar slots
+mov eax, 400
+mov [rbp-320], eax      ; the first free byte above the compiler's own scratch slots
 mov eax, 0
 mov eax, 1
 mov [rbp-292], eax      ; a call at depth 0 evaluates its arguments at depth 1
