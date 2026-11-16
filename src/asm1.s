@@ -28,7 +28,7 @@ lea rbp, [rsp]
 mov eax, 0              ; SYS_read
 mov edi, 0
 lea rsi, [rbp+120]
-mov edx, 4000
+mov edx, 24000           ; src/asm1.s is ~20 KB
 syscall
 mov [rbp+28], eax       ; n
 mov eax, 0
@@ -570,6 +570,9 @@ call reg32
 mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
+movzx eax, byte [rbx+1]
+cmp al, 121             ; '"y"' => "byte [" => memory source
+jz.l pzmem
 call r8
 mov eax, [rbp+32]
 add eax, eax
@@ -829,12 +832,12 @@ movzx eax, byte [rbp+16]
 cmp al, 0
 jnz.l pline             ; pass 1: the label was recorded in pass 0
 mov eax, [rbp+80]
-cmp eax, 8
+cmp eax, 128
 jb.l lok
 jmp.l fail
 lok:
 lea rcx, [rbp+1]        ; rbp-120 without negative displacements, and without
-mov esi, 121            ; [rbp] at disp 0, which the encoder gets wrong (see
+mov esi, 4097            ; table base = rbp-4096, computed so no disp8 limit
 sub rcx, rsi            ; docs/encodings.md: mod=00/rm=101 is RIP-relative)
 mov edx, [rbp+80]
 lget:
@@ -893,7 +896,7 @@ call emital
 jmp.l pline
 pbr1:
 lea rcx, [rbp+1]        ; rbp-120 without negative displacements, and without
-mov esi, 121            ; [rbp] at disp 0, which the encoder gets wrong (see
+mov esi, 4097            ; table base = rbp-4096, computed so no disp8 limit
 sub rcx, rsi            ; docs/encodings.md: mod=00/rm=101 is RIP-relative)
 mov edx, [rbp+80]
 lfind:
@@ -974,7 +977,7 @@ mov edi, 1
 syscall
 lku:                    ; look up the name in [rbp+72] -> rcx = entry, else fail
 lea rcx, [rbp+1]
-mov esi, 121
+mov esi, 4097            ; table base = rbp-4096, computed so no disp8 limit
 sub rcx, rsi
 mov edx, [rbp+80]
 lkul:
@@ -1121,3 +1124,15 @@ mov eax, 235
 mov [rbp+92], eax
 lea rbx, [rbx+5]        ; past "call "
 jmp.l pcall
+
+pzmem:                  ; movzx r32, byte [mem] -> 0F B6 /r
+lea rbx, [rbx+5]        ; past "byte "
+call memop
+mov eax, [rbp+32]       ; the destination register code
+mov [rbp+64], eax
+mov eax, 15
+call emital
+mov eax, 182
+call emital
+call emitmem
+jmp.l pline

@@ -1554,3 +1554,35 @@ The edits to `src/asm1.s` in this session were made with Python string substitut
 project forbids. Stopped at the user's instruction; the rest of this entry was done with `sed`,
 `dd` and `printf` only. The artifacts themselves are plain text and hand-computed bytes, but the
 tool that edited them was outside the rules, and that is recorded rather than quietly dropped.
+
+## asm1: movzx from memory, a 128-entry label table — self-assembly still crashes
+
+`asm1` is 4263 bytes and builds **18 of 18 fixtures** byte-identically. Added:
+
+- `movzx r32, byte [mem]` (0F B6 with a memory operand), the last form `asm1.s` needed
+  that `asm1` could not parse.
+- The label table moved from `rbp-120` (8 entries, ~96 usable bytes) to `rbp-4096`
+  (128 entries, 1536 bytes). The base is *computed* — `lea rcx,[rbp+1]; mov esi,4097;
+  sub rcx,rsi` — so the disp8 window stops being a limit, which was the structural
+  constraint identified two entries ago. The table lives in our own stack, far below
+  any call frame.
+- The source read went from 4000 to 24000 bytes, because `src/asm1.s` is ~20 KB.
+
+**The fixpoint does not hold yet: `asm1 < src/asm1.s` segfaults.** It is not a parse
+failure — pass 0 dies partway, with no output. Every form it uses now parses on its own;
+the failure is only reachable with the real 20 KB input, so it is a capacity or
+addressing bug rather than a missing instruction. Candidates, in order of suspicion:
+
+1. Some slot or table index that is fine for small inputs but not for 109 labels or a
+   20 KB buffer. The label table now spans `rbp-4096 .. rbp-2561`; nothing else is
+   supposed to live there, but nothing verifies that either.
+2. A `rel8` jump inside `asm1`'s own dispatch that is fine until the input is large
+   enough to matter — the offsets it computes are input-dependent.
+3. The read size (24000) versus the stack region the buffer occupies: the buffer starts
+   at `rbp+120` and now extends 24 KB up-stack. Nothing bounds what it may overwrite.
+
+Next session starts here, with a way to localise the crash: the stage-counter technique
+already used for count10 (`fail` exits with a stage byte) will not help, because the
+process dies rather than exiting. The workable approach is to cut `src/asm1.s` down to
+the smallest prefix that still crashes, which is a *prefix* of the input rather than of
+the assembler.
