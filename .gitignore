@@ -1,6 +1,7 @@
 /asm1
 /asm1b
 /count10
+/count10b
 core*
 .refcache/
 /dis
