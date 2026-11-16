@@ -11,6 +11,7 @@
 ASM0A := ./asm0a
 ASM1  := ./asm1
 SEED  := seed/asm1
+DIS   := ./dis
 # src/<name>.s assembles to ref/<name>
 PAIRS := addr32 callret cmp32 cmp8 count10 dbnum inc8 jmp jz load loop movrr \
          r8 rel32 stack store
@@ -19,9 +20,10 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 test test-asm0a test-asm1 test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 dis test test-asm0a test-asm1 test-dis test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1 (the promoted previous stage)'
+	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
 	@echo 'make test       assemble every fixture with both assemblers, compare to ref/'
 	@echo 'make test-reject  sources that must be refused, with no output'
 	@echo 'make test-capability  new syntax vs the old spelling: same bytes'
@@ -36,6 +38,15 @@ help:
 	@echo 'make check      bootstrap, shas, branch decodes, provenance'
 	@echo 'make clean      remove generated binaries'
 all: asm1
+
+# The branch decoder. It is built by asm1 from src/dis.s like any other program,
+# and it exists because the gate that checks docs/branches.tsv may not use
+# objdump: a disassembler is the tool this project replaces.
+dis: src/dis.s asm1
+	@$(ASM1) < src/dis.s > $@
+	@chmod +x $@
+	@printf '  dis   %s bytes  sha %s  (built by %s from src/dis.s)\n' \
+	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(ASM1)"
 bootstrap:
 	@printf '  asm0a %s bytes  sha %s  (hand-written machine code; nothing to build)\n' \
 	  "$$(wc -c < $(ASM0A))" "$$(sha256sum $(ASM0A) | cut -c1-16)"
@@ -47,7 +58,7 @@ asm1: src/asm1.s $(SEED)
 	@chmod +x $@
 	@printf '  asm1  %s bytes  sha %s  (built by %s from src/asm1.s)\n' \
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(SEED)"
-test: test-asm0a asm1 test-asm1 test-reject test-reject-msg test-capability test-superior
+test: test-asm0a asm1 test-asm1 test-dis test-reject test-reject-msg test-capability test-superior
 test-asm0a:
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; \
 	for f in $(PAIRS); do \
@@ -106,23 +117,23 @@ demo: asm1
 # a specific assembler binary by sha256. The ledger is written only by `record`:
 # recording asserts a change is intended, and a build step that absorbed drift
 # silently is exactly how a stale record would go unnoticed.
-record: asm1
+record: asm1 dis
 	@./tools/provenance.sh record
-verify-provenance: asm1
+verify-provenance: asm1 dis
 	@./tools/provenance.sh verify
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: asm1 fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior verify-provenance
+check: asm1 dis fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
 	  || { echo "  asm1 DOES NOT MATCH docs/asm1.sha -- the assembler changed"; \
 	       echo "  if that is intended: make record"; exit 1; }
-	@./tools/check-branches.sh || true
+	@./tools/check-branches.sh
 clean:
-	@rm -f asm1 asm1b count10
-	@echo '  removed asm1, asm1b, count10'
+	@rm -f asm1 asm1b count10 dis
+	@echo '  removed asm1, asm1b, count10, dis'
 
 # ---- bootstrap chain --------------------------------------------------------
 # Two builders exist while the dialect is still within asm0a's reach:
@@ -158,6 +169,38 @@ promote: asm1 fixpoint
 	   echo "  promoted seed/asm1: $${new%%????????????????} (was $${old%%????????????????})"; \
 	 fi
 	@./tools/provenance.sh record
+
+# ---- the decoder ------------------------------------------------------------
+# Each case is an input, a site, and the whole line the decoder must print --
+# hand-written from the encoding rules, not produced by the decoder. A decoder
+# tested against its own output proves nothing, so refusals are here in the same
+# file: `refuse:<reason>` means exit non-zero, NOT ONE BYTE on stdout, and
+# exactly `dis: <reason>` on stderr -- the reason is pinned, so a refusal that
+# names the wrong rule fails.
+test-dis: dis
+	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; n=0; \
+	while read -r hex site want; do \
+	  case "$$hex" in ''|'#'*) continue ;; esac; \
+	  n=$$((n+1)); \
+	  case "$$hex" in \
+	    -) : > $$tmp/in ;; \
+	    *) printf '%s\n' "$$hex" | xxd -r -p > $$tmp/in ;; \
+	  esac; \
+	  $(DIS) "$$site" < $$tmp/in > $$tmp/got 2> $$tmp/err; rc=$$?; \
+	  case "$$want" in \
+	  refuse*) \
+	    printf 'dis: %s\n' "$${want#refuse:}" > $$tmp/want; \
+	    if [ $$rc -ne 0 ] && [ ! -s $$tmp/got ] && cmp -s $$tmp/err $$tmp/want; then ok=$$((ok+1)); \
+	    else echo "  REFUSAL: [$$hex] site $$site -> '$$(cat $$tmp/got)' / '$$(cat $$tmp/err)' (exit $$rc), want '$$want'"; fail=1; fi ;; \
+	  *) \
+	    printf '%s\n' "$$want" > $$tmp/want; \
+	    if [ $$rc -eq 0 ] && cmp -s $$tmp/got $$tmp/want; then ok=$$((ok+1)); \
+	    else echo "  DECODE: [$$hex] site $$site -> '$$(cat $$tmp/got)' (exit $$rc), want '$$want'"; fail=1; fi ;; \
+	  esac; \
+	done < tests/dis/cases.tsv; \
+	if [ $$n -lt 30 ]; then echo "  only $$n cases -- the suite has been emptied"; exit 1; fi; \
+	if [ $$ok -ne $$n ]; then echo "  dis: $$ok/$$n cases"; exit 1; fi; \
+	printf '  dis   %s/%s cases: decoded and refused as hand-written\n' $$ok $$n
 
 # ---- rejection parity -------------------------------------------------------
 # A positive suite cannot see a silently truncated encoding: a wrong byte is

@@ -115,41 +115,58 @@ in four ways that this repo mirrors (`docs/pdp8-to-gcc.md` has the sources):
 What none of it catches is a deliberately miscompiling tool (Thompson, 1984). When `src/asm1.s`
 outgrows `asm0a`, only 2–4 remain, which is exactly DEC's position.
 
-## Known violation, now removed: the branch pins were checked with `objdump`
+## The branch pins are checked by our own decoder — and the rest of the mix is not
 
-`tools/check-branches.sh` decoded `asm0a` with `objdump`, so `make check` depended on a binutils
-disassembler to verify this project's output. That is now **suspended, not fixed**: the script refuses
-to run, prints that the pins are unverified, and exits 2. `make check` prints that line rather than a
-green one.
+`tools/check-branches.sh` used to decode `asm0a` with a binutils `objdump`, so `make check` depended
+on a disassembler to verify this project's output — the tool the project exists to replace. It was
+suspended rather than left green, and that suspension is now over because the replacement exists:
+**`src/dis.s`, a branch decoder written in the dialect and assembled by `asm1`** (`make dis`).
 
-`docs/branches.tsv` — 290 recorded sites — stays. It is hand-recorded evidence and it should be
-validated, by `src/dis.s`, the moment a decoder in the dialect exists. Until then **no claim in this
-repo may describe the branch pins as verified.**
+The gate, from a clean tree:
 
-The lesson, since it was earned twice in one hour: writing the rule down is not obeying it. The test is
-whether the tool is still in the loop, and for the branch gate it was, right up to the point where the
-check said so out loud and stopped.
+```
+make check
+```
 
-## Known violation: `tools/check-branches.sh` uses `objdump`
+ends with the line `branch pins: 290/290 decoded by src/dis.s -- asm0a sha 6271c5ee79034ffd, dis sha
+8c9bd9b356874875`, and
 
-Recorded because it is currently load-bearing: `make check` runs the branch decoder, and the branch
-decoder shells out to `objdump`. That makes a binutils disassembler the thing that verifies this
-project's output — the tool the project exists to replace.
+```
+./dis 0x142 < asm0a
+```
 
-**The fix is a decoder written in the dialect and assembled by `asm1`.** Its scope is exactly what the
-gate consumes: given a byte offset, return the mnemonic and the branch target for
+prints `0x142 0x373 jmp`.
 
-    jmp · je · jne · jz · jnz · jb · ja · jae · js · jg · jo · call        (rel8 and rel32)
+The gate compares every pin with `cmp`, not with a status, and it refuses to be quietly green three
+ways: no decoder, no subject, or a table shorter than the 290 recorded sites; a deliberate mismatch
+it must report; and any pin whose line does not match byte for byte. It prints the sha of the subject
+and of the decoder in the same line as the result, because a count with no subject is not evidence.
 
-which means recognising `EB`, `E9`, `E8`, `70`–`7F`, and `0F 80`–`0F 8F`, computing the target as
-`site + length + disp`, and printing it as hex. Hex output is now expressible: `shr` and `and` both
-exist, which they did not when the gate was written.
+What the decoder does, and it is deliberately no more than the gate consumes: `EB`, `E9`, `E8`,
+`70`–`7F`, `0F 80`–`0F 8F`; mnemonic, `site + length + disp`, printed as unpadded lowercase hex. It
+**refuses** — exit 1, nothing on stdout, and one reason word on stderr — in six named cases:
+`offset` (no argument, or not a hex offset), `input` (unreadable, or larger than the buffer), `site`
+(not a byte offset inside the input), `form` (not one of the forms above), `trunc` (the instruction
+would run past the end of the input), `target` (the computed target is not a byte in the input).
+Refusing beats guessing: a decoder that reads past its input has the same defect as an assembler that
+emits a prefix, and a refusal that names the wrong rule is evidence about the wrong subject.
 
-Until that exists, `docs/branches.tsv` is still worth running — but a green result from it is
-**evidence about objdump too**, and must be described that way rather than as independent confirmation.
+Its cases are in `tests/dis/cases.tsv` (`make test-dis`), expectations written by hand from the
+encodings, positive and negative in one file. A decoder tested against its own output proves nothing.
 
-Same for the instruction-mix inventory in `docs/ROADMAP.md`: it was produced with `objdump` and is
-therefore **provisional**. Re-deriving it with our own decoder is part of the same task.
+Two things this does **not** establish, and neither may be claimed as verified:
+
+1. **A shared bug could hide.** Our decoder checking our encoder is weaker than an independent one.
+   The mitigations already exist and are not new: hand-emitted `ref/` binaries, hand-written decode
+   cases, and the capability pairs that pin encodings against hand-computed dumps.
+2. **The instruction-mix table in `docs/ROADMAP.md` is still provisional**, and for a narrower
+   reason than before. The decoder handles branch forms only, so it confirms the branch half of that
+   inventory (290 sites, `make check`) and says nothing about `mov`, `add`, `inc`. Re-deriving the
+   whole mix needs a decoder for every form `asm0a` uses, which is a different and much larger tool.
+   It stays labelled provisional until that exists.
+
+The lesson from the suspension, kept because it was earned twice in one hour: writing the rule down is
+not obeying it. The test is whether the forbidden tool is still in the loop.
 
 ## Known defects in `asm0a` — never imitate, never "fix" `asm1` to match
 

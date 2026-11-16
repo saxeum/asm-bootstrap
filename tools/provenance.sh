@@ -24,6 +24,10 @@ ASM1_SHA=docs/asm1.sha
 PAIRS="addr32 callret cmp32 cmp8 count10 dbnum inc8 jmp jz load loop movrr r8 rel32 stack store"
 # src/hello_num.s has the hand-written ref/hello as its oracle
 HELLO=hello_num
+# artifacts with no independent oracle: a program assembled by asm1, whose check
+# is that asm1 reproduces the built file byte for byte. asm0a cannot assemble
+# these -- that is the point of them -- so they are recorded for asm1 only.
+NOORACLE=dis
 
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
@@ -49,19 +53,34 @@ emit() {
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+# the no-oracle artifacts, assembled by asm1 and compared with the built file
+emit_no() {
+	[ -x ./asm1 ] || { echo "provenance: ./asm1 is not executable" >&2; exit 1; }
+	asha=$(sha ./asm1)
+	for f in $NOORACLE; do
+		./asm1 < "src/$f.s" > "$TMP/$f" || {
+			echo "provenance: asm1 cannot assemble $f.s" >&2; exit 1; }
+		if [ -f "./$f" ] && ! cmp -s "$TMP/$f" "./$f"; then
+			echo "provenance: asm1 does not reproduce ./$f from src/$f.s" >&2
+			exit 1
+		fi
+		printf '%s\t%s\t%s\t%s\n' "$f" "$(sha "$TMP/$f")" asm1 "$asha"
+	done
+}
+
 case "$1" in
 record)
 	[ -x ./asm1 ] || { echo "provenance: build asm1 first (make asm1)" >&2; exit 1; }
 	sha256sum ./asm1 > "$ASM1_SHA.tmp"
 	printf '  %s\n' "$(cat "$ASM1_SHA.tmp")" | sed 's/^  /asm1 sha256 /'
 	mv "$ASM1_SHA.tmp" "$ASM1_SHA"
-	emit asm0a asm1 | sort > "$LEDGER.tmp"
+	{ emit asm0a asm1; emit_no; } | sort > "$LEDGER.tmp"
 	mv "$LEDGER.tmp" "$LEDGER"
 	echo "  recorded $LEDGER ($(wc -l < "$LEDGER" | tr -d ' ') lines) and $ASM1_SHA"
 	;;
 verify)
 	[ -f "$LEDGER" ] || { echo "provenance: $LEDGER missing; run make record" >&2; exit 1; }
-	emit asm0a asm1 | sort > "$TMP/now.tsv"
+	{ emit asm0a asm1; emit_no; } | sort > "$TMP/now.tsv"
 	if cmp -s "$TMP/now.tsv" "$LEDGER"; then
 		echo "  provenance: $(wc -l < "$LEDGER" | tr -d ' ') records reproduced exactly"
 	else

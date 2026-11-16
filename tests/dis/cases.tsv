@@ -1,0 +1,75 @@
+# src/dis.s — decode cases. The expectations here are written by hand from the
+# encodings in docs/encodings.md and the x86 branch rules (target = site +
+# length + displacement), NOT produced by running the decoder. A decoder tested
+# against its own output proves nothing.
+#
+#   input-hex  site  expected
+#
+# The expected column is the WHOLE line dis must print, so the site it echoes,
+# its spelling, and the mnemonic are all pinned. `refuse` means: exit non-zero
+# and not one byte on stdout.
+#
+# field 1 is the input as hex; `-` means an empty input.
+
+# --- the sixteen jcc rel8 names, 0x70..0x7f, displacement 0, target 2 --------
+70000000 0 0x0 0x2 jo
+71000000 0 0x0 0x2 jno
+72000000 0 0x0 0x2 jb
+73000000 0 0x0 0x2 jae
+74000000 0 0x0 0x2 je
+75000000 0 0x0 0x2 jne
+76000000 0 0x0 0x2 jbe
+77000000 0 0x0 0x2 ja
+78000000 0 0x0 0x2 js
+79000000 0 0x0 0x2 jns
+7a000000 0 0x0 0x2 jp
+7b000000 0 0x0 0x2 jnp
+7c000000 0 0x0 0x2 jl
+7d000000 0 0x0 0x2 jge
+7e000000 0 0x0 0x2 jle
+7f000000 0 0x0 0x2 jg
+
+# --- EB rel8, forward and backward -----------------------------------------
+# eb 04 -> 0 + 2 + 4 = 6, and 6 < 7 so it is a byte in the input
+eb040000000000 0 0x0 0x6 jmp
+# at site 4: eb fa -> 4 + 2 - 6 = 0
+00000000ebfa0000 4 0x4 0x0 jmp
+
+# --- 0F 8x rel32, forward and backward -------------------------------------
+# 0f 85 01000000 -> 0 + 6 + 1 = 7
+0f8501000000000000 0 0x0 0x7 jne
+# at site 8: 0f 85 faffffff -> 8 + 6 - 6 = 8
+00000000000000000f85faffffff0000 8 0x8 0x8 jne
+
+# --- E9 rel32 --------------------------------------------------------------
+# at site 8: e9 10000000 -> 8 + 5 + 16 = 29
+0000000000000000e910000000000000000000000000000000000000000000000000 8 0x8 0x1d jmp
+
+# --- E8 rel32 --------------------------------------------------------------
+# e8 fbffffff -> 0 + 5 - 5 = 0
+e8fbffffff000000 0 0x0 0x0 call
+# e8 00000000 -> 0 + 5 + 0 = 5
+e800000000000000 0 0x0 0x5 call
+
+# --- the site argument -----------------------------------------------------
+# 0X0 is the same offset as 0x0, and the output is always lowercase and
+# unpadded, so the site is echoed canonically rather than copied.
+70000000 0X0 0x0 0x2 jo
+70000000 0x0 0x0 0x2 jo
+70000000 2 refuse:form
+0000700000 2 0x2 0x4 jo
+
+# --- refusals --------------------------------------------------------------
+- 0 refuse:site
+70000000 4 refuse:site
+70000000 5 refuse:site
+70000000 0x refuse:offset
+70000000 12zz refuse:offset
+c3000000 0 refuse:form
+0f05000000000000 0 refuse:form
+# the same bytes with a 4-byte input: the 0F form needs six, so the bounds rule
+# fires first -- trunc, not form. The order of the checks is part of the answer.
+0f050000 0 refuse:trunc
+eb 0 refuse:trunc
+72f80000 0 refuse:target
+eb020000 0 refuse:target

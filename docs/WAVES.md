@@ -1675,3 +1675,84 @@ Re-pinned, and the diff against the old file is exactly what the change explains
 
 288 pins became 290; all 290 decode as recorded, and `--selftest` still rejects the three known-bad
 sites.
+
+## The decoder: `src/dis.s`, and the gate that stops depending on objdump
+
+The branch gate had been suspended with an honest message rather than left green on a forbidden tool.
+This wave replaces the tool. `src/dis.s` is 380 lines of the dialect, assembled by `asm1` into a
+1 348-byte program, and `make check` ends with
+
+    branch pins: 290/290 decoded by src/dis.s -- asm0a sha 6271c5ee79034ffd, dis sha 8c9bd9b356874875
+
+### Decisions, made before the code
+
+- **One site per run**: `./dis <site> < binary`. The offset comes from `argv` and the binary from
+  stdin, so the two never compete for one channel, and the gate can compare one line with `cmp`. 290
+  runs of a 1.2 KB program is not a performance question.
+- **`argv` without pointer arithmetic.** At entry `rsp` *is* `argc`, so `pop rcx` / `pop rax` /
+  `pop rbx` gives `argc`, `argv[0]`, `argv[1]` and nothing has to be loaded through a 64-bit pointer
+  (which `mov r32,[mem]` would truncate).
+- **Refuse rather than guess** in three more places than the original scope: the site must be inside
+  the input, the instruction must fit inside it, and the target it computes must be a byte in it. The
+  last is what makes a negative target impossible to print by accident.
+- **The mnemonic table is data, not a chain of compares**: 18 slots of 5 bytes (`len`, up to four
+  letters), indexed by `cc*5` via `*4 + *1`. `putmn` prints it, and the same printer writes the
+  refusal, which is six words in 8-byte slots (`offset`, `input`, `site`, `form`, `trunc`, `target`).
+
+### Four defects, none caught by reading
+
+1. **The hex accumulator was never initialised.** `mov eax,0` zeroed the digit counter and stopped
+   there, so the site came out as `garbage*16^n + value` with the garbage coming from the env area.
+   The first probe (`mov [rbp+16],eax; exit [rbp+16]`) reported `0` -> 128 and `5` -> 133 while
+   two-digit offsets were all correct, and the tell was arithmetic: 128 = 8*16, so the accumulator
+   had started at 8. A single-digit offset addresses a *wrong site* silently — the defect class this
+   project cares most about — and no fixture would have caught it.
+2. **`cmp eax,9` instead of `cmp eax,10`** in the nibble printer, so the digit `9` printed as `` ` ``
+   (87 + 9). That failed 93 of 290 pins at once, which is the good kind of failure.
+3. **A negative `rel8` fell through into the `rel32` load.** `d_re8` sign-extended the byte and then
+   ran into `d_re32`, which overwrote it with a 4-byte load. Only two of the 290 pins are backward
+   `rel8` branches.
+4. **Two labels over 7 characters** (`chkbnd_ok`, `msg_fail`): `line 244: rejected`, at build time,
+   which is where a limit should bite.
+
+The order of failures is the useful part: (1) would have been invisible in a green gate — it produced
+a plausible wrong number for a two-digit offset; (2) and (3) were caught only because the gate
+compares *bytes* on all 290 sites. 288/290 is not "green with two flaky pins", it is two real bugs.
+
+### The gate was then made to fail, twice
+
+A gate that cannot fail is a format check wearing a gate's clothes. So: one pin corrupted on purpose
+(`0x373` -> `0x374`) printed `pin 0x142: got '0x142 0x373 jmp', recorded '0x142 0x374 jmp'` and
+`289/290 agree, 1 DISAGREE`, exit 1. And the *subject* corrupted — the opcode byte at `0x1b4` changed
+from `0x73` (`jae`) to `0x77` (`ja`) in a copy of `asm0a` — printed `0x1b4 0x139 ja` where the real
+binary gives `0x1b4 0x2b3 jae`. The second one is the point: the decoder is reading the subject.
+
+### What this does not prove
+
+Our decoder checking our encoder can share a bug; that risk is why `tests/dis/cases.tsv` holds 38
+hand-written cases (16 jcc names, both rel8 and rel32 directions, all six refusal reasons, and the
+`argv` spellings) instead of expected output captured from the decoder. And the instruction-mix table
+in `docs/ROADMAP.md` stays provisional: `dis.s` decodes branch forms only, so it confirms the branch
+half of that inventory and says nothing about `mov`, `add`, `inc` or `cmp`.
+
+### The refusal message was a lie, and the fix caught a defect in the test
+
+It started as one string, `not a branch`, printed for every refusal — including for a 100 000-byte
+input that was refused for being larger than the buffer. That is not "not a branch", and a message
+that names the wrong rule is evidence about the wrong subject. It became six reason words, each
+pinned exactly by `make test-dis` (`refuse:<word>` must produce `dis: <word>` on stderr, an empty
+stdout, and a non-zero exit).
+
+The first pinning attempt then failed on a case of mine: `0f050000` at site 0 refused with `trunc`
+where I had written `form`. The input is four bytes, the `0F 8x` form needs six, so the bounds rule
+fires first — the decoder was right and my expectation was wrong. Both are now cases: the four-byte
+one is `trunc`, an eight-byte one with the same bytes is `form`. The order of the checks is part of
+the answer, so it is pinned rather than described.
+
+### Records touched
+
+`docs/provenance.tsv` gained one line — `dis` built by `asm1` — under a new rule in
+`tools/provenance.sh`: an artifact with no independent oracle is recorded for `asm1` only, and its
+check is that `asm1` reproduces the built file byte for byte. `asm1` itself did not change (same sha),
+so `docs/asm1.sha`, `docs/SHAS` and every fixture record are untouched. `tools/check-branches.sh` was
+rewritten and `tests/dis/cases.tsv` + `make test-dis` are new.

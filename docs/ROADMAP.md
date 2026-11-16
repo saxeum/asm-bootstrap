@@ -805,3 +805,95 @@ Hex output is now expressible (`shr` and `and` exist, which they did not when th
 - A shared-bug risk appears the moment our decoder audits our encoder. The mitigation is the existing
   one: hand-emitted `ref/` binaries whose bytes were written before either existed, plus capability
   pairs that pin encodings against hand-computed dumps.
+
+## `src/dis.s` landed: the gate is ours, and 290/290 pins agree
+
+```
+make check
+```
+
+ends with `branch pins: 290/290 decoded by src/dis.s -- asm0a sha 6271c5ee79034ffd, dis sha
+8c9bd9b356874875`.
+
+`src/dis.s` is 1 348 bytes, built by `asm1` from 467 lines of the dialect, and it is the first program
+in this repo that takes an *argument*: `./dis <site> < binary`. It reports `0xSITE 0xTARGET mnemonic`
+for `EB`, `E9`, `E8`, `70`–`7F` and `0F 80`–`0F 8F`, and refuses everything else — three refusals, in
+fact: a site outside the input, bytes that are not one of those forms, and an instruction that would
+run past the end of the input or a target that is not a byte in it. That last one is the truncation
+rule doing double duty: it cannot print a negative target because a target below zero wraps to a huge
+unsigned value and is refused.
+
+**What the dialect needed that it did not have**, and how each was paid for:
+
+| need | how |
+|---|---|
+| `argv` | `pop rcx` / `pop rax` / `pop rbx` at entry — the stack *is* `argc`, `argv[0]`, `argv[1]`, so no pointer arithmetic on a 64-bit pointer, which `mov r32,[mem]` would truncate |
+| a `jmp` table | 18 slots of 5 bytes, `len` then up to four letters, indexed by `cc*5` (`*4 + *1`); `putmn` prints it |
+| hex output | 8 nibbles shifted out with `shr eax,28` / `shl edx,4`, leading zeros suppressed, `0` for zero |
+| sign-extending `rel8` | `test edx,128` then `or edx,0xffffff00`; the sum is done in 32 bits so a wrapped target is caught by the range check |
+| a 40 000-byte input buffer | `rbp-40000`, filled 120 bytes at a time — the same chunked read `asm1` uses, for the reason recorded above |
+| a refusal with a message | six reason words (`offset`, `input`, `site`, `form`, `trunc`, `target`) in 8-byte slots, printed with the same `putmn`, to the fd in `[rbp+80]` (1 for output, 2 for complaints) |
+
+**Four defects, all found by tests, all worth recording:**
+1. **The hex accumulator was never initialised.** `mov eax,0` zeroed the digit counter and not the
+   accumulator, so the site became `garbage*16^n + value` from whatever the env area held (`8` in that
+   run). It showed up as sites `0x190`.. decoding `0x1`a` — a *wrong site*, silently, which is the
+   worst kind of defect here. Every two-digit offset happened to come out right, which is why the first
+   probes looked fine.
+2. **The nibble test was `cmp eax,9; jb`**, so the digit `9` fell into the letter branch and printed
+   `` ` `` instead of `9` (87+9). It corrupted 93 of 290 pins at once — the gate as a whole was
+   visibly broken, which is the good failure.
+3. **A negative `rel8` fell through into the `rel32` load**: `d_re8`'s sign-extended value was
+   overwritten by the 4-byte load in `d_re32`, because `d_re8` had no `jmp` over it. Only two of the
+   290 pins are backward `rel8` branches, and both were refused — 288/290 is exactly the kind of
+   near-miss that a "does it run" test would have called green.
+4. **Two labels were longer than 7 characters** (`chkbnd_ok`, `msg_fail`), which the assembler refused
+   with `line 244: rejected` — the dialect's own limit, caught at build time, which is the right place.
+
+And one defect in the **test**, which is the most instructive of the lot. The refusal message started as a
+single `not a branch`, which was a lie for five of the six reasons (a 100 000-byte input is not "not a
+branch"). It became six reason words, pinned verbatim by `make test-dis`, and the first pinned
+expectation I wrote was wrong:
+
+    0f050000 0 refuse:form      ->  REFUSAL: [0f050000] -> 'dis: trunc' (exit 1), want 'refuse:form'
+
+`0f050000` is four bytes and the `0F 8x` form needs six, so the bounds rule fires before the opcode rule:
+`trunc`, not `form`. The decoder was right and the expectation was wrong — which is the whole argument
+for pinning the reason rather than accepting "it refused". The order of the checks is part of the
+contract, so both cases are now in the file, the 4-byte one as `trunc` and an 8-byte one as `form`.
+
+**The gate itself was then made to fail on purpose**, twice, because a gate that cannot fail is a
+format check wearing a gate's clothes. First the pin, with `0x373` recorded as `0x374`:
+
+```
+./tools/check-branches.sh
+```
+
+prints `pin 0x142: got '0x142 0x373 jmp', recorded '0x142 0x374 jmp'` and `branch pins: 289/290
+agree, 1 DISAGREE`, and exits 1. Then the subject: the same site, in a copy of `asm0a` whose opcode
+byte `0x73` (`jae`) is changed to `0x77` (`ja`).
+
+```
+cp asm0a /tmp/asm0a.bad && printf '\167' | dd of=/tmp/asm0a.bad bs=1 seek=436 conv=notrunc 2>/dev/null && ./dis 0x1b4 < /tmp/asm0a.bad
+```
+
+prints `0x1b4 0x139 ja`, where the same site in the real `asm0a` prints `0x1b4 0x2b3 jae`. That
+second one is the one that matters: it proves the decoder is reading the subject, not repeating the
+table.
+
+### What is still provisional
+
+The instruction-mix table above was produced with `objdump` and is **still provisional**, but for a
+narrower reason: `dis.s` decodes branch forms only. It now confirms that every one of the 290 recorded
+branch sites is real (mnemonic, target, and byte-for-byte the recorded line), and it says nothing about
+`mov` (135), `add` (130), `inc` (107) or `cmp` (101). Re-deriving the whole mix needs a decoder for
+every form `asm0a` uses — a general disassembler, deliberately not built, because nothing in the gate
+consumes it.
+
+### Next, unchanged by this
+
+1. **REX.W for reg-reg ALU + `r8`–`r15`** — one mechanism, and it turns today's refusals into support.
+2. **The forms `asm0a` needs** to be rebuilt: `add r64,imm8`, `cmp r8/[mem]`, `imul r32,r32,imm8`, and
+   the missing condition codes `ja/jae/js/jg/jo`.
+3. **`src/asm0a.s`** — then `asm1 < src/asm0a.s | cmp - asm0a`.
+4. `.data` sections, scale factors, the self-testing generator.
