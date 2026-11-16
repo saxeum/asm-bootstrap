@@ -27,14 +27,14 @@ start:
 lea rbp, [rsp]
 mov eax, 0              ; SYS_read
 mov edi, 0
-lea rsi, [rbp+56]
+lea rsi, [rbp+120]
 mov edx, 4000
 syscall
 mov [rbp+28], eax       ; n
 mov eax, 0
 mov [rbp+16], eax       ; pass = 0 (count)
 mov [rbp+20], eax       ; count = 0
-lea rbx, [rbp+56]
+lea rbx, [rbp+120]
 mov ecx, [rbp+28]
 term:
 cmp ecx, 0
@@ -44,7 +44,7 @@ dec ecx
 jmp term
 termd:
 mov byte [rbx], 0
-lea rbx, [rbp+56]       ; pass 0 starts at the beginning, not at the NUL
+lea rbx, [rbp+120]       ; pass 0 starts at the beginning, not at the NUL
 call parse
 
 mov eax, [rbp+20]       ; filesz = 120 + count
@@ -112,7 +112,7 @@ jnz.l hdr2
 
 mov eax, 1              ; pass 1: emit
 mov [rbp+16], eax
-lea rbx, [rbp+56]
+lea rbx, [rbp+120]
 call parse
 mov eax, 60
 xor edi, edi
@@ -204,12 +204,16 @@ mov [rbp+48], eax
 jmp.l pu8
 d_x:
 cmp al, 120             ; 'x'  xor r32,r32: 31 /r
-jnz.l fail
+jnz.l d_l
 mov eax, 0
 mov [rbp+44], eax
 mov eax, 49
 mov [rbp+48], eax
 jmp.l prr
+d_l:
+cmp al, 108             ; 'l'  lea
+jnz.l fail
+jmp.l plea
 psp:
 lea rbx, [rbx+1]
 jmp.l pline
@@ -235,6 +239,12 @@ call emital
 jmp.l pline
 pmov:
 lea rbx, [rbx+4]
+movzx eax, byte [rbx]
+cmp al, 91              ; '[' => memory destination
+jz.l pmovmem
+movzx eax, byte [rbx+1]
+cmp al, 121             ; 'y' => "byte [" destination
+jz.l pmbyte
 movzx eax, byte [rbx+2]  ; a delimiter third means the name was 2 chars: 8-bit
 cmp al, 44              ; ','
 jz.l pmov8
@@ -245,6 +255,8 @@ mov [rbp+32], edx
 lea rbx, [rbx+1]
 call skipsp
 movzx eax, byte [rbx]
+cmp al, 91              ; '[' => load from memory
+jz.l pmovld
 cmp al, 101             ; 'e' => register source, not a number
 jz.l pmovrr
 cmp al, 114             ; 'r'
@@ -524,6 +536,129 @@ add eax, edx
 mov edx, 192
 add eax, edx
 call emital
+jmp.l pline
+
+memop:                  ; rbx at '[' ; -> [rbp+56]=base [rbp+60]=disp ; rbx past ']'
+lea rbx, [rbx+1]
+call reg32
+mov [rbp+56], edx
+mov eax, 0
+mov [rbp+60], eax
+movzx eax, byte [rbx]
+cmp al, 93              ; ']'
+jz.l memend
+cmp al, 43              ; '+'
+jnz.l fail
+lea rbx, [rbx+1]
+call num32
+mov [rbp+60], ecx
+memend:
+movzx eax, byte [rbx]
+cmp al, 93
+jnz.l fail
+lea rbx, [rbx+1]
+ret
+
+emitmem:                ; modrm+sib+disp from [rbp+56],[rbp+60], reg field [rbp+64]
+mov eax, [rbp+64]
+add eax, eax
+add eax, eax
+add eax, eax
+mov edx, [rbp+56]
+add eax, edx
+mov edx, [rbp+60]
+cmp edx, 0
+jz.l emmod1
+mov edx, 64             ; mod = 01
+add eax, edx
+emmod1:
+call emital
+mov eax, [rbp+56]
+cmp al, 4               ; rsp base needs a SIB byte
+jnz.l em_sib
+mov eax, 36
+call emital
+em_sib:
+mov eax, [rbp+60]
+cmp al, 0
+jz.l em_done
+call emital
+em_done:
+ret
+
+pmovmem:                ; mov [mem], r8|r32
+call memop
+lea rbx, [rbx+1]
+call skipsp
+movzx eax, byte [rbx]
+cmp al, 101
+jz.l pms32
+cmp al, 114
+jz.l pms32
+call r8
+mov [rbp+64], edx
+mov eax, 136            ; 88 /r
+call emital
+call emitmem
+jmp.l pline
+pms32:
+call reg32
+mov [rbp+64], edx
+mov eax, 137            ; 89 /r
+call emital
+call emitmem
+jmp.l pline
+
+pmbyte:               ; mov byte [mem], imm8
+lea rbx, [rbx+5]
+call memop
+mov eax, 0
+mov [rbp+64], eax       ; C6 /0
+lea rbx, [rbx+1]
+call skipsp
+call num32
+mov [rbp+36], ecx
+mov eax, 198            ; C6
+call emital
+call emitmem
+mov eax, [rbp+36]
+call emital
+jmp.l pline
+
+pmovld:                 ; mov r32,[mem]
+call memop
+mov eax, [rbp+32]
+mov [rbp+64], eax
+mov eax, 139            ; 8B /r
+call emital
+call emitmem
+jmp.l pline
+
+plea:                   ; lea r32|r64,[mem]
+lea rbx, [rbx+4]
+movzx eax, byte [rbx]
+mov edx, 0
+cmp al, 114             ; 'r' => REX.W
+jnz.l plea1
+mov edx, 72
+plea1:
+mov [rbp+68], edx
+call reg32
+mov [rbp+64], edx
+lea rbx, [rbx+1]
+call skipsp
+movzx eax, byte [rbx]
+cmp al, 91
+jnz.l fail
+call memop
+mov eax, [rbp+68]
+cmp al, 0
+jz.l plea2
+call emital
+plea2:
+mov eax, 141            ; 8D /r
+call emital
+call emitmem
 jmp.l pline
 
 fail:

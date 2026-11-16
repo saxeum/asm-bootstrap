@@ -1460,3 +1460,63 @@ REX byte and an opcode.
 ```
 missing: mov [mem],r8 · mov r32,[mem] · mov byte[mem],imm8 · lea r64,[mem] · label · jb rel8
 ```
+
+## asm1 step 3 of the count10 plan — PASS: the bracket parser
+
+`src/asm1.s`, 2564 bytes, 56 labels.
+
+```
+mov [rsp], al          -> 88 04 24        identical
+mov [rsp+1], ah        -> 88 64 24 01     identical
+mov byte [rsp+2], 10   -> c6 44 24 02 0a  identical
+mov [rbp+32], edx      -> 89 55 20        identical
+mov eax, [rbp+20]      -> 8b 45 14        identical
+mov [rsp], eax         -> 89 04 24        identical
+mov byte [rbx], 0      -> c6 03 00        identical
+lea rsi, [rsp+1]       -> 48 8d 74 24 01  identical
+lea edx, [ecx+2]       -> 8d 51 02        identical
+lea rdi, [rsp]         -> 48 8d 3c 24     identical
+```
+
+`memop` parses `[base]` / `[base+disp]` into `[rbp+56]`/`[rbp+60]` and `emitmem` builds
+modrm+SIB+disp from them plus a `reg` field in `[rbp+64]`. Four entry points use it: store r8,
+store r32, store imm8 (`byte [`), load r32, and `lea`. The `byte [` qualifier is recognised by the
+`'y'` at offset 1 — the same discriminator that `asm0a` uses, and for the same reason: `bl` also
+starts with `b`.
+
+### One defect
+
+**Label names were 8 characters.** `em_nomod`, `pmovms32` and `pmovbyte` all exceed the 7-character
+limit, and `asm0a` rejects them with a bare exit 1. Renamed to `emmod1`, `pms32`, `pmbyte`. The
+check is now mechanical: every label name is verified to be ≤7 before assembling.
+
+### count10 is one mechanism away
+
+```
+missing: label · jb rel8
+```
+
+Both tools now agree on every form count10 uses except those two.
+
+### The label table: the design constraint that matters
+
+This is the piece that needs thought rather than transcription, because of the ±127 window and the
+absence of a spare stable register:
+
+- **No spare register.** `rbx` holds the input pointer, `rbp` the frame base. `rax`, `rcx` and `rdx`
+  are syscall state (`rcx` is destroyed by every `emital` call), and `emital` itself sets `rsi` and
+  `rdi`. So a table base cannot live in a register across an emit.
+- **No writable data segment.** `asm1`'s PT_LOAD is `R+X`; its own embedded header template is
+  readable at a fixed address precisely because it is never written. A label table cannot go there.
+- **So the table must be inside `rbp±127`.** Above `rbp`: slots occupy `+8..+68` and the input buffer
+  starts at `+120`, leaving `+72..+119` — 48 bytes. Below `rbp`: `-128..-1`, minus call depth
+  (parse → handler → helper → `emital` is 4 frames = 32 bytes), leaving about 96 bytes.
+
+96 bytes is **8 entries** at 12 bytes (8-byte name + 4-byte offset). That is enough for count10 and
+not enough for self-hosting, which needs 27 labels. Self-hosting will therefore need either
+shorter entries (6-char names + 2-byte offsets = 8 bytes, 12 entries — still not 27) or a different
+strategy entirely: buffer the output in memory and backpatch, as `asm0a` does with its body buffer
+and patch list.
+
+That decision is deliberately deferred to its own session. It is the first thing in this project
+where the constraint is structural rather than a missing instruction.
