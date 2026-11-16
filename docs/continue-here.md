@@ -144,12 +144,12 @@ grep -o '^[a-z_0-9]*:' src/asm1.s | sort | uniq -d
 The working pattern, used for `memop`, `emitmem`, `chklim`, `trm`, `lfind`, `msg`, `d_n`:
 
 ```
-cat > /tmp/block.txt <<'EOF'
+cat > .work/block.txt <<'EOF'
 <the complete replacement block>
 EOF
-awk 'BEGIN{skip=0} /^label:$/ { while ((getline l < "/tmp/block.txt") > 0) print l; skip=1; next }
-     skip && /^[a-z_0-9]+:$/ { skip=0 } skip { next } { print }' src/asm1.s > /tmp/new.s
-cp /tmp/new.s src/asm1.s && make && <run the fixtures>
+awk 'BEGIN{skip=0} /^label:$/ { while ((getline l < ".work/block.txt") > 0) print l; skip=1; next }
+     skip && /^[a-z_0-9]+:$/ { skip=0 } skip { next } { print }' src/asm1.s > .work/new.s
+cp .work/new.s src/asm1.s && make && <run the fixtures>
 ```
 
 Then **immediately**: `make` (check exit code and sha changed), fixtures 18/18, fixpoint.

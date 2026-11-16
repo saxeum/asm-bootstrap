@@ -875,7 +875,7 @@ agree, 1 DISAGREE`, and exits 1. Then the subject: the same site, in a copy of `
 byte `0x73` (`jae`) is changed to `0x77` (`ja`).
 
 ```
-cp asm0a /tmp/asm0a.bad && printf '\167' | dd of=/tmp/asm0a.bad bs=1 seek=436 conv=notrunc 2>/dev/null && ./dis 0x1b4 < /tmp/asm0a.bad
+cp asm0a .work/asm0a.bad && printf '\167' | dd of=.work/asm0a.bad bs=1 seek=436 conv=notrunc 2>/dev/null && ./dis 0x1b4 < .work/asm0a.bad
 ```
 
 prints `0x1b4 0x139 ja`, where the same site in the real `asm0a` prints `0x1b4 0x2b3 jae`. That

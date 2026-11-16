@@ -25,24 +25,24 @@ Runs as `./asm0a < source.s > output` — no argv parsing, no `open`, no `chmod`
 An assembler is correct when its output is **byte-identical** to bytes written by hand.
 
 ```
-$ ./asm0a < src/exit42.s > /tmp/e42.out ; echo $?
+$ ./asm0a < src/exit42.s > .work/e42.out ; echo $?
 0
-$ wc -c < /tmp/e42.out
+$ wc -c < .work/e42.out
 132
-$ cmp /tmp/e42.out /tmp/e42.expected && echo identical
+$ cmp .work/e42.out .work/e42.expected && echo identical
 identical
-$ chmod +x /tmp/e42.out && /tmp/e42.out ; echo $?
+$ chmod +x .work/e42.out && .work/e42.out ; echo $?
 42
-$ sha256sum /tmp/e42.out
+$ sha256sum .work/e42.out
 d93aa7e7fd49e17fb09ac7cd6b0cd0776dea9e40503595ae28b1abf7c71c48c7
 ```
 
 Rejection path, which must produce *nothing*, not a partial file:
 
 ```
-$ printf 'bogus\n'      | ./asm0a > /tmp/x ; echo $? $(wc -c < /tmp/x)
+$ printf 'bogus\n'      | ./asm0a > .work/x ; echo $? $(wc -c < .work/x)
 1 0
-$ printf 'mov zzz, 5\n' | ./asm0a > /tmp/x ; echo $? $(wc -c < /tmp/x)
+$ printf 'mov zzz, 5\n' | ./asm0a > .work/x ; echo $? $(wc -c < .work/x)
 1 0
 ```
 

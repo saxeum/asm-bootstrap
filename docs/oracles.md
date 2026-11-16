@@ -185,12 +185,12 @@ Run against a **copy** of `asm0a`, never the artifact. Mutation: swap table entr
 entry 7 (`edi`), which still assembles fine but maps two register names to the wrong codes.
 
 ```
-$ cp asm0a /tmp/mut   # then swap the two 4-byte entries at file offsets 120 and 148
-$ /tmp/mut < src/hello_num.s > /tmp/mut.out ; echo $?
+$ cp asm0a .work/mut   # then swap the two 4-byte entries at file offsets 120 and 148
+$ .work/mut < src/hello_num.s > .work/mut.out ; echo $?
 0                                     # assembler is happy: 165 bytes, no error
-$ cmp /tmp/mut.out ref/hello
-/tmp/mut.out ref/hello differ: byte 121
-$ xxd -s 120 -l 10 /tmp/mut.out
+$ cmp .work/mut.out ref/hello
+.work/mut.out ref/hello differ: byte 121
+$ xxd -s 120 -l 10 .work/mut.out
 00000078: bf01 0000 00b8 0100 0000      # mov edi,1 / mov eax,1 — swapped opcodes
 ```
 
@@ -240,7 +240,7 @@ And the assembler still agrees with the validated references:
 ```
 $ ./asm0a < src/hello_num.s | cmp - ref/hello && echo identical
 identical
-$ ./asm0a < src/exit42.s | cmp - /tmp/e42.expected && echo identical
+$ ./asm0a < src/exit42.s | cmp - .work/e42.expected && echo identical
 identical
 ```
 

@@ -265,13 +265,13 @@ Rebuilding them. There was no `Makefile` at the fixpoint commit, so the path is 
 commit itself documents:
 
 ```bash
-mkdir -p /tmp/fx && git archive milestone-fixpoint | tar -x -C /tmp/fx && cd /tmp/fx && ./asm0a < src/asm1.s > X && chmod +x X && ./X < src/asm1.s > Xp && cmp X Xp && echo identical
+mkdir -p .work/fx && git archive milestone-fixpoint | tar -x -C .work/fx && cd .work/fx && ./asm0a < src/asm1.s > X && chmod +x X && ./X < src/asm1.s > Xp && cmp X Xp && echo identical
 ```
 
 At the handover tag `asm0a` is no longer a valid builder and `make` uses `seed/asm1`:
 
 ```bash
-mkdir -p /tmp/ho && git archive milestone-handover | tar -x -C /tmp/ho && cd /tmp/ho && make > /dev/null && ./asm1 < src/asm1.s | cmp - asm1 && echo identical
+mkdir -p .work/ho && git archive milestone-handover | tar -x -C .work/ho && cd .work/ho && make > /dev/null && ./asm1 < src/asm1.s | cmp - asm1 && echo identical
 ```
 
 Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha256 `250e02c9…` while
