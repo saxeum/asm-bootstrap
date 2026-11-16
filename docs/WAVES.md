@@ -879,3 +879,30 @@ The honest reading: **the work is right and the packaging is still the weak link
 defect this wave was mechanical, none conceptual — and the branch checker, which exists for
 exactly this, was only able to catch the ones where I remembered to run it *before* testing.
 Running it after every write, not after every wave, is what changes the cost curve.
+
+## rel32 branches — attempted, blocked on placeholder width; reverted
+
+`jmp.l` / `jz.l` / `jnz.l` / `jb.l` were implemented to the point where five harness retargets and
+four long op blocks verified correctly, then reverted because the fixture segfaulted. Three
+findings, all worth more than the code that was thrown away.
+
+**1. The pass-1 placeholder must match the final width.** `notfound` emits `EB 00` (2 bytes) when
+a label is not yet defined, so that pass 1 and pass 2 agree on offsets. For a long jump it must
+emit 5 bytes (`E9` + 4 zeroes) or 6 (`0F 8x` + 4 zeroes) — otherwise every label after a *forward*
+long jump gets a different offset in each pass and the second pass resolves against a layout that
+does not exist. This is the general form of the rule: **any code path that emits before the final
+encoding is known must emit the same number of bytes that encoding will have.**
+
+**2. The long flag lives in `r11d` bit 8, and `found_long` distinguishes jmp from jcc with bit 9.**
+The first version tested bit 9 in the dispatcher (`foundchk`) instead of bit 8, so `jnz.l` took the
+short path and quietly emitted `75 fe` — a *working-looking* wrong-width jump. Caught by comparing
+the emitted bytes against the intended form, not by running it.
+
+**3. Patch offset is opcode+2 for `0F 8x` and opcode+1 for `E9`** — and applying one rule to both
+sites in a loop corrupted the `jmp` entry (its displacement byte was overwritten). This is now the
+tenth occurrence of that class in the project.
+
+The revert is deliberate: three untested patches in one step is the condition under which this
+project has always produced garbage, and the last two waves both ended that way before being
+rebuilt. The next attempt should be **one patch, checker run, next patch** — the checker takes
+about a third of a second and would have caught all three of these.
