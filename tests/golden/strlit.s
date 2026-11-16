@@ -2,7 +2,7 @@
 f:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -15,7 +15,7 @@ mov rcx, [rbp-32]
 add rax, rcx
 movzx rax, byte [rax]
 cmp rax, 0
-jnz L1b
+jnz.l L1b
 jmp.l L1e
 L1b:
 mov rcx, [rbp-16]
@@ -45,17 +45,17 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 lea rcx, [rbp-408]
-mov [rbp-65436], rcx
+mov [rbp-259900], rcx
 mov rcx, 0
-mov [rbp-65428], rcx
+mov [rbp-259892], rcx
 mov rcx, 4194424+m1
-mov [rbp-65420], rcx
-mov rdx, [rbp-65420]
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259884], rcx
+mov rdx, [rbp-259884]
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call f
 mov [rbp-16], rax
 mov rax, [rbp-16]

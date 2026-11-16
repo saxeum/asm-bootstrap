@@ -2,7 +2,7 @@
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov eax, 0
 mov edi, 0
@@ -14,7 +14,7 @@ L1:
 mov rax, [rbp-16]
 mov rcx, 0
 cmp rcx, rax
-jb L1b
+jb.l L1b
 jmp.l L1e
 L1b:
 mov rax, 0
@@ -23,7 +23,7 @@ L2:
 mov rax, [rbp-24]
 mov rcx, [rbp-16]
 cmp rax, rcx
-jb L2b
+jb.l L2b
 jmp.l L2e
 L2b:
 lea rax, [rbp-504]
@@ -31,7 +31,7 @@ mov rcx, [rbp-24]
 add rax, rcx
 movzx rax, byte [rax]
 cmp rax, 97
-jz L3t
+jz.l L3t
 jmp.l L3e
 L3t:
 mov rcx, [rbp-24]
@@ -47,7 +47,7 @@ mov rcx, [rbp-24]
 add rax, rcx
 movzx rax, byte [rax]
 cmp rax, 98
-jz L4t
+jz.l L4t
 jmp.l L4e
 L4t:
 mov rcx, [rbp-24]

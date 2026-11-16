@@ -40,8 +40,9 @@ The shape of the project is a chain: build a better assembler, use it to build a
 | self-hosted | `asm1` | 8 053 | `71c5dbdba797ed40` | `seed/asm1` from `src/asm1.s` |
 | seed | `seed/asm1` | 8 053 | `71c5dbdba797ed40` | the promoted previous stage |
 | decoder | `dis` | 1 343 | `2d2eb451d7c7a9a9` | `asm1` from `src/dis.s` |
-| compiler | `cc` | 10 100 | `adbafa6c82210c3b` | `asm1` from `src/cc.s` |
-| **self-hosting port** | `cc1` | 41 132 | — | `cc` compiles `src/cc.c`, `asm1` assembles it |
+| compiler | `cc` | 10 429 | `a81345ad5a67490d` | `asm1` from `src/cc.s` |
+| **self-hosting port** | `cc1` | 42 814 | `5d78edb37c464b7b` | `cc` compiles `src/cc.c`, `asm1` assembles it |
+| **assembler in C** | `asm2` | 51 776 | `3804b0269d7a165d` | `cc` compiles `src/asm1.c`, `asm1` assembles it |
 
 Past the bootstrap. `asm1` is self-hosting, reaches its fixpoint, and is demonstrably better than
 what built it — 8 byte-level cases where `asm0a` answers wrongly and 36 syntax pairs it cannot parse.
@@ -56,7 +57,7 @@ value model. It emits text, not bytes, and every gate the assembler has applies 
 **And it compiles itself.** `src/cc.c` is the same compiler written in the subset it compiles. `cc`
 compiles it, `asm1` assembles it, and the resulting `cc1` compiles `src/cc.c` to identical text —
 `make test-d2` — while `make test-port` compares the port's output with `cc`'s on all 43 goldens, byte
-for byte. What is next is `asm2`, the assembler rewritten in C, in `docs/ROADMAP.md`; the authoritative
+for byte. **And the assembler is in C too**: `src/asm1.c` is compiled by `cc`, assembled by `asm1` into `asm2`, and `make test-asm2` requires it to reproduce `asm1` on the whole corpus and to assemble its own compiler text into itself (220 checks). The authoritative
 current state is `docs/continue-here.md`.
 
 ### Where things live
@@ -205,10 +206,10 @@ program with no partial output.
 src/asm1.c  →  cc  →  asm1  →  asm2
 ```
 
-`cc` in C is done (step 4). The remaining step is `asm2`: rewrite the assembler's source in C,
-compile it with the compiler this project grew, and require the result to be **byte-identical to
-`asm1` on the whole corpus** — every fixture, every capability pair, every rejection, the 99 KB
-source, and `src/asm1.s` itself. Only then is `asm2` accepted.
+`cc` in C is done (step 4), and so is `asm2` (step 5): `src/asm1.c` is compiled by `cc`, assembled
+by `asm1`, and required to be **byte-identical to `asm1` on the whole corpus** — every fixture, every
+capability pair, every rejection and exact message, the 99 KB source, `src/asm1.s`, and its own
+compiler text. Only then is `asm2` accepted; `asm1` stays as the witness.
 
 What that buys, and why the corpus is the criterion rather than "it runs": an assembler that produces
 the same bytes on 18 hand-emitted references, 36 syntax pairs, 290 pinned branches and a fixpoint is
@@ -324,8 +325,8 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1` |
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div r32`/`div r64` (quotient in `rax`/`eax`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `imul r,r,imm`, `div` needs a register of 32 or 64 bits, not 8, `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 15 characters |
-| compiler | `cc`, 10 100 bytes, built by `asm1` from `src/cc.s` (3 032 lines): C subset → dialect **text** → `asm1` → executable. 43 text goldens, 3 output oracles, 36 refusals (`make test-cc`, `docs/cc.md`). **The port compiles itself**: `src/cc.c` is the same compiler in its own subset; `make test-port` shows its output byte-identical to `cc`'s on all 43 goldens, and `make test-d2` shows `cc1.s == cc2.s` |
-| `make check` | forbidden tools, nothing-outside-the-tree, `asm1 < src/cc.s == cc` (the dialect source is invariant), the port's 43/43 goldens, `cc1.s == cc2.s`, header table, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, eight superiority cases plus three behavioural, 38/38 decoder cases, the compiler's 45 checks including `exit(3)` and the callee-local array, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| compiler | `cc`, 10 429 bytes, built by `asm1` from `src/cc.s` (3 108 lines): C subset → dialect **text** → `asm1` → executable. 43 text goldens, 3 output oracles, 36 refusals (`make test-cc`, `docs/cc.md`). **The port compiles itself**: `src/cc.c` is the same compiler in its own subset; `make test-port` shows its output byte-identical to `cc`'s on all 43 goldens, and `make test-d2` shows `cc1.s == cc2.s` |
+| `make check` | forbidden tools, nothing-outside-the-tree, `asm1 < src/cc.s == cc` (the dialect source is invariant), the port's 43/43 goldens, `cc1.s == cc2.s`, header table, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, eight superiority cases plus three behavioural, 38/38 decoder cases, the compiler's 45 checks including `exit(3)` and the callee-local array, the assembler-in-C gate (220 checks), 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.

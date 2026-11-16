@@ -2,7 +2,7 @@
 f:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov rax, [rbp-8]
@@ -12,15 +12,15 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rax, 21
 mov [rbp-8], rax
 mov rcx, [rbp-8]
 mov rdx, 2
 imul rcx, rdx
-mov [rbp-65436], rcx
-mov rdi, [rbp-65436]
+mov [rbp-259900], rcx
+mov rdi, [rbp-259900]
 call f
 mov rdi, rax
 mov eax, 60

@@ -825,3 +825,32 @@ there is no output buffer to overrun.
 The next bootstrap step is `asm2`: rewrite `asm1` in C, build it with `cc` + `asm1`, and accept it
 only when it assembles everything `asm1` does, byte for byte. `src/cc.c` is step 4 of that chain;
 step 5 has not started.
+
+## Stage 12: the assembler in C (`asm2`)
+
+`src/asm1.c` is the assembler written in the same subset: three passes (labels, count with labels,
+emit), the 120-byte ELF64 header, labels to 2 048, input to 200 000, and the exact `line N: reason`
+messages (`range`, `label`, `duplicate`, `rejected`). It is built by the chain
+
+```
+cc < src/asm1.c > asm1.c.s ; asm1 < asm1.c.s > asm2
+```
+
+and `make test-asm2` requires it to reproduce `asm1` on the whole corpus — 17 hand-emitted
+references, 80 capability/superior inputs, 100 coverage forms, 9 refusals, 8 exact messages,
+`src/dis.s`, `src/cc.s`, `src/asm1.s`, the 99 032-byte source (and run, exit 42) — and then to
+assemble the text of its own compiler into itself:
+
+```
+  asm2: 220 checks, 0 failures -- corpus and self-assembly
+```
+
+Building it forced three compiler changes that are part of the record: numeric literals to
+16 777 215 and eight-digit `emitnum`; condition jumps emitted as `.l` (a rel8 condition around a
+large block is an overflow, not a hypothetical); and `werr(buf, n)`, the fd-2 builtin that names a
+line and a reason. The frame moved to 260 000 and arrays to 255 000 so a 200 KB source and a
+2 048-label table fit. `asm1` is **not deleted**: it is the witness the hand-emitted references and
+every earlier record were checked against, and `asm2` inherits the obligation, not the credit.
+
+The next decision is whether `make` should build the assembler from `src/asm1.c` and what `seed/`
+means after that; the next feature is `.data`.

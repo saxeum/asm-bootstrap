@@ -2,7 +2,7 @@
 bump:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov rax, [rbp-8]
@@ -18,13 +18,13 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rax, 41
 mov [rbp-8], rax
 lea rcx, [rbp-8]
-mov [rbp-65436], rcx
-mov rdi, [rbp-65436]
+mov [rbp-259900], rcx
+mov rdi, [rbp-259900]
 call bump
 mov rax, [rbp-8]
 mov rdi, rax

@@ -11,7 +11,10 @@ hand-emitted fixtures, 36 capability pairs of syntax `asm0a` cannot parse, 8 sup
 `asm0a` fails or answers wrongly, and rejections that name their line. `cc` (10 100 bytes, built by
 `asm1` from `src/cc.s`) compiles a C subset to this dialect, and `src/cc.c` is the same compiler
 written in that subset: `make test-d2` shows `cc1.s == cc2.s`, and `make test-port` shows the port
-emits exactly what `cc` emits on all 43 goldens. The remaining bootstrap step is `asm2`, `asm1` in C.
+emits exactly what `cc` emits on all 43 goldens. **The assembler is in C too**: `src/asm1.c` is
+compiled by `cc`, assembled by `asm1` into `asm2`, and `make test-asm2` requires it to reproduce
+`asm1` on the whole corpus and to assemble its own compiler text into itself (220 checks). `asm1`
+stays as the witness and the builder; it is not deleted.
 `docs/continue-here.md` is the current state. `asm0a` is frozen history — it can no longer build the
 assembler, and it has a known wrong-answer defect (`and` assembled as `add`) that `asm1` must never
 reproduce.

@@ -2,7 +2,7 @@
 f:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -21,7 +21,7 @@ ret
 h:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -40,34 +40,34 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rcx, 1
-mov [rbp-65436], rcx
+mov [rbp-259900], rcx
 mov rcx, 2
-mov [rbp-65428], rcx
+mov [rbp-259892], rcx
 mov rcx, 3
-mov [rbp-65420], rcx
+mov [rbp-259884], rcx
 mov rcx, 4
-mov [rbp-65412], rcx
-mov rcx, [rbp-65412]
-mov rdx, [rbp-65420]
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259876], rcx
+mov rcx, [rbp-259876]
+mov rdx, [rbp-259884]
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call f
 push rax
 mov rdx, 1
-mov [rbp-65436], rdx
+mov [rbp-259900], rdx
 mov rdx, 2
-mov [rbp-65428], rdx
+mov [rbp-259892], rdx
 mov rdx, 3
-mov [rbp-65420], rdx
+mov [rbp-259884], rdx
 mov rdx, 4
-mov [rbp-65412], rdx
-mov rcx, [rbp-65412]
-mov rdx, [rbp-65420]
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259876], rdx
+mov rcx, [rbp-259876]
+mov rdx, [rbp-259884]
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call h
 mov rcx, rax
 pop rax

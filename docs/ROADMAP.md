@@ -2,7 +2,7 @@
 
 ## Where we are
 
-The compiler is self-hosting. `cc` (10 100 bytes, built by `asm1` from `src/cc.s`) compiles
+The compiler is self-hosting. `cc` (10 429 bytes, built by `asm1` from `src/cc.s`) compiles
 `src/cc.c` — the same compiler written in the subset — to `cc1.s`; `asm1` assembles it to `cc1`; and
 `cc1` compiles `src/cc.c` to the same text. `make test-d2` is that proof, and `make test-port`
 compares the port's output with `cc`'s on all 43 goldens (byte for byte). `asm1` (8 053 bytes) is
@@ -11,8 +11,10 @@ self-hosting, produces the 18 hand-emitted `ref/` binaries, and its branch pins 
 
 `docs/continue-here.md` is the authoritative current state and the next task. **This file is the
 ordered plan and its history**: sections below were true when written and some of their limits were
-raised later. The remaining bootstrap step is `asm2` — `asm1` rewritten in C and accepted only when
-it assembles everything `asm1` does, byte for byte.
+raised later. The bootstrap endgame is reached: `src/asm1.c` is compiled by `cc`, assembled by `asm1`
+into `asm2`, and `make test-asm2` requires it to reproduce `asm1` byte for byte on the whole corpus
+and to assemble its own compiler text into itself. `asm1` remains the witness; the next decisions are
+promotion and `.data`, not another rewrite.
 
 ## History
 

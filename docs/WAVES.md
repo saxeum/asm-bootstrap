@@ -3551,3 +3551,28 @@ Every golden with an array was re-pinned (the base moved from start to end), and
 were re-run. `cc` is `adbafa6c82210c3b`, 10 100 bytes; the port is 41 132 bytes and its self-hosted
 text is 129 752 bytes. This is the memory groundwork for `src/asm1.c`: its input buffer no longer
 needs a same-sized pad, so a 100 KB source fits a ~110 KB frame instead of ~250 KB.
+
+## Wave: D3 -- the assembler is in C
+
+`src/asm1.c` is 1 475 lines / 27 969 bytes, compiled by `cc`, assembled by `asm1` into `asm2`
+(51 776 bytes, sha `3804b0269d7a165d`). `make test-asm2` is 220 checks and 0 failures: the 17
+hand-emitted references, 80 capability/superior inputs, 100 coverage forms, 9 refusals, 8 exact
+messages, `src/dis.s`, `src/cc.s`, `src/asm1.s`, the 99 032-byte source (which runs, exit 42), and
+`asm2 < asm1.c.s == asm2`.
+
+Getting there forced changes to `cc` that are part of the record:
+
+1. **Numeric literals to 16 777 215 and eight-digit `emitnum`.** 100 000-byte buffers are not
+   expressible otherwise, and the old printer emitted a `>` for 149 900.
+2. **Condition jumps are `.l`.** The compiler had emitted `jb`/`jz`/`jnz` with rel8; a large function
+   overflowed it, and the assembler's error path crashed printing a line number past 2 559. The
+   `condj` fragments and `f_ccmp2` now carry `.l`.
+3. **`werr(buf, n)` is a builtin**, the fd-2 mirror of `write`. Both exact-message gates need it;
+   `asm2` prints `line N: range|label|duplicate|rejected`.
+4. **Frame 260 000, arrays 255 000, labels 2 048, input 200 000.** Goldens were re-pinned for the
+   frame, the argument-parking base and the `.l` conditions; behaviour gates were re-run.
+
+Two defects in the port surfaced: `gd`/`pd` (32-bit state accessors) were missing when the condition
+bound moved to a 32-bit slot, and the port's 16-bit array offset could not survive the larger limits.
+`asm1` is unchanged (`71c5dbdba797ed40`) and remains the witness; promoting `asm2` is a deliberate
+next decision, not a build step.

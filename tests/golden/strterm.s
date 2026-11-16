@@ -2,7 +2,7 @@
 es:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -15,7 +15,7 @@ mov rcx, [rbp-32]
 add rax, rcx
 movzx rax, byte [rax]
 cmp rax, 0
-jnz L1b
+jnz.l L1b
 jmp.l L1e
 L1b:
 mov rcx, [rbp-16]
@@ -45,7 +45,7 @@ ret
 ec:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
@@ -65,28 +65,28 @@ ret
 line:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov [rbp-16], rsi
 mov [rbp-24], rdx
 mov rcx, [rbp-8]
-mov [rbp-65436], rcx
+mov [rbp-259900], rcx
 mov rcx, [rbp-16]
-mov [rbp-65428], rcx
+mov [rbp-259892], rcx
 mov rcx, [rbp-24]
-mov [rbp-65420], rcx
-mov rdx, [rbp-65420]
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259884], rcx
+mov rdx, [rbp-259884]
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call es
 mov [rbp-16], rax
 mov rcx, [rbp-8]
-mov [rbp-65436], rcx
+mov [rbp-259900], rcx
 mov rcx, [rbp-16]
-mov [rbp-65428], rcx
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259892], rcx
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call ec
 mov [rbp-16], rax
 mov rax, [rbp-16]
@@ -96,32 +96,32 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 lea rax, [rbp-8400]
 mov [rbp-16], rax
 mov rax, 0
 mov [rbp-24], rax
 mov rcx, [rbp-16]
-mov [rbp-65436], rcx
+mov [rbp-259900], rcx
 mov rcx, [rbp-24]
-mov [rbp-65428], rcx
+mov [rbp-259892], rcx
 mov rcx, 4194424+m1
-mov [rbp-65420], rcx
-mov rdx, [rbp-65420]
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259884], rcx
+mov rdx, [rbp-259884]
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call line
 mov [rbp-24], rax
 mov rcx, [rbp-16]
-mov [rbp-65436], rcx
+mov [rbp-259900], rcx
 mov rcx, [rbp-24]
-mov [rbp-65428], rcx
+mov [rbp-259892], rcx
 mov rcx, 4194424+m2
-mov [rbp-65420], rcx
-mov rdx, [rbp-65420]
-mov rsi, [rbp-65428]
-mov rdi, [rbp-65436]
+mov [rbp-259884], rcx
+mov rdx, [rbp-259884]
+mov rsi, [rbp-259892]
+mov rdi, [rbp-259900]
 call line
 mov [rbp-24], rax
 mov rax, [rbp-24]

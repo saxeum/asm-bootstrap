@@ -2,7 +2,7 @@
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rcx, 0
 mov [rbp-328], rcx
@@ -16,7 +16,7 @@ mov rcx, 0
 add rax, rcx
 movzx rax, byte [rax]
 cmp rax, 65
-jz L1t
+jz.l L1t
 jmp.l L1e
 L1t:
 mov rax, 9

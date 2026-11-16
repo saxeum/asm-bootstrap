@@ -2,7 +2,7 @@
 a:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov rax, 0
@@ -11,7 +11,7 @@ L1:
 mov rax, [rbp-16]
 mov rcx, [rbp-8]
 cmp rax, rcx
-jb L1b
+jb.l L1b
 jmp.l L1e
 L1b:
 mov rax, [rbp-16]
@@ -27,7 +27,7 @@ ret
 b:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov [rbp-8], rdi
 mov rax, 0
@@ -36,7 +36,7 @@ L2:
 mov rax, [rbp-16]
 mov rcx, [rbp-8]
 cmp rax, rcx
-jb L2b
+jb.l L2b
 jmp.l L2e
 L2b:
 mov rax, [rbp-16]
@@ -52,16 +52,16 @@ ret
 main:
 push rbp
 mov rbp, rsp
-mov r10, 65536
+mov r10, 260000
 sub rsp, r10
 mov rcx, 3
-mov [rbp-65436], rcx
-mov rdi, [rbp-65436]
+mov [rbp-259900], rcx
+mov rdi, [rbp-259900]
 call a
 mov [rbp-8], rax
 mov rcx, 2
-mov [rbp-65436], rcx
-mov rdi, [rbp-65436]
+mov [rbp-259900], rcx
+mov rdi, [rbp-259900]
 call b
 mov [rbp-16], rax
 mov rax, [rbp-8]
