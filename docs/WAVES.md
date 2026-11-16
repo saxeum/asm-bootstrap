@@ -835,3 +835,47 @@ the next concrete task rather than a half-landed change.
 **The lesson:** making a silent failure loud is not a local change. Every parser that depended on
 the silence has to be enumerated first — and the enumeration came from the corpus failing, not
 from reading the code.
+
+## Wave 2d-11 — PASS: `eolv` landed, all five cursor-leaking handlers fixed
+
+Artifact: `asm0a`, 3229 bytes, sha `7e6524598808b38d82f8efadabc209e51756cf9755bc0c1a541a0d4cb22f6293`, filesz `0xc9d`.
+
+The previous session wrote the validating end-of-line handler and could not land it: five
+handlers left the parse cursor *at* their last operand and relied on the old `eol3` to swallow
+the remainder. This wave fixes those five and turns the handler on.
+
+| handler | was leaving `rbx` at | fix |
+|---|---|---|
+| `do_xor` | second register name | `add rbx,3` then `jmp eolv` |
+| `regop` (inc/dec r32) | register name | `add rbx,3` then `jmp eolv` |
+| `do_br` found | label name | `mov rbx,rsi` then `jmp eolv` |
+| `do_br` notfound | label name | `mov rbx,rsi` then `jmp eolv` |
+| `do_db` | the closing quote | `inc rbx` then `jmp eolv` |
+
+`mov bl,256` closed separately: `do_mov8`'s parse now routes through `cmp ecx,255`.
+
+### Gate
+
+```
+mov eax, 0x10   exit 1   (was: b8 00 00 00 00, exit 0)
+add al, -1      exit 1   (was: 04 00)
+db 0x48         exit 1   (was: 00)
+mov bl, 256     exit 1   (was: b3 00)
+mov bl, 200     b3 c8    (valid, unchanged)
+xor edi, edi    31 ff    (valid, unchanged)
+"mov eax, 10 ; note"   accepted — trailing comments are a new capability, not a regression
+corpus 15/15 byte-identical; branch checker 247/247; selftest refuses the three known-bad sites
+```
+
+### What this wave cost, and why
+
+Nine separate displacement errors, every one the same two mistakes: patching at opcode+1 when
+`0F 8x` is two bytes, and mixing file with segment offsets (they differ by 0x78). Two were
+caught by the decode checker before running anything; the rest by the corpus dropping to 0/15
+and 10/15 in successive attempts. The final count of corrections in this one wave: 8
+displacements, plus an `E9` opcode I had overwritten while fixing its own displacement.
+
+The honest reading: **the work is right and the packaging is still the weak link.** Every
+defect this wave was mechanical, none conceptual — and the branch checker, which exists for
+exactly this, was only able to catch the ones where I remembered to run it *before* testing.
+Running it after every write, not after every wave, is what changes the cost curve.

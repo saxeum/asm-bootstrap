@@ -30,10 +30,10 @@ To prove the output is the *verified* object and not merely something that runs:
 
 | | |
 |---|---|
-| artifact | `asm0a`, 3125 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
+| artifact | `asm0a`, 3229 bytes, `e_entry` = 0x400110, one R+X `PT_LOAD` |
 | identity | sha256 in `docs/SHAS` |
 | fixtures | 15, all byte-identical to hand-emitted references and behaviourally correct |
-| branches | 235 sites pinned in `docs/branches.tsv`, all verified by decoding |
+| branches | 247 sites pinned in `docs/branches.tsv`, all verified by decoding |
 | source language | 8-, 32- and 64-bit operands, memory operands, labels, two passes, decimal immediates |
 
 `src/count10.s` — the largest oracle — assembles to exactly `ref/count10` (188 bytes) and the
@@ -71,10 +71,10 @@ are **decimal only**.
 
 - **No rel32 branches.** A jump beyond ±127 bytes fails rather than wrapping. This is the last
   blocker for writing the assembler *in its own dialect*.
-- **Three parses are still silent**, and are the next target: `mov eax, 0x10`, `add al, -1` and
-  `db 0x48` assemble as `0`; `mov bl, 256` truncates to 0. A validating end-of-line handler is
-  written and works, but four handlers (`do_xor`, `regop`, `do_br` ×2) leave the parse cursor
-  *at* their last operand rather than past it, so they must be fixed before it can land.
+- **Parses are validated.** A leftover the parser did not consume now fails instead of being
+  skipped: `mov eax, 0x10`, `add al, -1` and `db 0x48` exit 1 rather than assembling to `0`, and
+  `mov bl, 256` is range-checked. Trailing `;` comments and trailing spaces are accepted. Hex and
+  signed literals are **rejected, not interpreted** — they are on the handover list.
 - **No `entry`**, so data must follow code and its addresses are decimal literals.
 - 32 labels maximum, 7-character names, no `test`/`imul` (needed for `fib`, not for
   self-hosting).
