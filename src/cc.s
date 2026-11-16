@@ -14,7 +14,8 @@
 ;   * `int main(void)` is the only function, and `(void)` is required
 ;   * `write("literal");` is a STATEMENT, not a call: there is no calling
 ;     convention yet, so it cannot be one. Up to nine of them.
-;   * `return N;` is optional and must be last; N is 0..255
+;   * `return N;` is optional and must be last; the exit code is one byte, so
+;     N above 255 truncates exactly as exit(300) does
 ;   * whitespace, /* */ and // comments anywhere between tokens
 ;
 ; Anything else is REFUSED: exit 1, a reason on stderr, not one byte on stdout.
@@ -2043,54 +2044,53 @@ esdone:
 ret
 ; emitnum: eax (0..255) in decimal, no leading zeros
 emitnum:
-; decimal, no leading zeros: the hundreds and tens digits are emitted only if
-; something has already been emitted or they are non-zero, and the ones digit is
-; always emitted. `started` is what makes 100 print as 100 and not as 10.
-mov [rbp+64], eax
+; eax (0..65535) in decimal, no leading zeros. One digit per place value, from
+; ten-thousands down to units, each emitted only if the value reaches it or a
+; digit has already been printed -- `started` is what makes 100 print as 100.
+mov [rbp+64], eax        ; the value being printed
 mov eax, 0
-mov [rbp+68], eax
+mov [rbp+68], eax        ; started
+mov eax, 10000
+call en_dig
+mov eax, 1000
+call en_dig
+mov eax, 100
+call en_dig
+mov eax, 10
+call en_dig
 mov eax, [rbp+64]
-cmp eax, 100
-jb en_ten
+mov ecx, 48
+add eax, ecx
+call emitc               ; the units digit, always
+ret
+
+en_dig:
+; eax is a place value. Prints that digit and leaves the remainder in [rbp+64].
+mov ecx, eax
+mov eax, [rbp+64]
+cmp eax, ecx
+jb en_skip               ; the value is smaller than this place
+jmp en_go
+en_skip:
+mov eax, [rbp+68]
+cmp eax, 0
+jz endig                 ; nothing printed yet: a leading zero stays hidden
+mov eax, 0               ; a zero digit inside the number
+jmp en_put
+en_go:
 mov eax, [rbp+64]
 mov edx, 0
-mov ebx, 100
-div bl
-movzx ecx, ah           ; the remainder, before anything else clobbers rax
-mov [rbp+64], ecx
-movzx eax, al
+div ecx
+mov [rbp+64], edx        ; the remainder
+en_put:
 mov ecx, 48
 add eax, ecx
 call emitc
 mov eax, 1
 mov [rbp+68], eax
-en_ten:
-mov eax, [rbp+64]
-cmp eax, 10
-jb en_maybe
-mov eax, [rbp+64]
-mov edx, 0
-mov ebx, 10
-div bl
-movzx ecx, ah
-mov [rbp+64], ecx
-movzx eax, al
-mov ecx, 48
-add eax, ecx
-call emitc
-jmp en_one
-en_maybe:
-mov eax, [rbp+68]
-cmp eax, 0
-jz en_one
-mov eax, 48
-call emitc
-en_one:
-mov eax, [rbp+64]
-mov ecx, 48
-add eax, ecx
-call emitc
+endig:
 ret
+
 flush:
 mov eax, [rbp+16]
 cmp eax, 0
@@ -2321,16 +2321,16 @@ numend:
 mov eax, [rbp+84]
 cmp eax, 0
 jz.l fail               ; no digits at all
-mov ecx, 4
+mov ecx, 6
 cmp eax, ecx
 jb num3ok
-jmp.l fail              ; more than three digits cannot be 0..255
+jmp.l fail              ; more than five digits
 num3ok:
 mov eax, [rbp+80]
-mov ecx, 256
+mov ecx, 65536
 cmp eax, ecx
 jb num2ok
-jmp.l fail              ; a value above 255
+jmp.l fail              ; a value above 65535
 num2ok:
 ret
 ret

@@ -2812,3 +2812,23 @@ subscript" — was initialised to 264 instead of 0, and **every** subscript was 
 separate probes passed (declaration, `read()`, scalars, small arrays) before a single `p[0]` showed it.
 
 `cc` 8 837 → 8 858 bytes. 29 checks, 35 refusals, 27 goldens.
+
+## Literals wider than a byte, at both ends
+
+`char b[2000]` works now. Two halves had to move together, and the second is the one that bites if
+forgotten: `numval` refused more than three digits, and **`emitnum` could not print four** — it had
+units, tens and hundreds and no more, so a 1 000-element array would have compiled to `mov rax, :00`.
+
+`numval` now takes up to five digits and refuses above 65 535; `emitnum` prints one digit per place
+value from ten-thousands down, with the same `started` flag hiding leading zeros. One routine,
+`en_dig`, does every place, and the units digit is emitted unconditionally at the end.
+
+`return 300` becomes legal with it, and exits 44 — that is the platform, not a defect: `exit(300)` is a
+byte. The refusal that used to cover it is now `int x = 70000;`, which `numval` genuinely refuses, and
+the comment at the top of `cc.s` that said "`return N` … N is 0..255" is now wrong and has to say what
+actually happens.
+
+Gate: a 2 000-byte buffer written and read at index 1 999 exits 65 — four-digit literals in a
+declaration *and* a subscript, both of which were three-digit before.
+
+`cc` 8 858 → 8 836 bytes. 30 checks, 35 refusals, 28 goldens.

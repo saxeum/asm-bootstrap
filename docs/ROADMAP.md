@@ -1531,3 +1531,12 @@ Two limits stand between this and a compiler's input buffer, and the first is tr
 2. The frame constant (8 200) caps an array at ~7.7 KB.
 
 Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.
+
+## Compiler: literals up to 65 535
+
+`char b[2000]` works: `numval` takes five digits and `emitnum` prints them. The frame constant (8 200)
+is now the only limit on an array, at about 7.7 KB, and raising it is one instruction if the stack
+depth is kept in mind.
+
+That leaves the port itself as the next piece of work rather than another feature: `src/cc.c`, compiled
+by `cc`, assembled by `asm1`, compared on the whole corpus, with the dialect frozen as the witness.

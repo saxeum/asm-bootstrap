@@ -494,6 +494,15 @@ test-cc: cc asm1
 	  if $$tmp/ba; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 65 ]; then \
 	    printf '  cc    a 200-byte buffer, written in a loop, exits 65\n'; \
+	if $(CC) < tests/golden/widearray.c > $$tmp/wa.s 2>/dev/null && cmp -s $$tmp/wa.s tests/golden/widearray.s; then :; \
+	else echo "  widearray.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/widearray.s > $$tmp/wa 2>/dev/null; then \
+	  chmod +x $$tmp/wa; \
+	  if $$tmp/wa; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 65 ]; then \
+	    printf '  cc    a 2000-byte buffer at index 1999 exits 65 (four-digit literals)\n'; \
+	  else echo "  widearray exited $$g1, wanted 65 -- a literal or an offset is truncated"; fail=1; fi; \
+	else echo "  asm1 refuses widearray.s"; fail=1; fi; \
 	  else echo "  bigarray exited $$g1, wanted 65 -- the array is outside the frame"; fail=1; fi; \
 	else echo "  asm1 refuses bigarray.s"; fail=1; fi; \
 	  else echo "  cmpbound exited $$g1, wanted 6 -- the bound adjustment is wrong"; fail=1; fi; \
@@ -553,7 +562,7 @@ test-cc: cc asm1
 	refuse 'int main(void) { puts("x"); }'; \
 	refuse 'int main(void) { write(x); }'; \
 	refuse 'int main(void) { write("unterminated); }'; \
-	refuse 'int main(void) { return 300; }'; \
+	refuse 'int main(void) { int x = 70000; }'; \
 	refuse 'void main(void) {}'; \
 	refuse 'int main(void) { write("a"); write("b"); write("c"); write("d"); write("e"); write("f"); write("g"); write("h"); write("i"); write("j"); }'; \
 	refuse '/* unterminated'; \
