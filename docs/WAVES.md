@@ -132,3 +132,44 @@ paths updated and re-checked.
 Commands quoted *above* this note were run when the files were at the root; they are left
 verbatim because the log is a record of what was executed, not a tutorial to be retconned.
 From here on the oracles are `ref/hello`, `ref/count10`, `ref/fib`.
+
+## Plan correction before wave 2b
+
+The original plan said "wave 2: relative jumps, so `count10` is reachable". That was
+optimistic by about twelve instruction forms. `count10` needs, beyond jumps: `mov r8,imm8`,
+`movzx r32,r8`, `div r8`, `add r8,imm8`, `mov [rsp+d8],r8`, `mov byte [rsp+d8],imm8`, `lea`
+(two addressing forms), `sub r64,r64`, `inc r8`, `cmp r8,imm8`. Jumps get you none of that.
+
+So wave 2 splits:
+
+| Wave | Adds | Oracle |
+|---|---|---|
+| **2b** | labels, `entry`, two passes, `jmp label` (forward and backward) | `src/jmp.s` → `ref/jmp`, sha `f1efca3a…` |
+| **2c** | conditional jumps (`jz jnz jb ja`), `inc`/`dec` r32, `cmp r32,imm8` | a loop fixture: count down, exit with the counter |
+| **2d** | the eleven forms above, i.e. everything `count10` uses | `src/count10.s` → `ref/count10`, sha `e61a23c9…` |
+| **3** | everything `fib` uses, then the fixpoint | `src/fib.s` → `ref/fib`, then `asmN.s` by `asmN` equals `asmN` |
+
+Why 2b first and why it is small: a **forward** jump is the smallest feature that cannot be
+done in one pass, so it forces the architecture (labels recorded in pass 1, resolved in pass
+2) without dragging in arithmetic. `ref/jmp` is hand-emitted and exits 7; if the jump were
+dropped, control would fall into `mov edi, 99` and the status would be 99 — an oracle that
+distinguishes "jump emitted" from "jump ignored", which a passing exit status alone would not.
+
+### 2b design (decided, not yet implemented)
+
+- **Two passes by re-parse, not two code paths.** Pass 1 parses exactly as today — handlers
+  write their bytes into the body buffer, and that is fine: its output is garbage that pass 2
+  overwrites. What pass 1 additionally does is record `label -> (r15 - r14)` as each label
+  definition goes by. At end of source, reset `r15` to `r14`, rewind `rbx` to `r12`, flip a
+  pass flag and re-parse. No handler needs a "counting" mode, which is what makes this
+  cheap.
+- **Label table**: 32 entries of 12 bytes (8-byte zero-padded name, 4-byte offset) at
+  `rsp+0x1F800` — inside the existing 128 KiB scratch allocation, above the 120-byte header
+  buffer at `rsp+0x1F000`. Lookup is an 8-byte compare, so label names are limited to 7
+  characters plus terminator (enough for `_start`, `msg`, `loop`, `done`).
+- **Label detection** at line start: after skipping spaces, scan while the character is not
+  space, newline or `:`; if it is `:`, it is a definition, else rewind and dispatch as now.
+  Needed because `skip:` and `syscall` both start with `s`.
+- **`jmp name`** → `EB rel8` with `rel8 = target_off - (here_off + 2)`, failing if it does not
+  fit. Backward and forward both work because pass 1 already filled the table.
+- **Registers**: `r8d` label count, `r9d` pass flag.
