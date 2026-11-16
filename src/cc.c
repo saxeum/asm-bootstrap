@@ -1,23 +1,25 @@
 /* src/cc.c -- the compiler, written in the subset it compiles.
  *
- * Slice 1: the output side.  Not a compiler yet: this emits the dialect text
- * for one fixed program (`int main(void) { return 42; }`) into a buffer and
- * writes the buffer out, so that the machinery every later slice needs -- a byte
- * buffer, a length in a local, one function per emission step -- is exercised
- * end to end by the real pipeline:
+ * Slice 1: emitstr, emitc, putn, line, and one program emitted line by line.
+ * Slice 2: the same output, emitted from *tables* rather than by hand -- two
+ *          arrays of literal addresses walked by loops, which is the shape the
+ *          real prologue and epilogue emitters take.
  *
- *     cc < src/cc.c > cc1.s ; asm1 < cc1.s > cc1 ; ./cc1 | cmp - expected
+ * The pipeline that judges it:
  *
- * The expected bytes are in tests/selfhost/slice1.expected and were written
- * before this file.  What is not here yet: the front end, the symbol table, the
- * literal section.  What is here: emitc, emitstr and putn -- putn being the
- * character-by-character equivalent of the assembler's emitnum.
+ *     cc < src/cc.c > .work/cc1.s ; asm1 < .work/cc1.s > .work/cc1
+ *     ./.work/cc1 | cmp - tests/selfhost/slice1.expected
  *
- * Conventions of the subset this is written in (docs/cc.md):
+ * The expected bytes were written before this file and have not changed: slice 2
+ * must produce exactly what slice 1 did.  Not here yet: the literal section, the
+ * symbol table, statements, expressions.
+ *
+ * Two things this file has to work around, both recorded in docs/cc.md:
+ *   - **the loop must be in the caller.** A pointer subscript is char-indexed by
+ *     design, so a function cannot index an `int` array that is passed to it;
+ *     the tables stay in main and only their elements cross the call.
  *   - no globals: the buffer and its length are locals of main, passed as
  *     pointers, and a function returns the length it reached.
- *   - declarations may appear anywhere in a block, but a name may not be reused
- *     in another block.
  *   - `\n` is not expressible in a character literal, so 10 is written out.
  */
 
@@ -70,20 +72,32 @@ int line(int p, int len, int s)
 int main(void)
 {
 	char obuf[8000];
+	int pro[5];
+	int epi[4];
 	int p = &obuf;
 	int len = 0;
-	len = line(p, len, "main:");
-	len = line(p, len, "push rbp");
-	len = line(p, len, "mov rbp, rsp");
-	len = line(p, len, "mov rcx, 16500");
-	len = line(p, len, "sub rsp, rcx");
+	pro[0] = "main:";
+	pro[1] = "push rbp";
+	pro[2] = "mov rbp, rsp";
+	pro[3] = "mov rcx, 16500";
+	pro[4] = "sub rsp, rcx";
+	epi[0] = "mov rsp, rbp";
+	epi[1] = "pop rbp";
+	epi[2] = "ret";
+	epi[3] = "entry main";
+	int i = 0;
+	while (i < 5) {
+		len = line(p, len, pro[i]);
+		i = i + 1;
+	}
 	len = emitstr(p, len, "mov rax, ");
 	len = putn(p, len, 42);
 	len = emitc(p, len, 10);
-	len = line(p, len, "mov rsp, rbp");
-	len = line(p, len, "pop rbp");
-	len = line(p, len, "ret");
-	len = line(p, len, "entry main");
+	i = 0;
+	while (i < 4) {
+		len = line(p, len, epi[i]);
+		i = i + 1;
+	}
 	int k = write(obuf, len);
 	return 0;
 }

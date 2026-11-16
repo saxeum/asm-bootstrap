@@ -728,7 +728,7 @@ test-selfhost: asm1 cc
 	    chmod +x $(WORK)/cc1; \
 	    if $(WORK)/cc1 > $(WORK)/cc1.out 2>$(WORK)/cc1.run.err; then \
 	      if cmp -s $(WORK)/cc1.out tests/selfhost/slice1.expected; then \
-	        printf '  selfhost: slice 1 -- src/cc.c compiled and assembled emits the expected text\n'; \
+  selfhost: slices 1-2 -- src/cc.c compiled and assembled emits the expected text
 	      else \
 	        echo '  selfhost: the emitted text differs from tests/selfhost/slice1.expected:'; \
 	        diff tests/selfhost/slice1.expected $(WORK)/cc1.out | head -8; exit 1; \

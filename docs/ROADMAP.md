@@ -1694,3 +1694,17 @@ uses.
 
 Fix that, then slice 2 (the prologue from a table), then the symbol table, statements, expressions, and
 the acceptance test `cc1 < src/cc.c > cc2.s ; cmp cc1.s cc2.s`.
+
+## The port: slice 2 passes
+
+`make test-selfhost` is green with the prologue and epilogue emitted from tables of literal addresses.
+The attempted version that passed the tables into a function is deleted rather than kept: it was not
+blocked by a defect, it was wrong about the language, and keeping it would suggest a bug that does not
+exist.
+
+Next slices: the literal section, the symbol table, statements, expressions, then
+`cc1 < src/cc.c > cc2.s ; cmp cc1.s cc2.s`.
+
+The language gaps the port will meet, in order: an `int` array cannot cross a call (use tables in the
+caller, or a `char` buffer with a length); `&&`/`||` (write nested `if`s); returning a pointer
+(`emit(char *s)` has no equivalent).

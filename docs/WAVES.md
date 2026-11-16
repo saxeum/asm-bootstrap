@@ -3194,3 +3194,30 @@ from two tables of literal addresses walked by loops, and it crashes because of 
 defect above. It is kept rather than deleted so that the next session can run it, see the failure, fix the
 defect and watch it start passing; `src/cc.c` stays at slice 1, which passes, because a tree handed over
 with a red gate is worth less than one handed over green with the failing attempt on the record beside it.
+
+## Slice 2 passes, and the "defect" was a language gap I had misread
+
+The A/B from the last entry was my mistake, and the mistake is worth recording because it was a *design*
+error dressed as a codegen bug. p3/p4 passed `&t` — an `int` array of literal addresses — into a function
+and indexed it there. A pointer subscript in this subset is **char-indexed by design** (`p[i]` reads one
+byte), so `t[i]` in the callee read the *bytes of an address*, not the address. The segfault was the
+program, not the compiler.
+
+Proved by separating the two variables: an array subscript as an argument in `main` prints `abcd`; a
+pointer subscript over the same array prints nothing, in `main`, with no parameters involved. Same
+"failure", no parameters in sight — so the parameter hypothesis was dead.
+
+The real gap is narrower and is a language limit, not a bug: **an `int` array cannot be passed to a
+function**, because the only way to receive one is as a pointer, and a pointer subscript is char-indexed.
+Closing it needs `int *` semantics (stride from the element type), which is the same work as a type
+system and is not in this subset.
+
+So slice 2 keeps the tables in `main` and passes only elements across the call:
+
+```c
+while (i < 5) { len = line(p, len, pro[i]); i = i + 1; }
+```
+
+which is the shape a prologue emitter actually takes — a table of lines walked by an index — and it now
+reproduces `tests/selfhost/slice1.expected` byte for byte. The gate that was red an hour ago is green, and
+it went red *because* it noticed, which is the whole point of having it.
