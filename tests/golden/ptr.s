@@ -11,10 +11,8 @@ mov [rbp-16], rax
 mov rax, [rbp-16]
 mov rax, [rax]
 mov [rbp-24], rax
-mov rax, [rbp-16]
-mov [rbp-224], rax
 mov rax, 33
-mov rcx, [rbp-224]
+mov rcx, [rbp-16]
 mov [rcx], rax
 mov rax, [rbp-8]
 mov rcx, [rbp-24]

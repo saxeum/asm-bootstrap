@@ -650,34 +650,26 @@ call emitstr
 ret
 
 stptr:
-; `*name = expr;` -- the pointer is parked in the scratch slot while the value
-; is computed, because the expression owns every depth register
+; `*name = expr;` -- the value is computed FIRST and the pointer loaded after
+; it, so nothing is parked; the slot offset lives at -244 because expr owns -140
 mov eax, 1
 call bump
 call ident
 call findvar
 call varoff
-mov [rbp-140], eax
-mov esi, 4194424+f_mov
-call emitstr
-mov eax, 0
-call emitreg
-mov esi, 4194424+f_cev
-call emitstr
-mov eax, [rbp-140]
-call emitnum
-mov esi, 4194424+f_le2
-call emitstr
-mov esi, 4194424+f_msav1
-call emitstr
-mov esi, 4194424+f_rax
-call emitstr
-mov esi, 4194424+f_nl
-call emitstr
+mov [rbp-244], eax
 mov esi, 4194424+f_eq
 call want
 call expr
-mov esi, 4194424+f_mlod
+mov esi, 4194424+f_mov
+call emitstr
+mov eax, 1
+call emitreg
+mov esi, 4194424+f_cev
+call emitstr
+mov eax, [rbp-244]
+call emitnum
+mov esi, 4194424+f_le2
 call emitstr
 mov esi, 4194424+f_lst1
 call emitstr
@@ -688,6 +680,7 @@ call emitstr
 mov esi, 4194424+f_semi
 call want
 jmp.l bodloop
+
 
 ex3num:
 call numval
@@ -2023,13 +2016,6 @@ db "lea "
 db 0
 f_dref1:
 db ", ["
-db 0
-f_msav1:
-db "mov [rbp-224], "
-db 0
-f_mlod:
-db "mov rcx, [rbp-224]"
-db 10
 db 0
 f_lst1:
 db "mov [rcx], "

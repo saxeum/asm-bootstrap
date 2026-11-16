@@ -22,7 +22,7 @@ included; `docs/continue-here.md` is where a session starts.
 | self-hosted | `asm1` | 7 731 | `ac80d9f9094d7051` | `seed/asm1` from `src/asm1.s` |
 | seed | `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted previous stage |
 | decoder | `dis` | 1 343 | `2d2eb451d7c7a9a9` | `asm1` from `src/dis.s` |
-| compiler | `cc` | 6 434 | `cf423fd41ae7ace8` | `asm1` from `src/cc.s` |
+| compiler | `cc` | 6 358 | `add5c0e004306981` | `asm1` from `src/cc.s` |
 
 Past the bootstrap. `asm1` is self-hosting, reaches its fixpoint, and is demonstrably better than
 what built it — 6 byte-level cases where `asm0a` answers wrongly and 30 syntax pairs it cannot parse.
@@ -248,7 +248,7 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1` |
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div` (8-bit form: `div bl`, quotient in `al`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `add`/`sub` with an immediate, `imul r,r,imm`, `div r32` (only the 8-bit form), `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 7 characters |
-| compiler | `cc`, 6 434 bytes, built by `asm1` from `src/cc.s` (2 039 lines): C subset → dialect **text** → `asm1` → executable. 12 text goldens, 3 output oracles, 23 refusals (`make test-cc`, `docs/cc.md`) |
+| compiler | `cc`, 6 358 bytes, built by `asm1` from `src/cc.s` (2 025 lines): C subset → dialect **text** → `asm1` → executable. 12 text goldens, 3 output oracles, 23 refusals (`make test-cc`, `docs/cc.md`) |
 | `make check` | 39 lines: forbidden tools, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 30/30 capability, 6/6 superiority plus three behavioural, 38/38 decoder cases, the compiler's 13 checks, 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are

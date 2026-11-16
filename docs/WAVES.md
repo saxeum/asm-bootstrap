@@ -2384,3 +2384,9 @@ Two gates: `&x`/`*p`/`*p = 33` exits 40, and `bump(&x)` — the callee writing t
 pointer — exits 42. Three refusals added (`&5`, `*q` with `q` undeclared, `&nope`): 23 now.
 
 `cc` 5 937 → 6 434 bytes.
+
+**Same hour: the parking was unnecessary.** `*p = v` first parked the pointer in a scratch slot while
+the value was computed, then reloaded it — 12 bytes and a second mechanism for a problem the order of
+two steps solves: compute the value into `rax`, *then* load the pointer into `rcx`, then `mov [rcx],
+rax`. `cc` 6 434 → 6 358 bytes, both gates still exactly 40 and 42, and one fewer fixed slot to
+collide with later. The golden text was re-pinned; the exit codes are what carry the meaning.

@@ -587,12 +587,12 @@ Then, with 64-bit values, three forms and no type system:
 |---|---|
 | `&x` | `lea rax, [rbp-8]` |
 | `*p` | `mov rax, [rbp-16]` / `mov rax, [rax]` |
-| `*p = 33` | `mov rax, [rbp-16]` / `mov [rbp-224], rax` / `mov rax, 33` / `mov rcx, [rbp-224]` / `mov [rcx], rax` |
+| `*p = 33` | `mov rax, 33` / `mov rcx, [rbp-16]` / `mov [rcx], rax` |
 
-`*p = expr` parks the pointer in a fixed scratch slot while the value is computed, because the
-expression owns every depth register. That is the same problem the call-argument parser hit, and the
-same size of answer: an expression is not reentrant, so a second thing that needs storage gets its
-own.
+`*p = expr` computes the **value first** and loads the pointer after it, so nothing is parked: the
+value lands in `rax`, the pointer in `rcx`, and one store finishes it. The first version parked the
+pointer in a scratch slot for the duration of the expression and reloaded it at 12 bytes a round trip;
+that was a second mechanism for a problem the order of two steps already solved.
 
 There is **no pointer type**: an `int` may hold an address, and the compiler neither knows nor checks
 which. That is a deliberate deferral — the mechanism (load, store, address-of) is what arrays and a

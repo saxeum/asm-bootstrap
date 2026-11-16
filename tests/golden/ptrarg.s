@@ -6,12 +6,10 @@ mov rcx, 64
 sub rsp, rcx
 mov [rbp-8], rdi
 mov rax, [rbp-8]
-mov [rbp-224], rax
-mov rax, [rbp-8]
 mov rax, [rax]
 mov rcx, 1
 add rax, rcx
-mov rcx, [rbp-224]
+mov rcx, [rbp-8]
 mov [rcx], rax
 mov rax, 0
 mov rsp, rbp
