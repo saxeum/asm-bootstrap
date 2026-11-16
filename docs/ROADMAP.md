@@ -1096,3 +1096,26 @@ input, never delete the case.
 a global, a string built at runtime, a heap. It needs a second `PT_LOAD` with `R+W`, an opt-in
 directive so the 18 fixtures stay byte-identical, and a way for `db`/labels to know which segment
 they belong to.
+
+## The compiler exists: `helloworld.c` compiles and runs
+
+```
+./cc < helloworld.c > hello.s
+./asm1 < hello.s > hello
+./hello            -> Hello, World!
+```
+
+`docs/cc.md` is the plan and the gate list. The design decision that matters: **`cc` emits dialect
+source, not machine code** — 1 958 bytes built by `asm1` from `src/cc.s`, whose output is a reviewable
+text file compared byte-for-byte against a hand-written golden. `asm1` stays the only thing that
+produces bytes, so every gate the assembler already has applies to what the compiler writes.
+
+This is the wave where the assembler's gaps stopped being a list and became blockers hit in the
+first 600 lines of a compiler: `cmp r32,[mem]`, `add r32,imm32`, `ja`/`jae`, rel8's 127 bytes, no
+disp32, label names ≤ 7 characters, and a `db` line that ends at the first string. And writing the
+*golden* found an assembler defect before the compiler existed — `msg1end-msg1` was rejected because
+the lexer did not stop a symbol at `+` or `-`.
+
+The next two items are unchanged and now have a user: `.data`, then disp32. After those, the C subset
+grows by the thing it is missing most: a calling convention, with a fixture whose output is wrong if
+the register assignment is wrong.

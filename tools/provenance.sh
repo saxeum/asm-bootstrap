@@ -27,7 +27,7 @@ HELLO=hello_num
 # artifacts with no independent oracle: a program assembled by asm1, whose check
 # is that asm1 reproduces the built file byte for byte. asm0a cannot assemble
 # these -- that is the point of them -- so they are recorded for asm1 only.
-NOORACLE=dis
+NOORACLE="dis cc"
 
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 

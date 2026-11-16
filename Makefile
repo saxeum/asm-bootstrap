@@ -12,6 +12,7 @@ ASM0A := ./asm0a
 ASM1  := ./asm1
 SEED  := seed/asm1
 DIS   := ./dis
+CC    := ./cc
 # src/<name>.s assembles to ref/<name>
 PAIRS := addr32 callret cmp32 cmp8 count10 dbnum inc8 jmp jz load loop movrr \
          r8 rel32 stack store
@@ -20,7 +21,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 dis test test-asm0a test-asm1 test-dis test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 dis cc test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1, then the decoder (which needs it)'
 	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
@@ -127,7 +128,7 @@ verify-provenance: asm1 dis
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: test-tools asm1 dis test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis verify-provenance
+check: test-tools asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -135,8 +136,8 @@ check: test-tools asm1 dis test-coverage fixpoint bootstrap-check test-reject te
 	       echo "  if that is intended: make record"; exit 1; }
 	@./tools/check-branches.sh
 clean:
-	@rm -f asm1 asm1b count10 dis
-	@echo '  removed asm1, asm1b, count10, dis'
+	@rm -f asm1 asm1b count10 dis cc
+	@echo "  removed asm1, asm1b, count10, dis, cc"
 
 # ---- bootstrap chain --------------------------------------------------------
 # Two builders exist while the dialect is still within asm0a's reach:
@@ -243,6 +244,75 @@ test-tools:
 	fi; \
 	[ $$fail -eq 0 ] && echo '  forbidden tools: none invoked in a Makefile recipe or tools/*.sh'; \
 	exit $$fail
+
+# ---- the compiler -----------------------------------------------------------
+# cc is built by asm1 from src/cc.s like every other program here, and it emits
+# DIALECT SOURCE, not machine code. That is the whole point: the compiler's
+# output is a file a person can read and diff, asm1 remains the only thing that
+# produces bytes, and everything the assembler already proves applies to what
+# the compiler writes.
+cc: src/cc.s asm1
+	@$(ASM1) < src/cc.s > $@
+	@chmod +x $@
+	@printf '  cc    %s bytes  sha %s  (built by %s from src/cc.s)\n' \
+	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(ASM1)"
+
+# Four gates, and each can fail on its own:
+#   1. the text:  cc's output must be byte-identical to the hand-written golden,
+#      so no refactor can silently change the shape of what it emits
+#   2. the assembly: that text must be accepted by asm1 and produce a binary
+#   3. the behaviour: the binary must write exactly "Hello, World!\n" and exit 0
+#   4. the refusal: anything outside the subset is exit 1 with NO output at all
+# Gate 3 is what makes gate 1 mean something. A golden whose validity rests only
+# on matching itself is a regression pin, not an oracle; the machine is the
+# oracle, and it judges gate 3.
+test-cc: cc asm1
+	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; fail=0; ok=0; n=0; \
+	$(CC) < helloworld.c > $$tmp/got.s 2>/dev/null || { echo "  cc cannot compile helloworld.c"; exit 1; }; \
+	if cmp -s $$tmp/got.s tests/golden/hello.s; then \
+	  printf '  cc    helloworld.c -> tests/golden/hello.s byte for byte\n'; \
+	else \
+	  echo "  the emitted text differs from tests/golden/hello.s:"; \
+	  diff -u tests/golden/hello.s $$tmp/got.s | sed -n '3,20p'; fail=1; fi; \
+	if $(ASM1) < tests/golden/hello.s > $$tmp/hello 2>/dev/null; then \
+	  chmod +x $$tmp/hello; \
+	  if $$tmp/hello > $$tmp/out; then got=0; else got=$$?; fi; \
+	  printf 'Hello, World!\n' > $$tmp/want; \
+	  if [ $$got -eq 0 ] && cmp -s $$tmp/out $$tmp/want; then \
+	    printf '  cc    the binary prints "Hello, World!" and exits 0\n'; \
+	  else \
+	    echo "  the binary exited $$got and wrote [$$(cat $$tmp/out)]"; fail=1; fi; \
+	else \
+	  echo "  asm1 refuses tests/golden/hello.s"; fail=1; fi; \
+	if $(CC) < tests/golden/twowrites.c > $$tmp/tw.s 2>/dev/null && cmp -s $$tmp/tw.s tests/golden/twowrites.s; then :; \
+	else echo "  twowrites.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/twowrites.s > $$tmp/tw 2>/dev/null; then \
+	  chmod +x $$tmp/tw; \
+	  if $$tmp/tw > $$tmp/two 2>&1; then got=0; else got=$$?; fi; \
+	  printf 'ABB' > $$tmp/want2; \
+	  if [ $$got -eq 255 ] && cmp -s $$tmp/two $$tmp/want2; then \
+	    printf '  cc    two writes and return 255: prints ABB, exits 255\n'; \
+	  else echo "  twowrites exited $$got, wrote [$$(cat $$tmp/two)]"; fail=1; fi; \
+	else echo "  asm1 refuses tests/golden/twowrites.s"; fail=1; fi; \
+	refuse() { \
+	  n=$$((n+1)); \
+	  printf '%s' "$$1" > $$tmp/bad.c; \
+	  $(CC) < $$tmp/bad.c > $$tmp/bad.s 2>/dev/null; rc=$$?; \
+	  if [ $$rc -ne 0 ] && [ ! -s $$tmp/bad.s ]; then ok=$$((ok+1)); \
+	  else echo "  NOT REFUSED: [$$1] -> exit $$rc, $$(wc -c < $$tmp/bad.s) bytes"; fail=1; fi; \
+	}; \
+	refuse 'int main() {}'; \
+	refuse 'int main(void) { puts("x"); }'; \
+	refuse 'int main(void) { write(x); }'; \
+	refuse 'int main(void) { write("unterminated); }'; \
+	refuse 'int main(void) { return 300; }'; \
+	refuse 'void main(void) {}'; \
+	refuse 'int main(void) { write("a"); write("b"); write("c"); write("d"); write("e"); write("f"); write("g"); write("h"); write("i"); write("j"); }'; \
+	refuse '/* unterminated'; \
+	if [ $$ok -ne $$n ]; then echo "  cc: $$ok/$$n refusals"; fail=1; fi; \
+	printf '  cc    %s/%s rejections outside the subset, with no output\n' $$ok $$n; \
+	exit $$fail
+
 
 # ---- coverage ---------------------------------------------------------------
 # The claim is tests/coverage/forms.tsv: one probe per supported form. Each must

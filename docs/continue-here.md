@@ -15,15 +15,15 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 | | bytes | sha256 (16) | notes |
 |---|---|---|---|
 | `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
-| `asm1` | 7 488 | `158b79648e5a2a1f` | built by `seed/asm1` from `src/asm1.s` |
-| `seed/asm1` | 7 488 | `158b79648e5a2a1f` | the promoted stage; identical to `asm1` |
+| `asm1` | 7 506 | `9ae3db24b9d814dd` | built by `seed/asm1` from `src/asm1.s` |
+| `seed/asm1` | 7 506 | `9ae3db24b9d814dd` | the promoted stage; identical to `asm1` |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
-| `src/asm1.s` | 28 337 | — | 2 043 lines, 192 labels (limit 256, 7 of them duplicated dead code) |
+| `src/asm1.s` | 28 535 | — | 2 049 lines, 192 labels (limit 256, 7 of them duplicated dead code) |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
 
-Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 12 reject sources · **29 capability
+Tags `milestone-fixpoint`, `milestone-handover` · 18 fixtures · 12 reject sources · **30 capability
 pairs** · **5 superiority cases** (byte-level) + 3 behavioural · 5 exact messages · 38 decoder cases ·
-**88 coverage forms** · 290 branch pins · 35 provenance records.
+**88 coverage forms** · **5 cc gates** · 290 branch pins · 36 provenance records.
 
 ## Verify before touching anything
 
@@ -31,10 +31,10 @@ pairs** · **5 superiority cases** (byte-level) + 3 behavioural · 5 exact messa
 make clean && make && make check
 ```
 
-`make check` must print, in order: **forbidden tools: none invoked** · **coverage 60/60 forms
+`make check` must print, in order: **forbidden tools: none invoked** · **coverage 88/88 forms
 exercised** · fixpoint holds · bootstrap NOT APPLICABLE · 12/12 rejections · 5/5 exact messages ·
-29/29 capability pairs · 5/5 superiority cases (plus the 99 KB, `entry` and r8d cases) · 38/38 decoder
-cases · 35 provenance records · SHAS match · `asm1.sha` match · and a real **`branch pins: 290/290`**
+30/30 capability pairs · 5/5 superiority cases (plus the 99 KB, `entry` and r8d cases) · 38/38 decoder
+cases · cc 5 gates · 36 provenance records · SHAS match · `asm1.sha` match · and a real **`branch pins: 290/290`**
 line naming both the subject's sha and the decoder's. If any line is missing or red, stop and fix
 that first.
 
@@ -65,30 +65,46 @@ after every step `asm1 < src/dis.s` had to be byte-identical to the previous bui
 8-register encoding had moved — and only then did the parser learn the new names. `asm1` 6 947 →
 7 488.
 
-## The next task: `.data`, the compiler's hard blocker
+## The compiler exists: `helloworld.c` compiles and runs
 
-Everything a compiled program needs to *be* a program rather than a sequence of instructions lives in
-writable memory: a global, a string built at runtime, a heap. `asm1` still emits one `R+X` `PT_LOAD`,
-so every byte of the image is code.
+`docs/cc.md` is the plan. The pipeline is two stages, and the compiler emits **text**:
 
-What it needs:
+```
+./cc < helloworld.c > hello.s
+./asm1 < hello.s > hello
+```
 
-1. **A directive to switch segment** (`.data`) — opt-in, so the 18 fixtures stay byte-identical.
-2. **A second program header**: `PT_LOAD` with `R+W` (flags 6) covering the data, and the first one
-   covering only code. `filesz`/`memsz` become two values computed from label differences — which is
-   what the expression support was for (`dataend - datastart`).
-3. **The `db`/label path must know which segment it is in**, because the file offset and the virtual
-   address no longer differ by the same constant for both segments — `mov eax, 0x400078+label` in the
-   dialect stops being true for data.
-4. Entry: `e_entry` still points into `.text`; the default (first body byte) must keep working.
+`./hello` prints `Hello, World!` and exits 0. `cc` is 1 958 bytes, built by `asm1` from
+`src/cc.s` (661 lines), and it handles exactly one function, `write("…")` statements, `return N`
+(0..255), comments and whitespace -- refusing everything else with no output, because the
+output is buffered and written once.
 
-Gate: `syscall` write from a `.data` buffer assembled by `asm1` prints the right bytes and exits 0;
-the 18 fixtures byte-identical; fixpoint; coverage green; then `make promote`, `make record`, and
-re-pin `docs/SHAS`.
+Five gates, in `make test-cc`: the emitted text is byte-identical to `tests/golden/hello.s`;
+the golden assembles; the binary prints exactly `Hello, World!\n` and exits 0; eight inputs
+outside the subset are refused; and a second program (two writes, `return 255`) matches its own
+golden and runs. The text gate is a regression pin, not an oracle -- the machine judging the
+binary is what makes it mean anything.
 
-Then, in order: disp32 and `[base+index*scale]` (arrays), the signed condition codes and
-`imul …,imm8`, and a calling convention with a fixture that exercises it. `src/asm0a.s` is the
-strongest statement the project can make and is *not* on the compiler path.
+**Writing the oracle found an assembler defect before the compiler existed**: `msg1end-msg1`
+was rejected, because the lexer did not stop a symbol at `+` or `-` (fixed, pinned by the
+capability pair `expr-nospace`). `docs/cc.md` lists the other seven edges the first client hit,
+and the gate for each thing that comes next.
+
+## The next assembler work: `.data`, then disp32
+
+The compiler found this by compiling hello world: the string lives in `.text` (readable, so
+`write` works), but a *mutable* global, a buffer or a heap cannot. `asm1` emits one `R+X`
+`PT_LOAD`, so every byte of the image is code.
+
+1. `.data` directive, opt-in so the 18 fixtures stay byte-identical
+2. a second `PT_LOAD` with `R+W`; `filesz`/`memsz` from label differences
+3. `db` and labels must know their segment, because file offset and vaddr no longer differ by
+   one constant -- `mov eax, 0x400078+label` stops being true for data
+4. **disp32**: `lea rax, [rbp-40000]` cannot be written today, so every buffer base is
+   `lea rax,[rbp+1]` plus a `sub`. A frame over 127 bytes hits this immediately.
+
+Gate: a compiled program that increments a counter in `.data` and prints it; fixtures
+byte-identical; fixpoint; then `make promote`, `make record`, re-pin `docs/SHAS`.
 
 ## How to edit `src/asm1.s` (this is not optional)
 

@@ -1927,3 +1927,64 @@ parser that keys on offsets is keyed on the length of a register name.
 `tests/reject/bad-register.s` was `mov r9, 1` — a register that did not exist. It exists, so the case
 assembled and `make test-reject` went red with `asm1 exit 0 (126 bytes)`. Replaced with `mov r7, 1`
 and `mov r16, 1`. The gate did its job by failing; the fix is a new input, never a deleted case.
+
+## Hello world, end to end: `helloworld.c` compiles and runs, and the gates fell out of it
+
+The exercise was to compile one C file and see what the gates have to be. The design choice came
+first: **`cc` emits dialect source, not machine code.** The compiler's output is a reviewable text
+file, `asm1` stays the only thing that produces bytes, and every gate the assembler already has
+applies to what the compiler writes.
+
+```
+./cc < helloworld.c > hello.s
+./asm1 < hello.s > hello
+./hello            -> Hello, World!   exit 0
+```
+
+`cc` is 1 958 bytes, built by `asm1` from `src/cc.s` (~560 lines). It handles one function, `write("…")`
+statements, `return N` (0..255), comments and whitespace — and refuses everything else with no output
+at all, because the output is buffered and written once.
+
+### The oracle came first, and it found an assembler defect immediately
+
+`tests/golden/hello.s` was hand-written before `cc` existed, and the first line I wrote that used a
+label difference — `mov edx, msg1end-msg1` — was **rejected**. With spaces it worked. `lcpy` stopped
+a symbol at `:`, space, newline and NUL, but not at `+` or `-`, so `msg1end-msg1` lexed as one long
+unknown name. No test had ever written the no-space spelling; the capability pair used `end - 2`.
+Fixed, and pinned by a new pair (`expr-nospace`).
+
+### Six more things the first client found
+
+`cmp r32,[mem]` (needed at once, worked around), `add r32,imm32` (three sites), `ja`/`jae` (three
+comparisons had to be inverted by hand), rel8's 127 bytes (five `.l` fixes in a 500-line program), no
+disp32 (`lea rax,[rbp-40000]` cannot be written — every buffer base is `lea` + `sub`), label names
+≤ 7 chars (`f_mainlab`, `f_return` rejected at assembly time), and a string on a `db` line ends that
+line, so `db ":", 10` silently drops the 10.
+
+### Two bugs in my own compiler, both familiar shapes
+
+- **`[rbp+8]` was never initialised** — the input size. It only mattered for inputs ≥ 120 bytes,
+  because that is when the read loop reads it. So `cc` compiled every small test and refused
+  `helloworld.c`; the tell was a size boundary found by bisecting file length. The same bug as `dis`'s
+  hex accumulator, four waves later.
+- **`mov esi, eax` truncated a 64-bit pointer.** The output buffer is a stack address; the low 32 bits
+  are not one. `write` returned `-EFAULT` silently and the compiler produced nothing and exited 0.
+  A compiler has to know which of its values are pointers, and this one has no types — so the fix is
+  `lea rsi, [rax]` and a comment, and the general lesson is that address arithmetic and integer
+  arithmetic are the same instruction and different meanings.
+
+And one decimal-emitter bug the golden caught for free: `return 255` emitted `mov edi, 20`, because
+the remainder in `ah` was read after `emitc` clobbered `rax`, and because 100 printed as 10 (no
+"started" flag). Values 0..255 are now checked exhaustively by hand.
+
+### The gates, which is what the exercise was for
+
+`make test-cc` has five, each able to fail on its own: the emitted text is byte-identical to the
+golden; the golden assembles; the binary writes exactly `Hello, World!\n` and exits 0; eight inputs
+outside the subset are refused with no output; and a *second* program (two writes, `return 255`)
+matches its own golden and runs, so the gates are not one lucky case.
+
+Gates 1 and 3 are complementary and the split matters: the golden is a **regression pin**, not an
+oracle — a golden whose only judge is itself proves nothing. The machine judges the binary the golden
+assembles to, and that is what makes the text pin mean something. Both were shown to fail: a
+one-byte change to the golden fails gate 1 with a diff, and `Hello, World?` fails gate 1 *and* gate 3.

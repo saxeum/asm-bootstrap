@@ -1225,6 +1225,12 @@ lcpyl:
 movzx eax, byte [rbx]
 cmp al, 58
 jz.l lcpyd
+; a symbol ends at +/- as well: `label-2` and `label+4` must lex as a term and
+; an operator, or the no-space spelling is read as one long (unknown) name
+cmp al, 43
+jz.l lcpyd
+cmp al, 45
+jz.l lcpyd
 cmp al, 32
 jz.l lcpyd
 cmp al, 10
