@@ -21,7 +21,7 @@ HELLO := hello_num
 # no oracle: the program's exit status is the assertion
 BEHAVE := exit42:42
 TOTAL := $(words $(PAIRS) $(HELLO) $(BEHAVE))
-.PHONY: all bootstrap asm1 dis cc test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
+.PHONY: all bootstrap asm1 dis cc hello test test-asm0a test-asm1 test-dis test-cc test-tools test-coverage test-reject test-reject-msg test-msg-exact test-capability test-superior fixpoint bootstrap-check triage promote demo record verify-provenance which check clean help
 help:
 	@echo 'make            build asm1 from seed/asm1, then the decoder (which needs it)'
 	@echo 'make dis        build the branch decoder (src/dis.s) with asm1'
@@ -136,8 +136,8 @@ check: test-tools asm1 dis cc test-coverage fixpoint bootstrap-check test-reject
 	       echo "  if that is intended: make record"; exit 1; }
 	@./tools/check-branches.sh
 clean:
-	@rm -f asm1 asm1b count10 dis cc
-	@echo "  removed asm1, asm1b, count10, dis, cc"
+	@rm -f asm1 asm1b count10 dis cc hello hello.s
+	@echo "  removed asm1, asm1b, count10, dis, cc, hello, hello.s"
 
 # ---- bootstrap chain --------------------------------------------------------
 # Two builders exist while the dialect is still within asm0a's reach:
@@ -256,6 +256,17 @@ cc: src/cc.s asm1
 	@chmod +x $@
 	@printf '  cc    %s bytes  sha %s  (built by %s from src/cc.s)\n' \
 	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)" "$(ASM1)"
+
+# One command for the whole pipeline. The two-stage version is easy to half-copy
+# -- and half-copied, cc's output is dialect TEXT that the shell will happily
+# try to run, one `command not found` per line. So: build it, assemble it, run it.
+hello: cc asm1 helloworld.c
+	@$(CC) < helloworld.c > hello.s
+	@$(ASM1) < hello.s > $@
+	@chmod +x $@
+	@printf '  helloworld.c -> hello.s -> hello (%s bytes, sha %s)\n' \
+	  "$$(wc -c < $@)" "$$(sha256sum $@ | cut -c1-16)"
+	@./hello
 
 # Four gates, and each can fail on its own:
 #   1. the text:  cc's output must be byte-identical to the hand-written golden,

@@ -5,3 +5,5 @@ core*
 .refcache/
 /dis
 /cc
+/hello
+/hello.s

@@ -67,28 +67,27 @@ after every step `asm1 < src/dis.s` had to be byte-identical to the previous bui
 
 ## The compiler exists: `helloworld.c` compiles and runs
 
-`docs/cc.md` is the plan. The pipeline is two stages, and the compiler emits **text**:
+`docs/cc.md` is the plan and the gate list. One command, and it is the whole pipeline:
 
 ```
-./cc < helloworld.c > hello.s
-./asm1 < hello.s > hello
+make hello
 ```
 
-`./hello` prints `Hello, World!` and exits 0. `cc` is 1 958 bytes, built by `asm1` from
-`src/cc.s` (661 lines), and it handles exactly one function, `write("…")` statements, `return N`
-(0..255), comments and whitespace -- refusing everything else with no output, because the
-output is buffered and written once.
+prints `Hello, World!`. Underneath it is two stages, and the second is not optional: `cc` writes
+dialect TEXT, `asm1` makes the program. Skipping the assembler means running a text file full of
+assembly as a shell script -- so the emitted text now starts with a `;` comment saying what it is,
+which is a comment to `asm1` and a syntax error to the shell, and that line is part of the golden
+text and therefore pinned.
 
-Five gates, in `make test-cc`: the emitted text is byte-identical to `tests/golden/hello.s`;
-the golden assembles; the binary prints exactly `Hello, World!\n` and exits 0; eight inputs
-outside the subset are refused; and a second program (two writes, `return 255`) matches its own
-golden and runs. The text gate is a regression pin, not an oracle -- the machine judging the
-binary is what makes it mean anything.
+Five gates in `make test-cc`: the emitted text is byte-identical to `tests/golden/hello.s`; the
+golden assembles; the binary prints exactly `Hello, World!\n` and exits 0; eight inputs outside
+the subset are refused with no output; and a second program (two writes, `return 255`) matches its
+own golden and runs.
 
 **Writing the oracle found an assembler defect before the compiler existed**: `msg1end-msg1`
-was rejected, because the lexer did not stop a symbol at `+` or `-` (fixed, pinned by the
-capability pair `expr-nospace`). `docs/cc.md` lists the other seven edges the first client hit,
-and the gate for each thing that comes next.
+was rejected because the lexer did not stop a symbol at `+` or `-` (fixed, pinned by the pair
+`expr-nospace`). `docs/cc.md` lists the other seven edges the first client hit and the gate for
+each thing that comes next.
 
 ## The next assembler work: `.data`, then disp32
 

@@ -186,14 +186,26 @@ Each prints `identical`, and `milestone-fixpoint` produces 4295 bytes with sha25
 | superior | five cases where asm1 is right and asm0a is not (`and`-as-`add`, `[rbp]` disp 0, a negative disp, 64-bit vs 32-bit width, `r8`–`r15`), each against a hand-computed body; plus a 99 KB source, a chosen `entry` point and r8d arithmetic, all of which must RUN |
 | branches | 290 sites in `docs/branches.tsv`, all decoded by `src/dis.s` — a decoder written in the dialect and assembled by `asm1`, because a system disassembler is forbidden |
 | source language | `mov`, `add`, `sub`, `cmp`, `and`, `or`, `test`, `xor`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `imul` in 8-bit (where it exists), 32-bit and 64-bit forms — the width comes from the operand names, and a mixed pair is refused; registers `rax`…`r15` (`r8d`–`r15d` for the 32-bit forms) with `REX.R`/`X`/`B`, `movzx` from registers and memory, `lea`, `div`, `push`/`pop`, `call`/`ret`, branches rel8 and `.l` rel32, `[base]` and `[base+index]`, `syscall`, `db` with strings, labels, expressions, `entry`, two-pass assembly with validation, hex/char/negative literals |
-| compiler | `cc`, 1958 bytes, built by `asm1` from `src/cc.s`: `helloworld.c` → dialect text → `asm1` → a binary that prints `Hello, World!`. It emits TEXT, so its output is diffed against a hand-written golden (`make test-cc`, `docs/cc.md`) |
+| compiler | `cc`, 2030 bytes, built by `asm1` from `src/cc.s`: `helloworld.c` → dialect text → `asm1` → a binary that prints `Hello, World!`. It emits TEXT, so its output is diffed against a hand-written golden (`make test-cc`, `docs/cc.md`) |
 
 `src/asm1.s` assembles every fixture, including `src/count10.s` → exactly `ref/count10`.
 
-`cc` compiles `helloworld.c` to dialect text that is byte-identical to `tests/golden/hello.s`, and that
-text assembles and prints `Hello, World!`. The compiler emits text and not bytes on purpose: `asm1`
-stays the only thing that makes an executable, so every gate above applies to the compiler's output too.
+```bash
+make hello
+```
 
+compiles `helloworld.c`, assembles the result and prints `Hello, World!`. The two stages are visible
+and the second one is not optional:
+
+```bash
+./cc < helloworld.c > hello.s     the compiler writes dialect TEXT
+./asm1 < hello.s > hello          the assembler is what makes a program
+```
+
+`cc` emits text and not bytes on purpose: its output is a reviewable file that is compared byte for
+byte against a hand-written golden, and `asm1` stays the only thing that produces an executable, so
+every gate above applies to the compiler's output too. The text begins with a `;` comment saying what
+it is — a comment to the assembler, a shell syntax error to anything that tries to run it directly.
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.
