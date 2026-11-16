@@ -609,3 +609,22 @@ it, and that is what happened.
 
 Remaining in item 6, deliberately deferred to a session that starts with budget: `neg`/`not`,
 `r8`–`r15` with REX, and indexed addressing.
+
+### Item 6: `neg` and `not`, the second time
+
+```
+neg eax -> f7 d8     neg edi -> f7 df
+not eax -> f7 d0     not ebp -> f7 d5
+```
+
+`asm1` 6 132 → **6 205 bytes**. Unary `F7 /3` and `F7 /2`, reusing `pu32` exactly as `inc`/`dec r32`
+do — no cursor arithmetic in the handler at all, which was the first attempt's bug.
+
+Done the way the rule says: the blocks were **appended whole** and the single dispatch retarget was
+one anchored line. Then `make` was run *and its exit checked* before any test, because the previous
+attempt's "green" results came from a stale binary left behind by a failed build.
+
+One defect, and it is the same one as ever: the `not` branch compared the mnemonic's **third**
+character against `o` — but `not` is `n,o,t`, so the third character is `t`. And the first attempt to
+fix it hit the wrong line, which was visible only because the rebuilt binary's sha was *unchanged*.
+Checking the sha as well as the exit status is what caught it.

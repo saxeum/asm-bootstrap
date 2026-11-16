@@ -1299,7 +1299,7 @@ mov [rbp+52], eax
 jmp.l pc32
 d_p:
 cmp al, 112
-jnz.l fail
+jnz.l d_n
 movzx edx, byte [rbx+1]
 cmp dl, 117
 jz.l psh_push
@@ -1659,3 +1659,23 @@ mov edx, 192
 add eax, edx
 call emital
 jmp.l pline
+
+d_n:
+cmp al, 110
+jnz.l fail
+movzx edx, byte [rbx+2]
+cmp dl, 103
+jz.l d_neg
+cmp dl, 116
+jnz.l fail
+mov eax, 247
+mov [rbp+44], eax
+mov eax, 2
+mov [rbp+48], eax
+jmp.l pu32
+d_neg:
+mov eax, 247
+mov [rbp+44], eax
+mov eax, 3
+mov [rbp+48], eax
+jmp.l pu32
