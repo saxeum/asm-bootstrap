@@ -1,0 +1,133 @@
+# ELF64 header + one program header, 120 bytes, as the numbers in src/asm1.s lines 16-23.
+# 0-15    e_ident: 7f 45 4c 46 (\x7fELF) 02 (64-bit) 01 (LSB) 01 (version) 00 (System V) 00..09 padding
+127
+69
+76
+70
+2
+1
+1
+0
+0
+0
+0
+0
+0
+0
+0
+# 16-17   e_type = 2 (ET_EXEC);  18-19 e_machine = 62 (EM_X86_64)
+0
+2
+0
+62
+# 20-23   e_version = 1;  24-31 e_entry = 0x400078 (first body byte)
+0
+1
+0
+0
+0
+120
+0
+64
+0
+0
+0
+0
+# 32-39   e_phoff = 64;  40-47 e_shoff = 0;  48-51 e_flags = 0
+0
+64
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+# 52-53   e_ehsize = 64;  54-55 e_phentsize = 56;  56-57 e_phnum = 1
+0
+64
+0
+56
+0
+1
+# 58-59   e_shentsize = 0;  60-61 e_shnum = 0;  62-63 e_shstrndx = 0
+0
+0
+0
+0
+0
+0
+# 64-67   p_type = 1 (PT_LOAD)
+0
+1
+0
+0
+# 68-71   p_flags = 5 (R+X).  NOT 7: the image is read-only, which is why `space` cannot be a buffer
+0
+5
+0
+0
+# 72-79   p_offset = 0;  80-87 p_vaddr = 0x400000;  88-95 p_paddr = 0x400000
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+64
+0
+0
+0
+0
+0
+0
+0
+64
+0
+0
+0
+0
+# 96-103  p_filesz = 0 here: the assembler patches it from the body length
+0
+0
+0
+0
+0
+0
+0
+0
+# 104-111 p_memsz  = 0 here: same value as p_filesz, patched with it
+0
+0
+0
+0
+0
+0
+0
+0
+# 112-119 p_align = 0x1000
+0
+0
+16
+0
+0
+0
+0
+0
+0

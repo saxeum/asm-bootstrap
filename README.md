@@ -5,12 +5,24 @@ hand-written machine code that assembles source into Linux ELF executables; it b
 assembler, which assembles itself. `cc` is a compiler written *in that dialect* whose output is
 that dialect, so the pipeline is `cc` → text → `asm1` → an executable.
 
-**No compiler, no system assembler, no disassembler, no interpreter, no debugger** — in the creation
-path or the diagnosis path. `make test-tools` fails if one is invoked anywhere in the `Makefile` or
-`tools/`; `objdump` is on that list, because a disassembler is the tool this project replaces and so
-cannot be the thing that verifies it (`src/dis.s` is the decoder that replaced it).
+**No compiler, no system assembler, no disassembler, no interpreter, no debugger** appears in the
+*verification* path: `make test-tools` fails if one is invoked anywhere in the `Makefile` or `tools/`;
+`objdump` is on that list, because a disassembler is the tool this project replaces and so cannot be the
+thing that verifies it (`src/dis.s` is the decoder that replaced it).
 
-The PDP-8 bootstrap done again deliberately: hand-assemble a minimal assembler, let it assemble a
+**And one violation, disclosed rather than buried:** the source of `asm1` was *written by a Python
+generator*, twice, in the wave that gave it an ELF header, and the 120-byte header it embeds was copied
+out of a reference binary by that script. Nothing said so until it was pointed out.
+`docs/violations/asm1-was-generated.md` records what happened, what survives in the committed source,
+and what the gates therefore do and do not establish. The artifact is still judged by bytes — that is
+what every gate below does — but the claim this project makes is about *provenance*, and the oldest
+commit in it was made with a tool this file used to say was never used.
+
+The assembler is still bootstrapped from itself and from hand-emitted references. What the disclosure
+changes is the sentence a reader is entitled to rely on: the *artifacts* are verified by bytes; the
+*source* of the assembler was generated once, and the 120 header bytes it embeds are checked against
+a documented table (`make test-header`) rather than trusted.
+
 better one, repeat. `docs/pdp8-to-gcc.md` has the history; `docs/WAVES.md` is the log, failures
 included; `docs/continue-here.md` is where a session starts.
 

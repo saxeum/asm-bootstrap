@@ -2966,3 +2966,42 @@ Two defects on the way, both the same shape and both caught by the gates rather 
   which is what a shared dispatcher is for.
 
 `cc` 9 238 → 9 452 bytes. 38 checks, 36 refusals, 34 goldens.
+
+## The violation that was there all along: `src/asm1.s` came from a Python generator
+
+Recorded because it was pointed out, not because it was found: `src/asm1.s` was written by two Python
+scripts in the wave that gave it an ELF header. They are preserved as
+`docs/violations/asm1-generator-step3{a,b}.py`, each ending in
+`open('/home/george/soper/genesis/src/asm1.s','w').write(src)` with the whole file as one f-string, and
+each deriving two things instead of typing them — the 120-byte header from `ref/addr32`, and the
+register-name constants with `struct.unpack`.
+
+Evidence, checked rather than taken on trust:
+
+- the 120 numbers in `src/asm1.s` lines 16–23 are byte-identical to `ref/addr32[0:120]` with bytes
+  96–111 zeroed (the two number lists `diff` empty);
+- the opening comment block in the file is the generator's text, verbatim;
+- the generated register chain *is* gone — `reg32` is a real byte parser and none of the eight packed
+  constants appears anywhere in the file — so what survives is the blob and the prose;
+- history: `src/asm1.s` at 11-16 17:46 as "step 2" without a header, scripts timestamped 17:54 and
+  17:56, commit `7400d1e` at 17:53 "step 3: written".
+
+`README.md` said "no interpreter … in the creation path", `docs/encodings.md` said "no other language
+enters the repo", and `AGENTS.md` invariant 10 said the tripwire held. All three were false about the
+origin of the assembler's source, for 141 commits, and nothing said so.
+
+What this does not do is make any artifact wrong. Everything here is still judged by bytes against
+hand-emitted references, and a miscompiling assembler would fail those gates whether a person or a
+script chose its text. But the thing this repository claims is *provenance*, and provenance was the one
+thing that was misrepresented.
+
+Repaired in this commit: the disclosure (`docs/violations/`), the three false claims, and the constant —
+`tests/header/elf64.nums` is the same 120 bytes as a table with every ELF field named, `make test-header`
+compares the source's `db` block against it, and the gate was demonstrated to fail by perturbing a byte.
+Not repaired: the source is still a descendant of generated text, and no edit changes that.
+
+And the neighbouring grey area, recorded at the same time rather than left implicit: `awk` has been
+load-bearing in the *editing* path all session, including the two splices that deleted 581 and 2 397
+lines. `awk` is a scripting language; the tripwire cannot match it because the tripwire is written in it.
+The distinction — generation versus editing — is now written down in `AGENTS.md` as a distinction, not an
+exemption.

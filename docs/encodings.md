@@ -84,7 +84,17 @@ would be the same lie this section exists to prevent.
 
 ## How to re-verify, without Python
 
-`xmllint` is enough; no other language enters the repo. One form:
+`xmllint` is enough *for the opcode table below*; no other language is needed to check it. One form:
+
+**That heading is narrower than it reads, and the difference matters.** It was written to say that the
+*opcode table* can be checked with `xmllint` alone. It is not a claim about this repository's history:
+`src/asm1.s` was written by a Python generator in the wave that gave it this header, and the 120 bytes
+below were copied out of `ref/addr32` by that script — `docs/violations/asm1-was-generated.md` has the
+evidence and the extent. What the table in `tests/header/elf64.nums` and `make test-header` restore is
+the ability to check the constant *field by field against the ELF spec*, which is what a reader needs in
+order not to have to trust the copy.
+
+
 
 ```bash
 X=.refcache/x86reference.xml

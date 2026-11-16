@@ -128,7 +128,7 @@ verify-provenance: asm1 dis
 which: asm1
 	@[ -n "$(FILE)" ] || { echo 'usage: make which FILE=<artifact>' >&2; exit 2; }
 	@./tools/provenance.sh which $(FILE)
-check: test-tools asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
+check: test-tools test-header asm1 dis cc test-coverage fixpoint bootstrap-check test-reject test-reject-msg test-msg-exact test-capability test-superior test-dis test-cc verify-provenance
 	@sha256sum -c docs/SHAS > /dev/null && echo "  docs/SHAS: pinned artifacts match"
 	@sha256sum -c docs/asm1.sha > /dev/null 2>&1 \
 	  && echo "  docs/asm1.sha: this asm1 is the recorded one" \
@@ -673,6 +673,24 @@ test-cc: cc asm1
 # assemble, and its normalised shape (tools/shape.awk) must appear in some test
 # input. A form nobody tests is a red gate with a name on it, which is the
 # difference between "we have 18 fixtures" and "we know what they reach".
+# ---- the header constant -----------------------------------------------------
+# The 120 bytes at src/asm1.s lines 16-23 were copied out of a reference binary
+# by a Python script (docs/violations/asm1-was-generated.md). That is not
+# recoverable by wishing, but the constant can stop being an unexplained blob:
+# tests/header/elf64.nums holds the same 120 numbers, one per line, with the ELF
+# field named for each group, so a reader can check them against the spec. This
+# target is what makes the table load-bearing rather than decorative.
+test-header:
+	@tmp=$$(mktemp); trap 'rm -f $$tmp' EXIT; \
+	sed -n '16,23p' src/asm1.s | sed 's/^db //' | tr ',' '\n' | tr -d ' ' | grep -v '^$$' > $$tmp; \
+	grep -v '^#' tests/header/elf64.nums > $$tmp.want; \
+	if cmp -s $$tmp $$tmp.want; then \
+	  printf '  header: the 120 bytes match the documented ELF64 table, field by field\n'; \
+	else \
+	  echo '  the header blob in src/asm1.s differs from tests/header/elf64.nums:'; \
+	  diff $$tmp.want $$tmp | head -6; fail=1; \
+	fi; exit $$fail
+
 test-coverage: asm1
 	@./tools/coverage.sh
 
