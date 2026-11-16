@@ -1503,3 +1503,16 @@ Next, in order of what unblocks the most:
    all. `p_flags` patched at emit time, template untouched, and a `promote-header` target whose
    evidence is the superiority suite rather than the fixpoint.
 3. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.
+
+## Compiler: `<=` and `>=` against a variable
+
+Both work, so every comparison operator now takes either a literal or a variable on the right. The
+literal range checks stay, and so do the two refusals that pin them.
+
+What is left is short and no longer about the language:
+
+1. **A large local array** — the frame is 264 bytes and arrays take slots out of it, so a compiler's
+   input buffer does not fit. The stack is read-write already and `cc` emits its own `sub rsp`, so this
+   needs no assembler change: allocate arrays from a byte counter and grow the frame.
+2. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus, with
+   the dialect frozen as the witness.

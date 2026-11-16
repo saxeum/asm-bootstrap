@@ -1519,7 +1519,17 @@ cmp al, 61
 jnz cnd_lt2
 mov eax, 1
 call bump
-call numval
+call cndbnd
+mov eax, [rbp-316]
+cmp eax, 0
+jz cnd_lel
+mov esi, 4194424+f_incrcx
+call emitstr             ; a register bound: x <= n is x < n+1
+mov eax, 0
+mov [rbp+44], eax
+ret
+cnd_lel:
+mov eax, [rbp+124]
 cmp eax, 255
 jb cnd_le
 jmp.l fail              ; `x <= 255` would need a bound of 256
@@ -1543,7 +1553,17 @@ cmp al, 61
 jnz cnd_gt2
 mov eax, 1
 call bump
-call numval
+call cndbnd
+mov eax, [rbp-316]
+cmp eax, 0
+jz cnd_gel
+mov esi, 4194424+f_decrcx
+call emitstr             ; a register bound: x >= n is n-1 < x
+mov eax, 3
+mov [rbp+44], eax
+ret
+cnd_gel:
+mov eax, [rbp+124]
 cmp eax, 0
 jnz cnd_ge
 jmp.l fail              ; `x >= 0` would need a bound of -1
@@ -2646,4 +2666,14 @@ db "cmp rax, rcx"
 db 0
 f_cmp2:
 db "cmp rcx, rax"
+db 0
+f_incrcx:
+db 10
+db "inc rcx"
+db 10
+db 0
+f_decrcx:
+db 10
+db "dec rcx"
+db 10
 db 0

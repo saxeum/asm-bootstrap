@@ -480,6 +480,15 @@ test-cc: cc asm1
 	  if $$tmp/mv; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 21 ]; then \
 	    printf '  cc    twenty variables in one function: v1 + v20 exits 21\n'; \
+	if $(CC) < tests/golden/cmpbound.c > $$tmp/cb.s 2>/dev/null && cmp -s $$tmp/cb.s tests/golden/cmpbound.s; then :; \
+	else echo "  cmpbound.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/cmpbound.s > $$tmp/cb 2>/dev/null; then \
+	  chmod +x $$tmp/cb; \
+	  if $$tmp/cb; then g1=0; else g1=$$?; fi; \
+	  if [ $$g1 -eq 6 ]; then \
+	    printf '  cc    i <= n with a variable bound: 0..5 inclusive exits 6\n'; \
+	  else echo "  cmpbound exited $$g1, wanted 6 -- the bound adjustment is wrong"; fail=1; fi; \
+	else echo "  asm1 refuses cmpbound.s"; fail=1; fi; \
 	  else echo "  manyvars exited $$g1, wanted 21 -- the frame is too small for the slots"; fail=1; fi; \
 	else echo "  asm1 refuses manyvars.s"; fail=1; fi; \
 	  else echo "  sumbuf exited $$g1, wanted 198 -- the callee cannot read the caller's array"; fail=1; fi; \
@@ -550,8 +559,8 @@ test-cc: cc asm1
 	refuse 'int main(void) { int x = 1 & 1; }'; \
 	refuse 'int main(void) { int x = 1; int y = read(x, 4); }'; \
 	refuse 'int main(void) { char s[4]; int n = read(s); }'; \
-	refuse 'int main(void) { int n = 3; int i = 0; while (i <= n) { i = i + 1; } }'; \
-	refuse 'int main(void) { int n = 3; int i = 0; while (i >= n) { i = i + 1; } }'; \
+	refuse 'int main(void) { int x = 1; if (x <= 255) { } }'; \
+	refuse 'int main(void) { int x = 1; if (x >= 0) { } }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(1, 2, 3, 4, 5); }'; \
 	refuse 'int main(void) { int p = &5; }'; \
 	refuse 'int main(void) { int y = *q; }'; \

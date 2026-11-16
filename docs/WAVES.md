@@ -2751,3 +2751,28 @@ ordinary gate structure.
 `space` is committed with a *read* of the reserved region as its gate: `movzx edi, byte [buf]` exits 0,
 because the bytes are zeros. That is a weak gate and an honest one — it proves the reservation and the
 label, not writability.
+
+## `<=` and `>=` with a variable bound
+
+`while (i <= n)` and `while (i >= n)` compile now, which retires the last two refusals that were
+language limits rather than parser gaps.
+
+The literal path normalises: `x <= N` becomes `x < N+1`, `x >= N` becomes `N-1 < x`, and the range
+checks (`N` must be under 255, at least 1) exist because those adjustments happen in a 32-bit immediate
+in `cond`. With a *register* bound the adjustment is an instruction, so `cndbnd` decides once and the
+two paths diverge:
+
+```
+x <= n   →   inc rcx ; cmp rax, rcx ; jb
+x >= n   →   dec rcx ; cmp rcx, rax ; jb
+```
+
+Two refusals had to change with it: `while (i <= n)` and `while (i >= n)` are legal, so they were
+replaced by `if (x <= 255)` and `if (x >= 0)`, which are still refused for the reason the literal path
+still has them — the bound would need a value outside 0..255. A refusal that still passes is worse than
+none, and a refusal that no longer applies is worse still.
+
+Gate: `i <= n` with `n = 5` counting 0..5 inclusive exits **6** — the off-by-one that the adjustment
+exists to prevent.
+
+`cc` 8 745 → 8 837 bytes. 28 checks, 35 refusals, 26 goldens.
