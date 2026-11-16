@@ -906,3 +906,37 @@ The revert is deliberate: three untested patches in one step is the condition un
 project has always produced garbage, and the last two waves both ended that way before being
 rebuilt. The next attempt should be **one patch, checker run, next patch** — the checker takes
 about a third of a second and would have caught all three of these.
+
+## rel32, second attempt — harness verified, `.l` path still fails; reverted again
+
+Different method this time, and it paid: append inert code first (corpus stayed 15/15), then
+apply **one retarget at a time, decoding the site and re-running the corpus after each**.
+
+```
+ok  0x561  je 0xc9d  corpus 15/15      ok  0x4cf  je 0xcd9  corpus 15/15
+ok  0x569  je 0xcac  corpus 15/15      ok  0x4a7  je 0xd27  corpus 15/15
+ok  0x571  je 0xcbb  corpus 15/15      ok  0x4e3  jmp 0xd27 corpus 15/15
+ok  0x792  je 0xcca  corpus 15/15
+```
+
+Seven retargets, seven correct, zero regressions — against three failures when the same seven
+were applied in one batch. That is the discipline finding, and it is now demonstrated rather
+than asserted.
+
+Then: every `.l` form still exits 1 while every short form still assembles, so the failure is
+inside the new long path, not in the harness. All eleven new blocks decode exactly as intended
+(shims branch on `[rbx+3]=='.'`, long op blocks set `r11d = opcode|0x100` and skip 6 or 5,
+`foundchk` tests bit 8, `found_long` tests bit 9 and emits `E9`/`0F 8x` + 4 bytes,
+`notfound_long` emits the matching 5/6-byte placeholder).
+
+The symptom is consistent with either of two causes, and they are distinguishable in one
+experiment:
+
+1. the shim does not branch to the long op block, so the short block runs, skips 4 characters,
+   parses the name as `.l`, fails lookup and exits; or
+2. the long op block runs and `found_long`/`notfound_long` fails before emitting.
+
+**Next diagnostic, written down so it is not re-derived:** force `foundchk`'s `jne` to `jmp`
+(short path) and reassemble a `.l` source. If it then "succeeds" with a 2-byte jump, the long op
+blocks are being reached and the defect is in `found_long`/`notfound_long`. If it still fails,
+the shim never branched and the defect is in the `[rbx+3]` test.
