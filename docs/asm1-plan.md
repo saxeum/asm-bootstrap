@@ -152,9 +152,7 @@ About 600–800 instructions. Build it in the order that keeps it runnable at ev
    identical to `sed 's/;.*//'` and 16/16 fixtures round-trip. See `docs/WAVES.md`. Blank lines are
    *kept*, not dropped: dropping them needs a "line has content" flag, and a flag cannot live in
    `rcx` across a syscall. Keeping them costs nothing — the parser ignores them.
-3. **BLOCKED pending `add r32, r32` in `asm0a` — the dialect has no arithmetic, so no number can be
-   parsed.** See `docs/WAVES.md`, "asm1.s step 3 blocked". Once that lands: **emit one hard-coded
-   instruction per matched mnemonic**: recognise `syscall`, `mov r32,imm`,
+3. **emit one hard-coded instruction per matched mnemonic** — unblocked by `add r32,r32` (2d-14): recognise `syscall`, `mov r32,imm`,
    `db` and emit them. Testable: assemble a 3-line source and compare with `asm0a`'s output.
 4. **labels + pass 2**: assemble something with a forward jump.
 5. **the rest of the mnemonic set**, one at a time, each verified against `asm0a` on the same
@@ -181,7 +179,7 @@ output of the bootstrap: the language shrinks to exactly what a self-hosting ass
 | `jmp`/`jz`/`jnz`/`jb` rel8 + `.l` rel32 | loops, and forward jumps beyond ±127 | have |
 | `mov [mem],r8` / `mov r32,[mem]` | pending byte, little-endian number | have |
 | `inc`/`dec r32` | counters, pointer advance | have |
-| **`add r32, r32`** | **decimal parsing: `value*10 + digit`** | **missing — next** |
+| `add r32, r32` | decimal parsing: `value*10 + digit` | **added, 2d-14** |
 | `syscall`, `xor r32,r32`, `sub r64,r64` | I/O, exit, length arithmetic | have |
 | `div r8` | not needed yet; the plan assumes no division | spare |
 

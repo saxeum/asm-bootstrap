@@ -1228,3 +1228,31 @@ one new form.
 cost of a new mnemonic in the dispatch chain rather than a new branch inside an existing handler.
 
 Status: **not yet landed.** Step 3 of `asm1.s` waits on it.
+
+## Wave 2d-14 — PASS: `add r32, r32` — the minimal dialect has arithmetic
+
+Artifact: `asm0a`, 3662 bytes, sha `41b7529c90be86633ffd3f46315d4f9cef4190056435c9d2f58e348f419a6b1c`.
+
+`add r32, r32` (`01 /r`). `do_add` already existed for `add r8,imm8` but resolves its destination
+with `lookup8`, which matches 2-byte names only. The routing is one byte: offset 4 of `add …` is
+`'e'` for every 32-bit register name and `'a'`/`'c'`/`'d'`/`'b'` for every 8-bit one.
+
+```
+add eax, ecx   -> 01 c8      add ebp, esp   -> 01 e5      add al, 1  -> 04 01
+add ecx, eax   -> 01 c1      add edi, ebx   -> 01 df      add eax, 1 -> rejected
+```
+
+Fixture `src/addr32.s` → `ref/addr32` (141 bytes, hand-emitted body) byte-identical, exits 7.
+Corpus 17/17.
+
+### Two defects
+
+1. **`modrm` built with dest in `reg` and src in `rm`** — the classic `01 /r` vs `03 /r` confusion.
+   `01 /r` means `ADD Ev, Gv`: destination in **rm**, source in **reg**. Observed `add eax, ecx`
+   emitting `01 c1` (which decodes as `add ecx, eax`). Fixed by swapping which register is shifted:
+   the moves exchanged `3-byte mov eax,r10d` for `2-byte mov eax,edx` and `2-byte or eax,edx` for
+   `3-byte or eax,r10d`, so the block stayed 19 bytes and nothing moved.
+2. **The source register name was never consumed.** After the second `lookup`, `rbx` still pointed
+   at `ecx`, so `eolv` saw `e` where it expected end-of-line and exited 1 — while the emitted bytes
+   were already correct. Every other handler advances past the source name; this one did not. Caught
+   by the `exit=1` on an otherwise-correct encoding, which is the same tell as wave 2d-13.
