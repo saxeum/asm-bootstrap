@@ -9,7 +9,7 @@ Past the bootstrap, and both tools are C-built. `asm1` (54 416 bytes, built by `
 `seed/asm1` from `src/asm1.c`) is the C assembler and **demonstrably better than the thing that
 built it**: 18/18 hand-emitted fixtures, 36 capability pairs of syntax `asm0a` cannot parse, 9
 superiority cases (including signed jumps, `idiv` and `cqo`), rejections that name their line.
-`cc` (44 238 bytes, built by `asm1` from `src/cc.c`) is the C compiler, and it compiles itself
+`cc` (44 154 bytes, built by `asm1` from `src/cc.c`) is the C compiler, and it compiles itself
 (`make test-d2`). `make test-asm2` requires the C assembler to reproduce the whole corpus and its
 own compiler text (234 checks). Comparisons are signed; `/` and `%` are `cqo` + `idiv`. `src/asm1.s`
 and `src/cc.s` are frozen witnesses, pinned by `make test-frozen`; `seed/cc` is the dialect witness,
