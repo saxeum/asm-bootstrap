@@ -68,6 +68,8 @@ lea rbx, [rbx+1]
 dec ecx
 jmp term
 termd:
+mov eax, 0
+mov [rbp+28], eax
 mov byte [rbx], 0
 lea rbx, [rbp+1]
 mov ecx, 300001
@@ -89,17 +91,39 @@ call parse
 mov eax, 2
 mov [rbp+16], eax
 mov ebx, 4194426
-mov eax, 96
-mov [rbp+40], eax
-hdr1:
-movzx eax, byte [rbx]
-call emital
-lea rbx, [rbx+1]
-mov eax, [rbp+40]
-dec eax
-mov [rbp+40], eax
+mov eax, 24
+call hcp
+mov eax, [rbp+28]
 cmp eax, 0
-jnz.l hdr1
+jz.l hdrdef
+mov ecx, 4194424
+add eax, ecx
+mov [rbp+4], eax
+movzx eax, byte [rbp+4]
+call emital
+movzx eax, byte [rbp+5]
+call emital
+movzx eax, byte [rbp+6]
+call emital
+movzx eax, byte [rbp+7]
+call emital
+mov eax, 0
+call emital
+mov eax, 0
+call emital
+mov eax, 0
+call emital
+mov eax, 0
+call emital
+jmp.l hdrnx
+hdrdef:
+mov ebx, 4194450
+mov eax, 8
+call hcp
+hdrnx:
+mov ebx, 4194458
+mov eax, 64
+call hcp
 movzx eax, byte [rbp+24]
 call emital
 movzx eax, byte [rbp+25]
@@ -134,16 +158,7 @@ mov eax, 0
 call emital
 mov ebx, 4194538
 mov eax, 8
-mov [rbp+40], eax
-hdr2:
-movzx eax, byte [rbx]
-call emital
-lea rbx, [rbx+1]
-mov eax, [rbp+40]
-dec eax
-mov [rbp+40], eax
-cmp eax, 0
-jnz.l hdr2
+call hcp
 
 mov eax, 2
 mov [rbp+16], eax
@@ -1178,11 +1193,23 @@ jmp.l pbr
 
 d_r:
 cmp al, 114
-jnz.l fail
+jnz.l d_en
 movzx edx, byte [rbx+1]
 cmp dl, 101
 jnz.l fail
 jmp.l pret
+
+d_en:
+cmp al, 101
+jnz.l fail
+movzx edx, byte [rbx+1]
+cmp dl, 110
+jnz.l fail
+lea rbx, [rbx+6]
+call skipsp
+call expr
+mov [rbp+28], ecx
+jmp.l pline
 
 d_call:
 mov eax, 235
@@ -1452,3 +1479,16 @@ mov ecx, [rbp+4]
 ret
 termnum:
 jmp.l numlit
+
+hcp:
+mov [rbp+40], eax
+hcpl:
+movzx eax, byte [rbx]
+call emital
+lea rbx, [rbx+1]
+mov eax, [rbp+40]
+dec eax
+mov [rbp+40], eax
+cmp eax, 0
+jnz.l hcpl
+ret

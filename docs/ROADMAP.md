@@ -411,3 +411,47 @@ line numbers. A rewrite of the header belongs in a session that starts with the 
 Next session starts here: extract the header emission into `hcp` (a copy helper taking pointer and
 count), then splice the entry field, and check `18/18` after **each** of those two steps rather than
 after the third.
+
+### Phase 2, item 5 landed (first half): the `entry` directive
+
+```
+db 1, 2, 3, 4          # data first
+code:
+mov eax, 60
+mov edi, 42
+syscall
+entry code             # e_entry = 0x40007c
+
+$ make test-superior
+  superior: entry directive -> e_entry 0x40007c, data first, runs (exit 42)
+```
+
+`asm1` 5 351 → **5 515 bytes**. A source can now put data before code and choose where execution
+starts, which `asm0a` cannot express at all — it hardcodes entry to the first byte. This is the
+layout `asm0a` itself uses, so it is the first requirement for reconstructing `src/asm0a.s`
+(Stage 5).
+
+**Done in two steps with a check after each, as planned after the revert:**
+
+1. the header emission became three parameterised copies — 24 bytes, then the entry field, then 64 —
+   with `hcp` taking a pointer in `rbx` and a count in `eax`. 18/18 and fixpoint checked before
+   touching the entry field.
+2. the entry field replaced the middle copy, defaulting to the template's `0x400078` when no
+   directive is present — so every existing fixture stays byte-identical.
+
+**Two defects, both from the same habit:**
+
+- The middle copy needed `[rbp+28]` to mean "no directive", but that slot still held the byte count
+  from the read loop, so the first run of step 2 put `0x00005xxx` in `e_entry` and broke every
+  fixture. Cleared at startup, where the value stops being needed.
+- The `d_en` handler was inserted *between* `d_r`'s body and its `jmp.l pret`, so `ret` fell into the
+  `entry` handler — `callret` broke, and asm1 could not build itself (`line 183: rejected`, which is
+  `emit_w:`). A label insertion has to be anchored on the *end* of the previous handler, not on one
+  of its lines.
+
+`entry` is also the first item where the *superior* suite gained a second case, and both now assert
+that the produced binary **runs** with the expected exit status rather than only matching bytes.
+
+Still open in item 5: `.text` / `.data` sections with two program headers and a writable data
+segment. `entry` was the piece of that which does not change the header *shape* — the rest does, and
+the second segment is what will change every fixture's bytes unless it is opt-in.

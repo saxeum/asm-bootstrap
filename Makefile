@@ -227,8 +227,7 @@ test-superior: asm1
 	if [ $$size -le 65536 ]; then \
 	  echo "  the test source is only $$size bytes -- it must exceed asm0a's 64 KiB read"; exit 1; fi; \
 	if $(ASM0A) < $$tmp/big.s > $$tmp/a 2>/dev/null; then \
-	  echo "  asm0a now assembles a $$size byte source: this test no longer discriminates"; fail=1; \
-	fi; \
+	  echo "  asm0a now assembles a $$size byte source: this test no longer discriminates"; fail=1; fi; \
 	if ! $(ASM1) < $$tmp/big.s > $$tmp/b 2>/dev/null; then \
 	  echo "  asm1 cannot assemble a $$size byte source"; exit 1; fi; \
 	chmod +x $$tmp/b; \
@@ -236,13 +235,22 @@ test-superior: asm1
 	if [ $$got -eq 42 ]; then \
 	  printf '  superior: asm1 assembles %s bytes that asm0a cannot, and it runs (exit 42)\n' $$size; \
 	else \
-	  echo "  the binary built from the big source exited $$got, wanted 42"; fail=1; \
-	fi; \
+	  echo "  the binary built from the big source exited $$got, wanted 42"; fail=1; fi; \
+	printf 'db 1, 2, 3, 4\ncode:\nmov eax, 60\nmov edi, 42\nsyscall\nentry code\n' > $$tmp/e.s; \
+	if $(ASM0A) < $$tmp/e.s > $$tmp/ea 2>/dev/null; then \
+	  echo "  asm0a accepts 'entry': this test no longer discriminates"; fail=1; fi; \
+	if $(ASM1) < $$tmp/e.s > $$tmp/eb 2>/dev/null; then \
+	  chmod +x $$tmp/eb; \
+	  entry=$$(od -An -tx1 -j24 -N4 $$tmp/eb | tr -d ' \n'); \
+	  if $$tmp/eb; then got=0; else got=$$?; fi; \
+	  if [ "$$entry" = "7c004000" ] && [ $$got -eq 42 ]; then \
+	    printf '  superior: entry directive -> e_entry 0x40007c, data first, runs (exit 42)\n'; \
+	  else \
+	    echo "  entry case: e_entry bytes $$entry, exit $$got (wanted 7c004000 / 42)"; fail=1; fi; \
+	else \
+	  echo "  asm1 cannot assemble the entry case"; fail=1; fi; \
 	exit $$fail
 
-# asm1 says WHICH line it rejected; asm0a exits in silence. The reject suite has
-# always required zero stdout -- now it also requires the message, because a
-# refusal nobody can locate is only half a refusal.
 test-reject-msg: asm1
 	@fail=0; \
 	for f in tests/reject/*.s; do \
