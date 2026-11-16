@@ -352,3 +352,38 @@ exit42, hello_num, jmp, loop, jz — all byte-identical (regressions)
    made `asm0a` itself `SIGILL` on every input — including five previously-passing ones. That
    loud, total failure is the only reason it took seconds to find; the same mistake inside a
    rarely-taken branch would have been invisible.
+
+## Wave 2d-2 — PASS: `inc r8`, `dec r8`
+
+Artifact: `asm0a`, 1915 bytes, sha `7be1fa0675d0282cd13c8506bd5dc678855ab543fe8faa6b8cc117ea100f1778`, entry `0x400110`, filesz `0x77b`.
+
+`regsel` decides between the 32-bit path (`regop`, `FF /x`) and the 8-bit path (`regop8`,
+`FE /x`) by looking at character 2 of the register name; `regop8` reuses the `sel` in `r11d`
+that `do_inc`/`do_dec` already set, so the modrm construction is identical to the 32-bit case.
+Two retargets: `do_inc` and `do_dec` now jump to `regsel` instead of straight to `regop`.
+
+### Gate
+
+```
+snapshot  asm0a exit  byte-identical  behaviour
+inc8      0           yes             exit 3
+exit42, hello_num, jmp, loop, jz, r8 — all byte-identical
+```
+
+`src/inc8.s` counts in `cl` while a separate register counts down: `inc cl` / `dec bl` / `jnz top`
+/ `movzx edi, cl` / `syscall`, so it exercises `inc r8`, `dec r8`, the existing `jnz`, and
+`movzx` in one program, and exits 3.
+
+### Defects
+
+1. **`[rbx+2]` was tested for `,` and space only.** With one operand the terminator is a
+   newline, so `inc cl` fell through to the 32-bit path, the table lookup missed `cl`, and the
+   whole assembly failed. Fixed additively: `regsel`'s fall-through was retargeted to
+   `regsel2`, which adds the newline case — no bytes shifted.
+2. **Both displacements in that new block were 2 bytes off**, computed from a wrong base, so
+   `je` landed mid-instruction (`SIGILL`). Caught by decoding at the instruction address rather
+   than at the rel32 byte — the checker had been given the wrong start addresses as well, which
+   is its own reminder that a verifier needs verifying.
+
+The pattern across 2d-1 and 2d-2 is consistent: every defect was found by decode-and-compare or
+by byte-identical comparison, and none by re-reading the hex.
