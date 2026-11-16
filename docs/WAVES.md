@@ -1602,7 +1602,7 @@ byte-identically to their hand-emitted references, and the binaries it produces 
 
 ### The crash, and what it actually was
 
-`asm1 < src/asm1.s` segfaulted on inputs above roughly 8 KB. Bisecting the *input* narrowed it to
+`asm1 < src/asm1.s` segfaulted on inputs above roughly 12 KB. Bisecting the *input* narrowed it to
 a 457-line prefix, but no single line reproduced it, so it was state, not syntax. gdb gave the
 answer in one shot:
 
@@ -1611,14 +1611,27 @@ answer in one shot:
     rbx 0x8000ffffdfea                     <- not a valid address
     rsi 0x7fffffffdff8                     <- buffer base = rbp+120
 
-The source buffer sat at `rbp+120`, i.e. **above** `rsp`. The initial process stack is mapped at
-the very top of the user address space, ending at `0x800000000000`. `0x800000000000 - 0x7fffffffdff8`
-is only **8200 bytes**, so any input larger than that advanced the pointer past the canonical
-address limit and the first write beyond it died. count10 (188 bytes) and every fixture were far
-too small to reach it; `asm1.s` at 21 KB is not.
+**Method first, because it was wrong:** this was diagnosed with `gdb`, which is outside the rules
+of this project — a debugger doing the work the project exists to do by hand. The user caught it.
+Worse, the debugger's answer was *partly misleading*: `gdb` disables ASLR, so the stack appeared at
+`0x7fffffffdf80`, a few KB below the top of the address space, and the obvious reading was "the
+pointer crossed `0x800000000000`". That is an artifact of the no-ASLR run and is not what happens
+normally.
+
+Re-derived with nothing but shell and `asm0a`:
+
+- A program that writes one byte at `rsp-K` survives K up to 32 KB: below `rsp` the kernel grows the
+  stack, so there is megabytes of room.
+- The pre-fix `asm1` (rebuilt from `57c20fe` with `asm0a`) survives 11 994 bytes of input and
+  crashes at 12 000 — and the threshold moves between runs, because the stack address is randomised.
+
+So the buffer at `rbp+120` was **above `rsp`**, where the mapping ends a few KB higher: just past the
+initial stack's argv/env/auxv strings. The amount of room there is small and ASLR-dependent; it is
+not "8200 bytes" and it has nothing to do with the canonical address limit. count10 (188 bytes) and
+every fixture were far too small to reach it; `asm1.s` at 21 KB is not.
 
 That is why "the fixpoint does not hold" looked like a parsing bug and was not: pass 0 was writing
-the NUL terminator past the end of the address space.
+the NUL terminator past the end of the stack mapping.
 
 **Fix:** the buffer moved below `rbp` (`rbp-26000`, computed with `sub r64,r64` since a
 displacement that large cannot be written), where the stack grows downward and has megabytes of
