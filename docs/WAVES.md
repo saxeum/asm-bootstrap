@@ -3600,3 +3600,16 @@ dialect `cc`'s shared `[rbp-308]` slot cannot turn a char store into a 64-bit st
 The default `make` still builds `asm1`/`cc` from the frozen assembly sources. Installing the C-built
 artifacts as the canonical `asm1`/`cc` is the next deliberate decision, with `seed/` and
 `docs/toolchain.tsv` consequences.
+
+## Wave: a real program on a C-only chain
+
+`tests/programs/wc.c` counts lines, words and characters from stdin in 128-byte chunks, formats the
+three numbers with its own `putn`, and writes them. `make test-program` builds it with `cc` + `asm1`
+and checks four inputs (normal text, empty, no final newline, and a 300-byte stream that forces the
+chunk loop).
+
+`make from-c` now also builds that program with the **C-built** `cc1` + `asm2` and runs the same four
+inputs. The order is the one the request asked for: assembler (`src/asm1.c` → `asm2`), compiler
+(`src/cc.c` → `cc1`), then both rebuild each other, then the program. After the committed seeds
+(`seed/cc`, `seed/asm1`) no assembly-built compiler or assembler is invoked for the chain or for
+`wc`.

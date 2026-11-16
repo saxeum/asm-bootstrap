@@ -60,6 +60,12 @@ compiles it, `asm1` assembles it, and the resulting `cc1` compiles `src/cc.c` to
 for byte. **And the assembler is in C too**: `src/asm1.c` is compiled by `cc`, assembled by `asm1` into `asm2`, and `make test-asm2` requires it to reproduce `asm1` on the whole corpus and to assemble its own compiler text into itself (220 checks). `make from-c` rebuilds both `.c` artifacts from the frozen seeds (`seed/asm1`, `seed/cc`) in that order, and `make test-frozen` pins all 160 `.s` sources. The authoritative
 current state is `docs/continue-here.md`.
 
+**The C-only chain is exercised by a real program.** `tests/programs/wc.c` counts lines, words and
+characters from stdin in 128-byte chunks. `make test-program` builds it with `cc`+`asm1` and runs it
+on four inputs; `make from-c` then builds it with the **C-built** `cc1`+`asm2`, after rebuilding both
+tools from `src/asm1.c` and `src/cc.c` with the frozen seeds. No assembly-built compiler or assembler
+is invoked for the program.
+
 ### Where things live
 
 Everything is in the repository. There is no `/tmp`: tooling, probes and evidence are committed and
@@ -326,7 +332,7 @@ Each prints `identical`, and `milestone-fixpoint` produces 4 295 bytes with sha2
 | source language | `mov` (8/32/64-bit, register, immediate and memory), `add`, `sub`, `cmp`, `and`, `or`, `xor`, `test`, `imul`, `inc`, `dec`, `neg`, `not`, `shl`/`shr`/`sar`, `movzx`, `lea`, `div r32`/`div r64` (quotient in `rax`/`eax`), `push`/`pop`, `call`/`ret`, `syscall`, `jmp`/`jz`/`jnz`/`jb` with rel8 and `.l` rel32, `[base]` and `[base+index]` with disp8/disp32, `db` with strings, labels, expressions (`label+4`, `end - start`), `entry`, two-pass assembly with validation, hex/char/negative literals. Width comes from the operand names and a mixed pair is refused; registers `rax`…`r15` with `REX.R`/`X`/`B` |
 | not in the language | `imul r,r,imm`, `div` needs a register of 32 or 64 bits, not 8, `[base+index*scale]`, `je`/`jne`/`ja`/`jae`/`jbe`/`js`/`jg`/`jo` as mnemonics (only `jz`/`jnz`/`jb` exist), `cmp r32,[mem]`, `mov` between two memory operands, rel8 beyond 127 bytes (use `.l`), names longer than 15 characters |
 | compiler | `cc`, 10 429 bytes, built by `asm1` from `src/cc.s` (3 108 lines): C subset → dialect **text** → `asm1` → executable. 43 text goldens, 3 output oracles, 36 refusals (`make test-cc`, `docs/cc.md`). **The port compiles itself**: `src/cc.c` is the same compiler in its own subset; `make test-port` shows its output byte-identical to `cc`'s on all 43 goldens, and `make test-d2` shows `cc1.s == cc2.s` |
-| `make check` | forbidden tools, `frozen: 160 assembly sources unchanged`, nothing-outside-the-tree, `asm1 < src/cc.s == cc` (the dialect source is invariant), the port's 43/43 goldens, `cc1.s == cc2.s`, header table, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, eight superiority cases plus three behavioural, 38/38 decoder cases, the compiler's 45 checks including `exit(3)` and the callee-local array, the assembler-in-C gate (220 checks), 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
+| `make check` | forbidden tools, `frozen: 160 assembly sources unchanged`, nothing-outside-the-tree, `asm1 < src/cc.s == cc` (the dialect source is invariant), the port's 43/43 goldens, `cc1.s == cc2.s`, header table, coverage, fixpoint, bootstrap NOT APPLICABLE, 9/9 rejections, 8/8 messages, 36/36 capability, eight superiority cases plus three behavioural, 38/38 decoder cases, the compiler's 45 checks including `exit(3)` and the callee-local array, the assembler-in-C gate (220 checks), the wc program (4/4 inputs), 36 provenance records, `docs/SHAS`, `docs/asm1.sha`, 290/290 branch pins — every line able to fail |
 
 `ref/` holds binaries written by hand **before** the assembler could read their source. They are
 never regenerated casually: a binary whose bytes you did not write cannot judge an assembler.
