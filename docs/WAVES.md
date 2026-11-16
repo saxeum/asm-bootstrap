@@ -2599,3 +2599,39 @@ And one refusal had to be retired: `int x = 4 / 2;` is no longer outside the sub
 
 `cc` 7 888 → 8 184 bytes, `asm1` 7 979 → 7 979 (same size, different bytes: the table base is a bigger
 constant). Gates: 22 → 23 checks, 31 refusals. 49 check lines.
+
+## `read()`: a compiled program can have input at all
+
+Until now every `cc` program was closed: no input, no data, output only through `write("...")`. That is
+not a program a compiler can be written in. `read(a, N)` is a builtin that reads up to N bytes from
+stdin into the char array `a` and returns the count in `rax`:
+
+```
+mov eax, 0        ; SYS_read
+mov edi, 0        ; stdin
+lea rsi, [rbp-B]  ; the buffer's slot
+mov edx, N
+syscall
+```
+
+The first argument is a *name*, not an expression, because a buffer has no value: `cc` has no pointer
+type, so the address is taken by the builtin rather than written by the programmer. `read` is
+recognised by name at the call site — four bytes compared little-endian — and a `read` whose count is
+not a literal, or whose buffer is not an array, is refused.
+
+The gate is the shape of a compiler's main loop: read a chunk, walk it with a variable offset, sum the
+bytes, read again, stop at EOF.
+
+```c
+char buf[8];
+int n = read(buf, 8);
+while (n > 0) { int i = 0; while (n > 0) { total = total + buf[i]; i = i + 1; n = n - 1; } n = read(buf, 8); }
+```
+
+Three inputs, three exact answers: `ABC` → 198, `ABCDEFGHIJ` (two reads) → 193, empty → 0.
+
+**And the loop found a gap that reading the code had not.** The natural way to write it is
+`while (i < n)` — comparing against a *variable* — and `cc` refuses that, because a condition's bound
+must be a literal (`cond` calls `numval`). The gate program is written the awkward way round, counting
+`n` down, and that refusal is the next thing to fix: a condition on two variables is the single most
+common construct a compiler uses.

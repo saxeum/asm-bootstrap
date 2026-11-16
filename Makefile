@@ -440,6 +440,17 @@ test-cc: cc asm1
 	  if $$tmp/ln; then g1=0; else g1=$$?; fi; \
 	  if [ $$g1 -eq 42 ]; then \
 	    printf '  cc    names longer than seven: averylongname(xyzlongname) exits 42\n'; \
+	if $(CC) < tests/golden/readsum.c > $$tmp/rs.s 2>/dev/null && cmp -s $$tmp/rs.s tests/golden/readsum.s; then :; \
+	else echo "  readsum.c does not compile to its golden"; fail=1; fi; \
+	if $(ASM1) < tests/golden/readsum.s > $$tmp/rs 2>/dev/null; then \
+	  chmod +x $$tmp/rs; \
+	  printf 'ABC' | $$tmp/rs; if [ $$? -eq 198 ]; then g1=0; else g1=1; fi; \
+	  printf 'ABCDEFGHIJ' | $$tmp/rs; if [ $$? -eq 193 ]; then g2=0; else g2=1; fi; \
+	  printf '' | $$tmp/rs; if [ $$? -eq 0 ]; then g3=0; else g3=1; fi; \
+	  if [ $$g1 -eq 0 ] && [ $$g2 -eq 0 ] && [ $$g3 -eq 0 ]; then \
+	    printf '  cc    read(): a stdin loop over a char array sums 198, then 193, then 0\n'; \
+	  else echo "  readsum: three inputs want 198/193/0"; fail=1; fi; \
+	else echo "  asm1 refuses readsum.s"; fail=1; fi; \
 	if $(CC) < tests/golden/divmod.c > $$tmp/dm.s 2>/dev/null && cmp -s $$tmp/dm.s tests/golden/divmod.s; then :; \
 	else echo "  divmod.c does not compile to its golden"; fail=1; fi; \
 	if $(ASM1) < tests/golden/divmod.s > $$tmp/dm 2>/dev/null; then \
@@ -500,6 +511,8 @@ test-cc: cc asm1
 	refuse 'int main(void) { int x = 1; int x = 2; }'; \
 	refuse 'int main(void) { int abcdefghijklmnopq = 1; }'; \
 	refuse 'int main(void) { int x = 1 & 1; }'; \
+	refuse 'int main(void) { int x = 1; int y = read(x, 4); }'; \
+	refuse 'int main(void) { char s[4]; int n = read(s); }'; \
 	refuse 'int f(void) { return 1; } int main(void) { return f(1, 2, 3, 4, 5); }'; \
 	refuse 'int main(void) { int p = &5; }'; \
 	refuse 'int main(void) { int y = *q; }'; \

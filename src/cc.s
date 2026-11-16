@@ -821,6 +821,17 @@ ex3call:
 ; Arguments are evaluated at d+1 so they cannot touch reg 0..d. A call inside
 ; an *argument list* is still refused: it would overwrite the argument
 ; registers, which is a different resource from the depth registers.
+mov eax, [rbp-16064]
+cmp eax, 1684104562      ; "read", four bytes little-endian
+jz ex3rdgo
+jmp ex3cgo
+ex3rdgo:
+lea rdx, [rbp-16064]
+mov eax, [rdx+4]
+cmp eax, 0               ; the name must be exactly four bytes
+jz.l ex3read
+jmp.l fail
+ex3cgo:
 mov eax, [rbp-208]
 cmp eax, 0
 jz ex3fin
@@ -886,6 +897,42 @@ call emitstr
 jmp ex3cpl
 ex3cdone:
 ret
+ex3read:
+; `read(a, N)` -- SYS_read from stdin into the char array `a`, up to N bytes,
+; with the count in rax. The first argument is a *name*, because a buffer has no
+; value: cc has no pointer type, so the address is taken here rather than
+; written by the programmer.
+mov eax, 1
+call bump               ; '(' -- already consumed by the caller
+call ident
+mov [rbp-112], eax
+call findvar
+mov [rbp-268], eax
+mov eax, [rbp-268]
+call isarr
+cmp eax, 0
+jnz ex3rdok
+jmp.l fail              ; read into something that is not an array
+ex3rdok:
+mov esi, 4194424+f_comma
+call want
+call numval
+mov [rbp-272], eax      ; the byte count
+mov esi, 4194424+f_rpar
+call want
+mov esi, 4194424+f_rd1
+call emitstr
+mov eax, [rbp-268]
+call varoff
+call emitnum
+mov esi, 4194424+f_rd2
+call emitstr
+mov eax, [rbp-272]
+call emitnum
+mov esi, 4194424+f_rd3
+call emitstr
+ret
+
 ex3sub:
 ; `a[i]` -- the base goes into reg d and the index is computed at d+1, so the
 ; base survives: that is what the depth mechanism is for. d is saved in -288
@@ -2482,4 +2529,24 @@ db 0
 f_rax2:
 db ", rax"
 db 10
+db 0
+f_rd1:
+db "mov eax, 0"
+db 10
+db "mov edi, 0"
+db 10
+db "lea rsi, [rbp-"
+db 0
+f_rd2:
+db "]"
+db 10
+db "mov edx, "
+db 0
+f_rd3:
+db 10
+db "syscall"
+db 10
+db 0
+f_comma:
+db ","
 db 0

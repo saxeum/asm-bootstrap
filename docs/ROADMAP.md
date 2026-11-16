@@ -1428,3 +1428,17 @@ What is left before `cc` could compile a C version of itself is now a short and 
    byte array work already done.)
 3. Then the port itself: `src/cc.c`, compiled by `cc`, assembled by `asm1`, and compared — the way the
    assembler was bootstrapped, with the dialect frozen as the witness.
+
+## Compiler: `read`, and what the loop found
+
+`read(a, N)` reads stdin into a char array and returns the count; gated by a program that loops over
+its input and exits 198, 193 and 0 for three different inputs.
+
+The gate was written the awkward way round because `while (i < n)` does not compile: a condition's
+bound must be a literal. That is now the top of the list, ahead of `.data`:
+
+1. **Comparisons against a variable** (`i < n`, `n == want`) — `cond` resolves the bound with
+   `numval`, so it must be a constant. Two registers and one register-form `cmp` would do it: the
+   dialect has `cmp r32, r32` and `jb`.
+2. **`.data`** — string literals that live in memory, so a program can address its own text.
+3. Then the port: `src/cc.c`, compiled by `cc`, assembled by `asm1`, compared on the whole corpus.
