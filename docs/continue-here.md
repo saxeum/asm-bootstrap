@@ -16,9 +16,9 @@ roadmap is ordered by; `docs/ROADMAP.md` has the requirement table and why `.dat
 |---|---|---|---|
 | `asm0a` | 3 745 | `6271c5ee79034ffd` | hand-written machine code, **frozen**, not a correctness reference |
 | `asm1` | 7 903 | `5db95315a741a858` | built by `seed/asm1` from `src/asm1.s` |
-| `seed/asm1` | 7 731 | `ac80d9f9094d7051` | the promoted stage; identical to `asm1` |
+| `seed/asm1` | 7 903 | `5db95315a741a858` | the promoted stage; identical to `asm1` |
 | `dis` | 1 343 | `2d2eb451d7c7a9a9` | built by `asm1` from `src/dis.s` — our decoder |
-| `src/asm1.s` | 31 236 | — | 2 150 lines, 199 labels (limit 256), **no duplicates** |
+| `src/asm1.s` | 33 062 | — | 2 209 lines, 208 labels (limit 256), **no duplicates** |
 | `src/dis.s` | 11 108 | — | 467 lines, 48 labels |
 | `cc` | 7 888 | `3927cdab7effa2b0` | built by `asm1` from `src/cc.s` (2 400 lines) — C to dialect TEXT |
 
